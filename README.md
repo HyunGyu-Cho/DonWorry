@@ -4,6 +4,16 @@ CakeShop(1차 프로젝트)에서 발생한 거래를 받아 **결제(PG) → FD
 
 설계 정본은 Notion `2차 프로젝트 1차 MVP` 문서 트리이며, 이 저장소는 그 구현체다. 문서와 코드가 어긋나면 **Notion 04-3(설계 결정 DEC) / 05-1~3(API·이벤트 계약)이 기준**이다.
 
+**작업하기 전에 [AGENTS.md](AGENTS.md)를 읽는다.** 사람과 AI 도구가 공통으로 따르는 규칙과 정본이 어디 있는지가 거기 있다.
+
+| 찾는 것 | 위치 |
+| --- | --- |
+| 작업 규칙·문서 지도 | [AGENTS.md](AGENTS.md) (Claude Code 진입점은 [CLAUDE.md](CLAUDE.md)) |
+| 검증 가능한 HTTP·Event 계약 | [contracts/](contracts/) |
+| 아키텍처 결정 기록 | [docs/decisions/](docs/decisions/) |
+| 여러 세션에 걸친 작업 맥락 | [tasks/](tasks/) |
+| DB 스키마 정본 | `backend/src/main/resources/db/migration/` |
+
 ## 핵심 시연 흐름 (1차 목표)
 
 ```
@@ -227,4 +237,7 @@ DONWORRY_TEST_DB_PASSWORD=donworry \
 - 시연용 시드 데이터(가맹점·API Key·직원 계정).
 - 화면 구현 — `frontend/`는 폴더 구조·라우팅·인증 경계·API 호출 계층까지만 있고, AUTH-01 외 11개 화면은 자리표시자다.
 - AI 보고서 실제 생성 — `ai-server/`는 C04 계약·멱등·Tool allowlist까지만 있고 LLM 호출은 Mock이다.
-- Docker 구성(06-4), 하네스 파일 `AGENTS.md`·`CLAUDE.md`·`docs/decisions/`·`contracts/`·`tasks/`(06-2). 브랜치 보호 규칙(06-3).
+- Docker 구성 — Dockerfile 3개, `infra/docker/` compose 3종(06-4).
+- 브랜치 보호 규칙 — CI 잡을 필수 상태로 등록해야 병합을 막는다(06-3).
+- 하네스 Hook·Skill — SessionStart 훅, `project-resume` / `save` 스킬(06-2). 그래서 **자동 저장은 보장되지 않는다.**
+- 계약 파일로 구현을 검증하는 테스트 — `contracts/`는 아직 사람이 읽는 정의다.

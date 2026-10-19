@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/HyunGyu-Cho/DonWorry/contracts/events/CaseDecisionMade.schema.json",
+  "title": "CaseDecisionMade",
+  "description": "C05 — investigation 이 발행하고 payment 가 수신하는 유일한 필수 이벤트. 설명 정본은 Notion 05-3, 판정 정책은 DEC-03.\n\n발행: CaseDecision(UNIQUE payment_id) 저장과 Spring Modulith 이벤트 발행을 같은 DB 트랜잭션에서 한다.\n수신: HELD 여부를 검증하고, 같은 paymentId 에 이미 반영된 조치면 성공으로 멱등 반환한다.\n  REJECT  → 결제 REJECTED 저장 후 알림 발행. 모의 카드사를 호출하지 않는다.\n  RELEASE → 결제 AUTHORIZING 으로 두고 승인 요청을 영속화한 뒤 모의 카드사를 호출한다.\n            즉시 APPROVED 를 의미하지 않는다.\n\n역방향 Java 직접 의존은 금지다. payment 는 리스너로만 받는다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "caseId", "paymentId", "decision", "reason", "decidedAt"],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "멱등 키. case_decisions.event_id 에 UNIQUE 로 저장한다. 중복 전달 시 카드 승인이 다시 호출되지 않는 근거."
+    },
+    "caseId": {
+      "type": "integer",
+      "format": "int64"
+    },
+    "paymentId": {
+      "type": "integer",
+      "format": "int64",
+      "description": "판정 대상 결제. 판정은 Case 전체가 아니라 결제별로 적용된다. Case 일괄 RELEASE 는 금지."
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["REJECT", "RELEASE"],
+      "description": "FDS DENY 로 거절된 결제는 RELEASE 대상이 아니다."
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "decidedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC 저장. 화면 표기는 KST."
+    }
+  },
+  "examples": [
+    {
+      "eventId": "case-101-payment-1001-reject",
+      "caseId": 101,
+      "paymentId": 1001,
+      "decision": "REJECT",
+      "reason": "동일 카드로 10분 내 4회 시도, 배송지와 청구지 불일치",
+      "decidedAt": "2026-10-23T02:14:35.123456Z"
+    }
+  ]
+}

@@ -1,0 +1,194 @@
+openapi: 3.1.0
+info:
+  title: DonWorry PG — CakeShop 수신 계약
+  version: 1.0.0
+  description: |
+    C01 결제 요청과 결제 조회. 설명 정본은 Notion 05-1.
+
+    merchantId 는 요청 본문이 아니라 인증된 API Key 로 결정한다. 본문의 가맹점 식별자는
+    신뢰하지 않는다 (DEC-13).
+
+servers:
+  - url: http://localhost:8081
+    description: 로컬 개발
+  - url: '{baseUrl}'
+    description: 환경변수로 주입 (06-4)
+    variables:
+      baseUrl:
+        default: http://localhost:8081
+
+security:
+  - MerchantApiKey: []
+
+paths:
+  /api/payments:
+    post:
+      operationId: createPayment
+      summary: C01 — 결제 요청 접수
+      description: |
+        DEC-07: 주문당 결제 시도 1회. UNIQUE(merchant_id, order_id).
+
+        - 신규 접수: 201
+        - 같은 주문·같은 입력 재전송: 200 과 기존 상태
+        - 같은 주문·다른 금액 또는 결제수단: 409
+        - 처리 타임아웃·비동기 복구 중일 때만 paymentStatus=RECEIVED 로 응답하고
+          GET /api/payments/{paymentId} 로 복구한다
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '201':
+          description: 신규 접수
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '200':
+          description: 동일 요청 재전송 — 기존 결제의 현재 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: 같은 주문에 금액·결제수단이 다른 재요청
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '422': { $ref: '#/components/responses/PolicyRejected' }
+        '500': { $ref: '#/components/responses/ServerError' }
+        '503': { $ref: '#/components/responses/DependencyFailure' }
+
+  /api/payments/{paymentId}:
+    get:
+      operationId: getPayment
+      summary: 결제 현재 상태 조회
+      description: C01 응답이 RECEIVED 였을 때의 비동기 복구 경로.
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 현재 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    MerchantApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        X-Merchant-Code 헤더와 함께 보낸다. 서버는 merchant_credentials.key_hash 로
+        해시 비교만 한다. 키 원문은 저장·로그에 남기지 않는다 (TEST-05).
+
+  schemas:
+    PaymentRequest:
+      type: object
+      additionalProperties: false
+      required: [orderId, customerRef, amount, currency, paymentMethodRef]
+      properties:
+        orderId:
+          type: string
+          maxLength: 100
+          description: CakeShop 주문 ID
+        customerRef:
+          type: string
+          maxLength: 128
+        amount:
+          type: integer
+          minimum: 0
+          description: KRW 원 단위
+        currency:
+          type: string
+          const: KRW
+        paymentMethodRef:
+          type: string
+          maxLength: 128
+          description: 카드번호 원문이 아닌 참조값
+
+    PaymentResponse:
+      type: object
+      required: [paymentId, orderId, paymentStatus]
+      properties:
+        paymentId:
+          type: integer
+          format: int64
+        orderId:
+          type: string
+        paymentStatus:
+          type: string
+          enum: [RECEIVED, HELD, AUTHORIZING, APPROVED, REJECTED, FAILED_RISK]
+        riskDecision:
+          type: [string, 'null']
+          enum: [ALLOW, HOLD, DENY, null]
+        riskScore:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+        caseLinkStatus:
+          type: [string, 'null']
+          enum: [PENDING, LINKED, RETRY, ERROR, null]
+          description: DEC-06. HELD 인데 LINKED 가 아니면 직원 RELEASE 가 금지된다
+
+    ErrorBody:
+      type: object
+      required: [code, message, requestId, timestamp]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+  responses:
+    BadRequest:
+      description: 잘못된 요청
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+    Unauthorized:
+      description: 인증 실패
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+    Forbidden:
+      description: 권한 없음 — 비활성 가맹점의 신규 요청 포함 (ADM-01)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+    NotFound:
+      description: 대상 없음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+    PolicyRejected:
+      description: 정책 거절
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+    ServerError:
+      description: 서버 장애
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }
+    DependencyFailure:
+      description: 의존 서비스 실패
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorBody' }

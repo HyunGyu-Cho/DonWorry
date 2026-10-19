@@ -1,0 +1,115 @@
+openapi: 3.1.0
+info:
+  title: CakeShop — DonWorry PG 결과 통보 수신 계약
+  version: 1.0.0
+  description: |
+    C06 최종 결과 통보. 설명 정본은 Notion 05-1, 재시도 정책은 DEC-12.
+
+    이 엔드포인트는 **CakeShop 쪽**에 있다. DonWorry Payment 가 호출한다.
+
+    PG 측 동작:
+    - 결제 최종 상태 기록과 payment_notifications(PENDING) 삽입을 같은 트랜잭션에서 한다
+    - 재시도 10초 / 30초 / 1분 / 5분 / 15분, 최대 5회. 이후 FAILED 로 두고 운영자가 확인한다
+    - 프로세스 재시작 시 미완료 알림을 다시 찾는다
+
+    CakeShop 측 동작:
+    - notificationId 를 UNIQUE 로 두거나 동일 paymentId + 최종 상태를 멱등 처리한다
+    - 주문의 paymentId 가 일치하는지 검증한다
+    - 중복 수신에도 성공으로 응답한다
+
+servers:
+  - url: http://localhost:8080
+    description: 로컬 CakeShop
+
+security:
+  - MerchantApiKey: []
+
+paths:
+  /api/payments/results:
+    post:
+      operationId: receivePaymentResult
+      summary: C06 — 결제 최종 결과 수신
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentResultNotification'
+      responses:
+        '200':
+          description: 수신 완료. 중복 수신도 이 응답을 준다
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received, notificationId]
+                properties:
+                  received:
+                    type: boolean
+                    const: true
+                  notificationId:
+                    type: integer
+                    format: int64
+        '400':
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+        '401':
+          description: 인증 실패
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+        '409':
+          description: 주문과 paymentId 가 맞지 않음
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorBody' }
+
+components:
+  securitySchemes:
+    MerchantApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    PaymentResultNotification:
+      type: object
+      additionalProperties: false
+      required: [notificationId, merchantCode, orderId, paymentId, paymentStatus, occurredAt]
+      properties:
+        notificationId:
+          type: integer
+          format: int64
+          description: 멱등 키
+        merchantCode:
+          type: string
+          maxLength: 64
+        orderId:
+          type: string
+          maxLength: 100
+        paymentId:
+          type: integer
+          format: int64
+        paymentStatus:
+          type: string
+          enum: [APPROVED, REJECTED]
+          description: |
+            최종 상태만 통보한다. HELD 는 보내지 않으며 CakeShop 화면에서도
+            PENDING_REVIEW 로 표시하고 승인으로 취급하지 않는다 (DEC-12)
+        reasonCode:
+          type: [string, 'null']
+          maxLength: 50
+        occurredAt:
+          type: string
+          format: date-time
+
+    ErrorBody:
+      type: object
+      required: [code, message, requestId, timestamp]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+        timestamp: { type: string, format: date-time }

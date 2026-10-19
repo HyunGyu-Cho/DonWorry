@@ -1,0 +1,147 @@
+openapi: 3.1.0
+info:
+  title: DonWorry AI Server — 조사보고서 계약
+  version: 1.0.0
+  description: |
+    C04 조사보고서 생성. 설명 정본은 Notion 05-1, 보고서 버전 정책은 DEC-05.
+
+    - 멱등 키는 caseId + evidenceVersion
+    - Investigation 쪽 타임아웃 3초. 초과하면 ai_reports 를 FAILED 로 두고 재시도 가능하게 하되
+      직원의 수동 조사·판정을 막지 않는다
+    - AI 는 읽기 전용이다. 결제 상태를 바꾸지 않고 권고만 낸다
+    - 입력은 최소 필요 증거만 담고 민감정보는 마스킹한다
+
+servers:
+  - url: http://localhost:8000
+    description: 로컬 AI Server
+
+paths:
+  /api/reports:
+    post:
+      operationId: createReport
+      summary: C04 — 조사보고서 요청
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+      responses:
+        '200':
+          description: |
+            보고서 결과. 생성 실패도 이 응답으로 reportStatus=FAILED 를 돌려준다.
+            같은 caseId + evidenceVersion 재요청은 저장된 결과를 그대로 준다.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '422':
+          description: 스키마 위반 — 알 수 없는 필드, 범위를 벗어난 점수 등
+
+  /health:
+    get:
+      operationId: health
+      summary: 상태 확인
+      responses:
+        '200':
+          description: UP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: UP }
+
+components:
+  schemas:
+    ReportRequest:
+      type: object
+      additionalProperties: false
+      required: [reportRequestId, caseId, evidenceVersion, merchantId, subjectType]
+      properties:
+        reportRequestId:
+          type: string
+          maxLength: 100
+        caseId:
+          type: integer
+          format: int64
+        evidenceVersion:
+          type: integer
+          minimum: 0
+          description: Case.evidence_version. 이 값이 올라가면 기존 보고서는 STALE 이 된다
+        merchantId:
+          type: integer
+          format: int64
+        subjectType:
+          type: string
+          enum: [PAYMENT_CUSTOMER, PLATFORM_USER]
+        signals:
+          type: array
+          default: []
+          items:
+            $ref: '#/components/schemas/Signal'
+        payments:
+          type: array
+          default: []
+          items:
+            $ref: '#/components/schemas/PaymentEvidence'
+
+    Signal:
+      type: object
+      additionalProperties: false
+      required: [sourceType, sourceId, occurredAt]
+      properties:
+        sourceType:
+          type: string
+          enum: [FDS_ALERT, LOGIN_EVENT]
+        sourceId:
+          type: integer
+          format: int64
+        riskScore:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+        occurredAt:
+          type: string
+          format: date-time
+        reason:
+          type: [string, 'null']
+          maxLength: 500
+
+    PaymentEvidence:
+      type: object
+      additionalProperties: false
+      required: [paymentId, amount, status, occurredAt]
+      properties:
+        paymentId:
+          type: integer
+          format: int64
+        amount:
+          type: integer
+          minimum: 0
+          description: KRW 원 단위
+        status:
+          type: string
+          maxLength: 20
+        occurredAt:
+          type: string
+          format: date-time
+
+    ReportResponse:
+      type: object
+      required: [caseId, evidenceVersion, reportStatus]
+      properties:
+        caseId:
+          type: integer
+          format: int64
+        evidenceVersion:
+          type: integer
+        reportStatus:
+          type: string
+          enum: [PENDING, COMPLETED, FAILED]
+        summary:
+          type: [string, 'null']
+        recommendation:
+          type: [string, 'null']
+          enum: [REJECT_SUGGESTED, RELEASE_SUGGESTED, NEEDS_MORE_EVIDENCE, null]
+          description: AI 권고다. 직원의 최종 판정이 아니다
