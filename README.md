@@ -44,12 +44,26 @@ DonWorry/
 │       │       └── db/migration/    # Flyway 마이그레이션 (스키마 수동 변경 금지)
 │       └── test/java/com/donworry/
 │           └── ModularityTests.java # 모듈 경계 위반·순환 의존 검사
-├── frontend/                        # React (아직 생성 안 됨)
-└── ai-server/                       # FastAPI 조사보고서 서버 (아직 생성 안 됨)
+├── frontend/                        # React + TypeScript (Vite) — 02-2
+│   └── src/
+│       ├── app/                     # App·Router·인증 경계·역할 가드
+│       ├── pages/{auth,security,merchant,admin}/
+│       ├── components/              # 공용 UI
+│       ├── api/                     # 백엔드 HTTP 호출 — 화면에서 직접 fetch 금지
+│       ├── hooks/
+│       └── types/                   # 05-1 계약에서 옮긴 공유 타입
+├── ai-server/                       # FastAPI 조사보고서 서버 — 02-3
+│   ├── app/
+│   │   ├── controller/              # POST /api/reports (C04) 수신
+│   │   ├── service/                 # 입력 검증·멱등·AI 실행
+│   │   ├── agent/                   # 흐름·프롬프트·허용 Tool
+│   │   ├── schemas/                 # Pydantic 요청/응답
+│   │   └── config.py
+│   └── tests/
+└── docs/db/01-create-database.sql   # DB·계정 생성 (관리자 1회 실행)
 ```
 
-- `frontend/`, `ai-server/`는 모노레포의 별도 최상위 디렉터리로 두기로 결정되어 있으나 아직 만들지 않았다.
-- CakeShop은 이 저장소가 아닌 **독립 실행 애플리케이션**이다.
+- CakeShop은 이 저장소가 아닌 **독립 실행 애플리케이션**이다. CS-01·02 화면도 CakeShop 소유이므로 `frontend/`에 중복 구현하지 않는다.
 - 모듈 내부 하위 폴더(`api/`, `controller/`, `service/`, `repository/`, `entity/`, `dto/` 및 필요 시 `client/`, `listener/`, `security/`, `job/`)는 **실제로 필요할 때 생성**한다. 클래스·DTO·Entity 파일명은 확정 전이다.
 
 ## 모듈 경계 규칙
@@ -111,15 +125,46 @@ DB 접속 정보는 환경변수로도 넘길 수 있다: `DONWORRY_DB_HOST` / `
 
 > **DB 포트 주의** — 설정 기본값은 팀 기준인 MariaDB 3306이다. 한 머신에 MySQL이 함께 설치되어 3306을 점유한 경우 MariaDB는 다른 포트(예: 3307)로 올라가므로, 접속 전에 어느 서버가 3306을 쓰는지 확인하고 `DONWORRY_DB_PORT`로 맞춰야 한다. 확인: MariaDB 접속 후 `SHOW VARIABLES LIKE 'port';`
 
+## 프론트엔드 실행
+
+```bash
+cd frontend
+npm install
+cp .env.example .env            # VITE_API_BASE_URL
+npm run dev                     # 개발 서버
+npm run lint                    # ESLint
+npm run typecheck               # tsc -b
+npm run format:check            # Prettier
+npm run build                   # 프로덕션 빌드
+```
+
+## AI 서버 실행
+
+```bash
+cd ai-server
+uv sync
+cp .env.example .env
+uv run uvicorn app.main:app --reload --port 8000
+uv run ruff check .             # 린트
+uv run pytest                   # Mock LLM 기반 계약 테스트
+```
+
+LLM 제공자는 아직 정하지 않았다. `AI_SERVER_LLM_PROVIDER=mock`이 기본이고, `app/agent/graph.py`의 `LlmClient` 프로토콜 구현만 바꾸면 교체된다. LangGraph 배선은 제공자 확정 후에 올린다.
+
 ## 기술 스택 결정
 
 | 항목 | 선택 | 비고 |
 | --- | --- | --- |
 | Java | 17 | Spring Boot 4.x 최소 버전 |
 | Spring Boot | 4.1.1 | 2026-10 기준 최신 안정 버전 |
-| Spring Modulith | 2.1.1 | 모듈 경계 + Event Publication Registry |
+| Spring Modulith | 2.1.1 | 모듈 경계 + Event Publication Registry (JDBC 구현) |
 | DB | MariaDB | 드라이버 `mariadb-java-client` |
 | 마이그레이션 | Flyway (+ `flyway-mysql`) | 스키마 정본, 수동 변경 금지 |
+| Frontend | React 19 + TypeScript 5.9 + Vite 8 | 라우팅 `react-router-dom` 7 |
+| Frontend 검사 | ESLint 9 + Prettier 3 | `typescript-eslint` 8 |
+| AI Server | FastAPI + Pydantic 2 / Python 3.13+ | 의존성 관리 `uv`, 검사 `ruff` + `pytest` |
+
+TypeScript를 5.9로 내린 이유: Vite 템플릿 기본값은 TypeScript 7(tsgo)이지만 `typescript-eslint` 8의 peer 범위가 `>=4.8.4 <6.1.0`이어서 설치가 거부된다. 06-1이 ESLint + React Hooks 검사를 명시하므로 린터를 살리고 TypeScript를 내렸다. TypeScript 7을 쓰려면 린터를 oxlint로 바꾸고 06-1을 함께 고쳐야 한다.
 
 Spring Boot 4 로 올리면서 걸린 두 가지:
 
@@ -153,4 +198,6 @@ Flyway 마이그레이션이 Notion 04-2 의 업무 테이블 25개와 Spring Mo
 - `SecurityConfig` — `spring-boot-starter-security`만 들어가 있어 현재는 모든 요청이 인증을 요구한다.
 - 25개 테이블에 대응하는 JPA 엔티티·리포지토리, C01~C07 API·이벤트 구현, 업무 테스트.
 - 시연용 시드 데이터(가맹점·API Key·직원 계정).
-- `frontend/`, `ai-server/` 디렉터리.
+- 화면 구현 — `frontend/`는 폴더 구조·라우팅·인증 경계·API 호출 계층까지만 있고, AUTH-01 외 11개 화면은 자리표시자다.
+- AI 보고서 실제 생성 — `ai-server/`는 C04 계약·멱등·Tool allowlist까지만 있고 LLM 호출은 Mock이다.
+- CI 워크플로(06-3), Docker 구성(06-4), 하네스 파일 `AGENTS.md`·`CLAUDE.md`·`docs/decisions/`·`contracts/`·`tasks/`(06-2).

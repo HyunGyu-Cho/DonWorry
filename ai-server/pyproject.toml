@@ -1,0 +1,39 @@
+[project]
+name = "donworry-ai-server"
+version = "0.0.1"
+description = "DonWorry AI 조사보고서 서버 (Notion 02-3 / C04)"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.121.0",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.12.0",
+    "uvicorn[standard]>=0.38.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.0",
+    "pytest>=8.4.0",
+    "ruff>=0.14.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "ANN",  # 타입 힌트 — 06-1 요구
+    "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
