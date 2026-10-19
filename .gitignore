@@ -1,0 +1,61 @@
+# ─── Java / Gradle (backend) ───────────────────────────────
+build/
+.gradle/
+out/
+bin/
+*.class
+*.jar
+*.war
+*.log
+hs_err_pid*
+# Gradle Wrapper jar는 커밋한다 (*.jar 뒤에 와야 예외가 적용됨)
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# ─── Node / React (frontend) ───────────────────────────────
+node_modules/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── Python / FastAPI (ai-server) ──────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ─── 환경 변수·비밀값 (API Key, DB 비밀번호 등 커밋 금지) ──
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+application-local.yml
+application-local.yaml
+application-local.properties
+application-secret*.yml
+
+# ─── IDE ───────────────────────────────────────────────────
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+!.vscode/extensions.json
+.project
+.classpath
+.settings/
+
+# ─── OS (OneDrive·Windows·macOS) ───────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
