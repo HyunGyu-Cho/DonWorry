@@ -90,12 +90,10 @@ React 개발 서버 포트는 별도.
 전제: JDK 17, MariaDB 3306.
 
 ```bash
-# 1) DB 준비
-#    CREATE DATABASE donworry DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-#    CREATE USER 'donworry'@'localhost' IDENTIFIED BY '...';
-#    GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'localhost';
+# 1) DB·계정 생성 (MariaDB 관리자 계정으로 1회)
+mariadb -h 127.0.0.1 -P 3306 -u root -p < docs/db/01-create-database.sql
 
-# 2) 개인 로컬 설정 (비밀번호가 기본값과 다를 때만)
+# 2) 개인 로컬 설정 (비밀번호·포트가 기본값과 다를 때만)
 cd backend
 cp src/main/resources/application-local.yml.example src/main/resources/application-local.yml
 
@@ -108,6 +106,8 @@ cp src/main/resources/application-local.yml.example src/main/resources/applicati
 DB 접속 정보는 환경변수로도 넘길 수 있다: `DONWORRY_DB_HOST` / `DONWORRY_DB_PORT` / `DONWORRY_DB_NAME` / `DONWORRY_DB_USER` / `DONWORRY_DB_PASSWORD` / `DONWORRY_PORT`, 외부 연동은 `CAKESHOP_BASE_URL` / `AI_SERVER_BASE_URL`.
 
 `application-local.yml`은 `.gitignore` 대상이다. 비밀값을 `application.yml`에 적지 않는다.
+
+> **DB 포트 주의** — 설정 기본값은 팀 기준인 MariaDB 3306이다. 한 머신에 MySQL이 함께 설치되어 3306을 점유한 경우 MariaDB는 다른 포트(예: 3307)로 올라가므로, 접속 전에 어느 서버가 3306을 쓰는지 확인하고 `DONWORRY_DB_PORT`로 맞춰야 한다. 확인: MariaDB 접속 후 `SHOW VARIABLES LIKE 'port';`
 
 ## 기술 스택 결정
 

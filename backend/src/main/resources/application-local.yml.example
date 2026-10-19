@@ -5,6 +5,9 @@
 
 spring:
   datasource:
+    # 포트 주의: 팀 기준은 3306 이지만, 3306 이 MySQL 등 다른 서버에 점유된
+    # 머신에서는 MariaDB 가 쓰는 포트(예: 3307)로 바꿔야 한다.
+    # 확인: MariaDB 접속 후 SHOW VARIABLES LIKE 'port';
     url: jdbc:mariadb://localhost:3306/donworry?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
     username: donworry
     password: 여기에_본인_로컬_비밀번호
@@ -14,8 +17,4 @@ spring:
 #   DONWORRY_DB_USER / DONWORRY_DB_PASSWORD / DONWORRY_PORT
 #   CAKESHOP_BASE_URL / AI_SERVER_BASE_URL
 #
-# DB 준비 (MariaDB 3306):
-#   CREATE DATABASE donworry
-#     DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-#   CREATE USER 'donworry'@'localhost' IDENTIFIED BY '...';
-#   GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'localhost';
+# DB·계정 준비: docs/db/01-create-database.sql 을 MariaDB 관리자 계정으로 1회 실행.
