@@ -33,3 +33,4 @@
 | --- | --- | --- |
 | [0001](0001-modulith-event-registry-jdbc.md) | Modulith 이벤트 레지스트리를 JDBC 구현으로 | 채택 |
 | [0002](0002-typescript-5-9-for-eslint.md) | Frontend TypeScript를 5.9로 고정 | 채택 |
+| [0003](0003-investigation-payment-cycle.md) | investigation ↔ payment 순환 의존 해소 | **제안 — 결정 필요** |
