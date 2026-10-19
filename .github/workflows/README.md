@@ -16,6 +16,14 @@
 - **`uv sync --locked`**: `uv.lock` 과 어긋나면 실패한다. 잠금 파일을 CI 가 조용히 갱신하지 않는다.
 - **`npm ci`**: `package-lock.json` 기준으로만 설치한다.
 
+## 겪은 문제
+
+- `./gradlew: Permission denied` (exit 126) — Windows 에서 커밋하면 `gradlew` 가 모드 `100644`
+  로 들어가 Linux 러너에서 실행되지 않는다. `git update-index --chmod=+x backend/gradlew` 로
+  `100755` 로 바꿔야 한다.
+- `astral-sh/setup-uv` 는 떠다니는 메이저 태그(`v10`)를 publish 하지 않는다. 정확한 버전
+  (`v10.3.0`)을 써야 액션이 해석된다.
+
 ## 아직 안 된 것
 
 - **브랜치 보호 규칙.** 이 잡들을 GitHub 저장소 설정에서 필수 상태로 등록해야 CI 실패가 병합을 막는다.

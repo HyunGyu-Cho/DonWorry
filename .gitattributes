@@ -6,6 +6,8 @@
 *.cmd text eol=crlf
 
 # gradlew 는 반드시 LF (CRLF면 Linux/macOS에서 실행 실패)
+# 실행 권한은 git 모드로 관리한다. Windows 에서 새로 추가하면 100644 가 되므로
+# `git update-index --chmod=+x backend/gradlew` 로 고쳐야 CI 에서 실행된다.
 gradlew text eol=lf
 
 # 바이너리
