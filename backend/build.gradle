@@ -39,8 +39,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
     // 모듈 경계 + Event Publication Registry (C05 CaseDecisionMade 영속 발행)
+    // JPA 대신 JDBC 구현을 쓴다: event_publication 이 JPA 엔티티가 아니게 되므로
+    // ddl-auto=validate 를 켜도 이 인프라 테이블이 검사 대상에서 빠진다 (06-1 정책).
     implementation "org.springframework.modulith:spring-modulith-starter-core"
-    implementation "org.springframework.modulith:spring-modulith-starter-jpa"
+    implementation "org.springframework.modulith:spring-modulith-starter-jdbc"
 
     // 운영 확인용
     implementation 'org.springframework.boot:spring-boot-starter-actuator'

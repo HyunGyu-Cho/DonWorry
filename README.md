@@ -142,7 +142,9 @@ Flyway 마이그레이션이 Notion 04-2 의 업무 테이블 25개와 Spring Mo
 규칙:
 
 - 모듈 간 참조에는 DB FK 를 두지 않는다. 같은 모듈 안에서만 FK 를 쓰고, 다른 모듈의 ID 는 공개 조회 계약으로 존재를 검증한다 (04-1).
-- `spring.jpa.hibernate.ddl-auto`는 `none`을 유지한다. `validate`로 바꾸면 `event_publication`의 컬럼 길이를 Hibernate 기본값보다 넓혀 둔 것 때문에 기동이 실패한다 (`V6` 주석 참고).
+- `spring.jpa.hibernate.ddl-auto`는 `validate`다 (06-1). 엔티티 매핑이 Flyway 스키마와 어긋나면 기동 시점에 실패한다. `create` / `create-drop` / `update`는 공유 DB에서 금지.
+- `EVENT_PUBLICATION`은 Spring Modulith 의 **JDBC** 구현을 쓰기 때문에 JPA 엔티티가 아니고, 따라서 `validate` 검사 대상이 아니다. `starter-jpa`로 되돌리면 이 테이블이 엔티티가 되어 `validate`와 충돌한다.
+- `V6`는 Modulith 가 배포하는 `schemas/v2/schema-mariadb.sql` 원본이다. 직접 수정하지 말고 Modulith 버전을 올릴 때 원본과 다시 대조한다. `use-legacy-structure`는 `false` 유지.
 - 적용된 마이그레이션은 수정하지 않고 새 버전 파일을 추가한다.
 - 04-2 에 없는데 추가한 것: `cashflow_assumptions`의 `UNIQUE(merchant_id)` (MER-05 가 가맹점당 1행을 `PUT` 으로 갱신하므로), 그리고 재시도·스케줄러 재탐색용 인덱스 몇 개. `status` 류 컬럼은 명세대로 `VARCHAR` 이며 `CHECK` 제약은 걸지 않았다.
 

@@ -14,12 +14,10 @@ spring:
       connection-timeout: 3000
 
   jpa:
-    # 스키마 정본은 Flyway. Hibernate 는 스키마를 만들지도 검사하지도 않는다.
-    # validate 로 바꾸지 말 것: event_publication 의 listener_id·event_type·
-    # serialized_event 를 Hibernate 기본 길이보다 넓혀 두었기 때문에 기동이 실패한다.
-    # (V6__modulith_event_publication.sql 주석 참고)
+    # 스키마 정본은 Flyway. Hibernate 는 스키마를 만들지 않고 매핑만 검사한다.
+    # 06-1: create / create-drop / update 는 공유 DB 금지.
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate
     open-in-view: false
     properties:
       hibernate:
@@ -38,9 +36,11 @@ spring:
   modulith:
     events:
       jdbc:
-        # event_publication 테이블도 Flyway 마이그레이션에서 생성한다.
+        # EVENT_PUBLICATION 테이블은 Flyway(V6)가 만든다. Modulith 가 직접 만들지 않는다.
         schema-initialization:
           enabled: false
+        # V6 는 Modulith 의 V2 스키마다. true 로 바꾸면 V1 구조를 기대해 조회가 깨진다.
+        use-legacy-structure: false
       republish-outstanding-events-on-restart: true   # 재시작 시 미완료 이벤트 재처리
 
   jackson:

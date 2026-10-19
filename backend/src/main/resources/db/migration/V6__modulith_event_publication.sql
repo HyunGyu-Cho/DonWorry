@@ -2,29 +2,32 @@
 -- Spring Modulith Event Publication Registry (인프라 테이블, 업무 25개 테이블과 별도)
 -- 정본: Notion 05-3 — CaseDecisionMade 영속 발행, 재시작 후 미완료 이벤트 재처리
 --
--- 컬럼 구성은 spring-modulith-events-jpa 2.1.1 의 JpaEventPublication 엔티티를
--- Hibernate 가 MariaDB 12.2 에 생성한 결과에서 가져왔다. 단, 아래 세 컬럼은
--- Hibernate 기본값(VARCHAR(255))이 실제 페이로드에 비해 좁아 의도적으로 넓혔다.
---   listener_id / event_type : 255 → 512  (FQCN + 메서드 시그니처가 넘길 수 있음)
---   serialized_event         : 255 → TEXT (직렬화된 이벤트 JSON)
--- 이 차이 때문에 spring.jpa.hibernate.ddl-auto 는 none 을 유지한다. validate 로
--- 바꾸면 길이 불일치로 기동이 실패한다.
+-- 내용은 spring-modulith-events-jdbc 2.1.1 이 제공하는
+--   org/springframework/modulith/events/jdbc/schemas/v2/schema-mariadb.sql
+-- 을 그대로 쓴다. 직접 손대지 말고 Modulith 버전을 올릴 때 해당 파일과 다시 대조할 것.
 --
--- id 는 MariaDB 의 native UUID 타입이다 (MariaDB 10.7 이상 필요).
+-- V2 구조를 쓰므로 spring.modulith.events.jdbc.use-legacy-structure 는 기본값(false)을
+-- 유지해야 한다. true 로 바꾸면 Modulith 가 V1 구조를 기대해 조회가 깨진다.
+--
+-- 테이블 생성 주체는 Flyway 다. spring.modulith.events.jdbc.schema-initialization.enabled
+-- 는 false 로 두어 Modulith 가 직접 만들지 않게 한다.
+--
+-- JDBC 구현이라 JPA 엔티티가 아니므로 ddl-auto=validate 검사 대상이 아니다.
+-- 식별자는 Modulith 코드가 참조하는 대문자 이름을 유지한다 (Linux 의
+-- lower_case_table_names=0 환경에서 대소문자가 구분된다).
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE event_publication (
-    id                     UUID         NOT NULL,
-    listener_id            VARCHAR(512) NOT NULL,
-    event_type             VARCHAR(512) NOT NULL,
-    serialized_event       TEXT         NOT NULL,
-    publication_date       DATETIME(6)  NOT NULL,
-    completion_date        DATETIME(6)  NULL COMMENT 'NULL = 미완료. 재시작 시 재처리 대상',
-    last_resubmission_date DATETIME(6)  NULL,
-    completion_attempts    INT          NOT NULL DEFAULT 0,
-    status                 VARCHAR(20)  NULL COMMENT 'PUBLISHED / PROCESSING / COMPLETED / FAILED / RESUBMITTED',
-    PRIMARY KEY (id),
-    -- 미완료 이벤트 재탐색
-    KEY ix_event_publication_completion_date (completion_date),
-    KEY ix_event_publication_listener (listener_id)
-) ENGINE = InnoDB;
+CREATE TABLE IF NOT EXISTS EVENT_PUBLICATION
+(
+    ID                     VARCHAR(36)   NOT NULL,
+    LISTENER_ID            VARCHAR(512)  NOT NULL,
+    EVENT_TYPE             VARCHAR(512)  NOT NULL,
+    SERIALIZED_EVENT       VARCHAR(4000) NOT NULL,
+    PUBLICATION_DATE       TIMESTAMP(6)  NOT NULL,
+    COMPLETION_DATE        TIMESTAMP(6)  DEFAULT NULL NULL,
+    STATUS                 VARCHAR(20),
+    COMPLETION_ATTEMPTS    INT,
+    LAST_RESUBMISSION_DATE TIMESTAMP(6),
+    PRIMARY KEY (ID),
+    INDEX EVENT_PUBLICATION_BY_COMPLETION_DATE_IDX (COMPLETION_DATE)
+);
