@@ -76,7 +76,16 @@ payment 가 상태 변경 이벤트를 발행하고 investigation 이 수신하�
   강제한다. 누가 `PaymentReader` 를 다시 끌어오면 `./gradlew check` 에서 막힌다.
   `SchemaMigrationTests` 가 스냅샷 컬럼 존재를 확인한다.
 - **문서:** `AGENTS.md`, README 모듈 경계 규칙, `investigation/api`·`payment/api` package-info.
-  **Notion 02-1 §4 와 05-2 는 아직 갱신하지 않았다** — 팀 공유 문서라 별도로 고쳐야 한다.
+  Notion 도 갱신했다 (2026-10-20):
+  - **02-1 §4** `investigation ⇢ payment` 항목에 PaymentReader 조회 금지와 그 이유, 스냅샷 방식,
+    이 ADR 링크를 추가. `payment → investigation.api` 항목에 요청이 결제 사실을 함께 넘긴다는 점 추가.
+  - **05-2** C03 Request 에 `orderId`, `amount`, `paymentStatus` 추가. 공개 조회 Interface 의
+    Investigation 항목에서 PaymentReader 제거.
+
+  **남은 것:** 02-1 하단의 "전체 시스템 및 업무 호출 관계", "Java 모듈 의존성: 핵심 구조"
+  두 이미지가 이전 의존 방향을 그렸을 수 있다. 이미지는 고치지 못했으므로 다음에 다시 그릴 때
+  investigation → payment 화살표를 빼야 한다. 같은 페이지의 `CaseService` 코드 예시는 이미
+  `ApplicationEventPublisher` 만 들고 있어 이 결정과 맞다.
 
 ## 검증
 
