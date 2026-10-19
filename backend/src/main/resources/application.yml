@@ -1,0 +1,88 @@
+spring:
+  application:
+    name: donworry
+
+  # ── MariaDB (로컬 기본값; 비밀값은 환경변수나 application-local.yml 로 덮어쓴다) ──
+  datasource:
+    url: jdbc:mariadb://${DONWORRY_DB_HOST:localhost}:${DONWORRY_DB_PORT:3306}/${DONWORRY_DB_NAME:donworry}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+    username: ${DONWORRY_DB_USER:donworry}
+    password: ${DONWORRY_DB_PASSWORD:donworry}
+    driver-class-name: org.mariadb.jdbc.Driver
+    hikari:
+      pool-name: donworry-pool
+      maximum-pool-size: 10
+      connection-timeout: 3000
+
+  jpa:
+    # 스키마 정본은 Flyway. 마이그레이션이 생기면 validate 로 올린다.
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC            # DATETIME(6) UTC 저장, KST 표기는 화면에서
+          batch_size: 50
+        format_sql: true
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+
+  modulith:
+    events:
+      jdbc:
+        # event_publication 테이블도 Flyway 마이그레이션에서 생성한다.
+        schema-initialization:
+          enabled: false
+      republish-outstanding-events-on-restart: true   # 재시작 시 미완료 이벤트 재처리
+
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+server:
+  port: ${DONWORRY_PORT:8081}        # CakeShop 8080 / DonWorry 8081 / FastAPI 8000
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# ── 외부 연동 대상 (구현 시 사용) ──
+donworry:
+  cakeshop:
+    base-url: ${CAKESHOP_BASE_URL:http://localhost:8080}
+  ai-server:
+    base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
+    timeout: 3s                      # C04: 3초 타임아웃 → 보고서 FAILED
+
+logging:
+  level:
+    root: INFO
+    com.donworry: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.flywaydb: DEBUG

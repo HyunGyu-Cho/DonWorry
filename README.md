@@ -26,18 +26,24 @@ FDS 판정 기준: `score < 50` ALLOW / `50~80` HOLD / `> 80` DENY.
 ```
 DonWorry/
 ├── backend/                         # Spring Boot 단일 애플리케이션 + 5개 업무 모듈
-│   ├── gradle/                      # Gradle Wrapper (`gradle wrapper` 실행 시 생성)
+│   ├── build.gradle                 # Spring Boot 4.1.1 / Modulith 2.1.1 / Java 17
+│   ├── settings.gradle
+│   ├── gradlew, gradle/wrapper/     # Gradle Wrapper 9.3.0
 │   └── src/
 │       ├── main/
 │       │   ├── java/com/donworry/
+│       │   │   ├── DonWorryApplication.java
 │       │   │   ├── identity/        # 로그인·사용자·가맹점·권한
 │       │   │   ├── payment/         # PG·결제·CakeShop 연동·Mock 카드사
 │       │   │   ├── fds/             # Rule Engine·위험평가·Alert
 │       │   │   ├── investigation/   # Case·보안직원 판정·AI 결과 관리
 │       │   │   └── settlement/      # 매입·정산·환불·자금관리(cashflow)
 │       │   └── resources/
+│       │       ├── application.yml
+│       │       ├── application-local.yml.example
 │       │       └── db/migration/    # Flyway 마이그레이션 (스키마 수동 변경 금지)
-│       └── test/
+│       └── test/java/com/donworry/
+│           └── ModularityTests.java # 모듈 경계 위반·순환 의존 검사
 ├── frontend/                        # React (아직 생성 안 됨)
 └── ai-server/                       # FastAPI 조사보고서 서버 (아직 생성 안 됨)
 ```
@@ -79,6 +85,43 @@ DonWorry/
 
 React 개발 서버 포트는 별도.
 
+## 백엔드 실행
+
+전제: JDK 17, MariaDB 3306.
+
+```bash
+# 1) DB 준비
+#    CREATE DATABASE donworry DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+#    CREATE USER 'donworry'@'localhost' IDENTIFIED BY '...';
+#    GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'localhost';
+
+# 2) 개인 로컬 설정 (비밀번호가 기본값과 다를 때만)
+cd backend
+cp src/main/resources/application-local.yml.example src/main/resources/application-local.yml
+
+# 3) 실행 / 빌드 / 테스트
+./gradlew bootRun --args='--spring.profiles.active=local'
+./gradlew build
+./gradlew test --tests '*ModularityTests'
+```
+
+DB 접속 정보는 환경변수로도 넘길 수 있다: `DONWORRY_DB_HOST` / `DONWORRY_DB_PORT` / `DONWORRY_DB_NAME` / `DONWORRY_DB_USER` / `DONWORRY_DB_PASSWORD` / `DONWORRY_PORT`, 외부 연동은 `CAKESHOP_BASE_URL` / `AI_SERVER_BASE_URL`.
+
+`application-local.yml`은 `.gitignore` 대상이다. 비밀값을 `application.yml`에 적지 않는다.
+
+## 기술 스택 결정
+
+| 항목 | 선택 | 비고 |
+| --- | --- | --- |
+| Java | 17 | Spring Boot 4.x 최소 버전 |
+| Spring Boot | 4.1.1 | 2026-10 기준 최신 안정 버전 |
+| Spring Modulith | 2.1.1 | 모듈 경계 + Event Publication Registry |
+| DB | MariaDB | 드라이버 `mariadb-java-client` |
+| 마이그레이션 | Flyway (+ `flyway-mysql`) | 스키마 정본, 수동 변경 금지 |
+
 ## 아직 없는 것
 
-Gradle 빌드 스크립트, 애플리케이션 설정, Flyway 마이그레이션, 엔티티·API 구현, 테스트가 모두 미작성 상태다. 현재 저장소에 있는 것은 모듈 경계와 상위 폴더 구조뿐이다.
+- Flyway 마이그레이션 스크립트 (`event_publication` 테이블 포함). 이 때문에 `spring.jpa.hibernate.ddl-auto`는 `none`이며, 마이그레이션이 생기면 `validate`로 올린다.
+- `SecurityConfig` — `spring-boot-starter-security`만 들어가 있어 현재는 모든 요청이 인증을 요구한다.
+- 25개 테이블의 엔티티, C01~C07 API·이벤트 구현, 업무 테스트.
+- `frontend/`, `ai-server/` 디렉터리.

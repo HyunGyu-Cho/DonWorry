@@ -1,0 +1,21 @@
+# 개인 로컬 설정 템플릿.
+#   cp application-local.yml.example application-local.yml
+# application-local.yml 은 .gitignore 대상이므로 비밀값을 여기에 적지 말고 복사본에만 적는다.
+# 실행: ./gradlew bootRun --args='--spring.profiles.active=local'
+
+spring:
+  datasource:
+    url: jdbc:mariadb://localhost:3306/donworry?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+    username: donworry
+    password: 여기에_본인_로컬_비밀번호
+
+# 환경변수로 넘기는 방법 (이 파일 없이도 가능)
+#   DONWORRY_DB_HOST / DONWORRY_DB_PORT / DONWORRY_DB_NAME
+#   DONWORRY_DB_USER / DONWORRY_DB_PASSWORD / DONWORRY_PORT
+#   CAKESHOP_BASE_URL / AI_SERVER_BASE_URL
+#
+# DB 준비 (MariaDB 3306):
+#   CREATE DATABASE donworry
+#     DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+#   CREATE USER 'donworry'@'localhost' IDENTIFIED BY '...';
+#   GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'localhost';

@@ -1,0 +1,61 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.donworry'
+version = '0.0.1-SNAPSHOT'
+description = 'DonWorry 백엔드 — 결제(PG)·FDS·보안조사·정산'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    springModulithVersion = '2.1.1'
+}
+
+dependencies {
+    // 웹·검증
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // 영속성 — 스키마 정본은 Flyway (DEC: 스키마 수동 변경 금지)
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-mysql'      // MariaDB/MySQL 계열 지원 모듈
+    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
+
+    // 인증·권한 (AUTH-01, DEC-13 역할·가맹점 격리)
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // 모듈 경계 + Event Publication Registry (C05 CaseDecisionMade 영속 발행)
+    implementation "org.springframework.modulith:spring-modulith-starter-core"
+    implementation "org.springframework.modulith:spring-modulith-starter-jpa"
+
+    // 운영 확인용
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // 테스트
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation "org.springframework.modulith:spring-modulith-starter-test"
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.modulith:spring-modulith-bom:${springModulithVersion}"
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
