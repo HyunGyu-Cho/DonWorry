@@ -1,0 +1,45 @@
+name: ai-server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ai-server/**'
+      - '.github/workflows/ai-server.yml'
+  pull_request:
+    paths:
+      - 'ai-server/**'
+      - '.github/workflows/ai-server.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: ai-server
+
+jobs:
+  check:
+    name: check (ruff · pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: ai-server/uv.lock
+
+      - name: uv sync
+        run: uv sync --locked
+
+      - name: ruff check
+        run: uv run ruff check .
+
+      - name: ruff format --check
+        run: uv run ruff format --check .
+
+      # Mock LLM 기반. 외부 LLM 을 호출하지 않는다 (02-3).
+      - name: pytest
+        run: uv run pytest -q

@@ -1,0 +1,49 @@
+name: frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  check:
+    name: check (ESLint · tsc · Prettier · build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      # 06-3 필수 CI 4종. 하나라도 실패하면 병합을 막는다.
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Prettier
+        run: npm run format:check
+
+      - name: Production build
+        run: npm run build

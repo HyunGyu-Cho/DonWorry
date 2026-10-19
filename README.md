@@ -193,6 +193,33 @@ Flyway 마이그레이션이 Notion 04-2 의 업무 테이블 25개와 Spring Mo
 - 적용된 마이그레이션은 수정하지 않고 새 버전 파일을 추가한다.
 - 04-2 에 없는데 추가한 것: `cashflow_assumptions`의 `UNIQUE(merchant_id)` (MER-05 가 가맹점당 1행을 `PUT` 으로 갱신하므로), 그리고 재시도·스케줄러 재탐색용 인덱스 몇 개. `status` 류 컬럼은 명세대로 `VARCHAR` 이며 `CHECK` 제약은 걸지 않았다.
 
+## CI
+
+GitHub Actions 워크플로 3개. 각자 자기 디렉터리가 바뀔 때만 돈다.
+
+| 워크플로 | 잡 | 검사 |
+| --- | --- | --- |
+| `frontend` | check | ESLint / `tsc -b` / Prettier `--check` / 프로덕션 빌드 |
+| `backend` | check | `./gradlew check` — JUnit + Modulith `verify()` + ArchUnit |
+| `backend` | schema | 빈 MariaDB 11.8 에 Flyway 전체 migration 적용 + JPA `validate` 기동 |
+| `ai-server` | check | `ruff check` / `ruff format --check` / `pytest` (Mock LLM) |
+
+DB가 필요한 테스트는 `@Tag("db")`로 떼어 `./gradlew dbTest`에서만 돈다. 그래서 `./gradlew check`는 Docker나 DB 없이 어디서나 돌아간다.
+
+로컬에서 schema 잡과 같은 검사를 하려면:
+
+```bash
+cd backend
+DONWORRY_TEST_DB_URL='jdbc:mariadb://127.0.0.1:3306/donworry' \
+DONWORRY_TEST_DB_USER=donworry \
+DONWORRY_TEST_DB_PASSWORD=donworry \
+  ./gradlew dbTest
+```
+
+환경변수를 주지 않으면 `application.yml` 기본값으로 접속한다.
+
+**아직 안 된 것:** 이 검사들을 필수 상태로 등록하는 브랜치 보호 규칙은 GitHub 저장소 설정에서 따로 켜야 한다. 등록하지 않으면 CI가 실패해도 병합을 막지 못한다 (06-3).
+
 ## 아직 없는 것
 
 - `SecurityConfig` — `spring-boot-starter-security`만 들어가 있어 현재는 모든 요청이 인증을 요구한다.
@@ -200,4 +227,4 @@ Flyway 마이그레이션이 Notion 04-2 의 업무 테이블 25개와 Spring Mo
 - 시연용 시드 데이터(가맹점·API Key·직원 계정).
 - 화면 구현 — `frontend/`는 폴더 구조·라우팅·인증 경계·API 호출 계층까지만 있고, AUTH-01 외 11개 화면은 자리표시자다.
 - AI 보고서 실제 생성 — `ai-server/`는 C04 계약·멱등·Tool allowlist까지만 있고 LLM 호출은 Mock이다.
-- CI 워크플로(06-3), Docker 구성(06-4), 하네스 파일 `AGENTS.md`·`CLAUDE.md`·`docs/decisions/`·`contracts/`·`tasks/`(06-2).
+- Docker 구성(06-4), 하네스 파일 `AGENTS.md`·`CLAUDE.md`·`docs/decisions/`·`contracts/`·`tasks/`(06-2). 브랜치 보호 규칙(06-3).

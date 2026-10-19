@@ -51,6 +51,8 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation "org.springframework.modulith:spring-modulith-starter-test"
+    // 06-3: Modulith 와 겹치지 않는 구조 규칙(Controller → Repository 금지 등)
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.5.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -60,6 +62,33 @@ dependencyManagement {
     }
 }
 
+// 기본 test 는 DB 없이 어디서나 돌아야 한다. 실제 MariaDB 가 필요한 테스트는
+// @Tag("db") 로 떼어내고 dbTest 태스크에서만 실행한다 (06-3 점진적 도입).
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'db'
+    }
+}
+
+tasks.register('dbTest', Test) {
+    group = 'verification'
+    description = '빈 MariaDB 에 Flyway 전체 migration 적용 + JPA validate 검증'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'db'
+    }
+    // 접속 정보는 환경변수로 받는다 (CI 의 MariaDB service, 로컬의 임시 인스턴스).
+    // 환경변수가 없으면 application.yml 기본값을 그대로 쓴다.
+    [
+        'spring.datasource.url'     : 'DONWORRY_TEST_DB_URL',
+        'spring.datasource.username': 'DONWORRY_TEST_DB_USER',
+        'spring.datasource.password': 'DONWORRY_TEST_DB_PASSWORD',
+    ].each { property, envName ->
+        def value = System.getenv(envName)
+        if (value != null) {
+            systemProperty property, value
+        }
+    }
+    outputs.upToDateWhen { false }
 }

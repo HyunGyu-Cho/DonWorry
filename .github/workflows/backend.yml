@@ -1,0 +1,95 @@
+name: backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  # DB 없이 어디서나 도는 검사: 단위 테스트 + Modulith 모듈 경계 + ArchUnit 계층 규칙
+  check:
+    name: check (JUnit · Modulith · ArchUnit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: ./gradlew check
+        run: ./gradlew check --no-daemon
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-report
+          path: backend/build/reports/tests/
+          if-no-files-found: ignore
+
+  # 빈 MariaDB 에 Flyway 전체 migration 적용 + JPA ddl-auto=validate 기동 (06-3)
+  schema:
+    name: schema (Flyway · JPA validate)
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: donworry
+          MARIADB_USER: donworry
+          MARIADB_PASSWORD: donworry
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: ./gradlew dbTest
+        env:
+          DONWORRY_TEST_DB_URL: jdbc:mariadb://127.0.0.1:3306/donworry?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+          DONWORRY_TEST_DB_USER: donworry
+          DONWORRY_TEST_DB_PASSWORD: donworry
+        run: ./gradlew dbTest --no-daemon
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-schema-report
+          path: backend/build/reports/tests/
+          if-no-files-found: ignore
