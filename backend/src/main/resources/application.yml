@@ -14,7 +14,10 @@ spring:
       connection-timeout: 3000
 
   jpa:
-    # 스키마 정본은 Flyway. 마이그레이션이 생기면 validate 로 올린다.
+    # 스키마 정본은 Flyway. Hibernate 는 스키마를 만들지도 검사하지도 않는다.
+    # validate 로 바꾸지 말 것: event_publication 의 listener_id·event_type·
+    # serialized_event 를 Hibernate 기본 길이보다 넓혀 두었기 때문에 기동이 실패한다.
+    # (V6__modulith_event_publication.sql 주석 참고)
     hibernate:
       ddl-auto: none
     open-in-view: false
@@ -42,9 +45,12 @@ spring:
 
   jackson:
     time-zone: UTC
-    serialization:
-      write-dates-as-timestamps: false
     default-property-inclusion: non_null
+    datatype:
+      # Jackson 3(Spring Boot 4)에서 날짜 옵션은 DateTimeFeature 로 옮겨졌다.
+      # spring.jackson.serialization.write-dates-as-timestamps 는 더 이상 유효하지 않다.
+      datetime:
+        write-dates-as-timestamps: false
 
 server:
   port: ${DONWORRY_PORT:8081}        # CakeShop 8080 / DonWorry 8081 / FastAPI 8000

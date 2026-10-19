@@ -107,6 +107,8 @@ DB 접속 정보는 환경변수로도 넘길 수 있다: `DONWORRY_DB_HOST` / `
 
 `application-local.yml`은 `.gitignore` 대상이다. 비밀값을 `application.yml`에 적지 않는다.
 
+> **OneDrive 주의** — 프로젝트를 OneDrive 동기화 폴더에 두면 OneDrive 가 `backend/build/` 의 파일을 잠가 `./gradlew build` 가 `Unable to delete directory ...build\test-results` / `Failed to clean up stale outputs` 로 실패할 수 있다. 이때는 `rm -rf backend/build` 후 다시 실행하면 된다. 반복되면 프로젝트를 OneDrive 밖으로 옮기는 편이 낫다.
+
 > **DB 포트 주의** — 설정 기본값은 팀 기준인 MariaDB 3306이다. 한 머신에 MySQL이 함께 설치되어 3306을 점유한 경우 MariaDB는 다른 포트(예: 3307)로 올라가므로, 접속 전에 어느 서버가 3306을 쓰는지 확인하고 `DONWORRY_DB_PORT`로 맞춰야 한다. 확인: MariaDB 접속 후 `SHOW VARIABLES LIKE 'port';`
 
 ## 기술 스택 결정
@@ -119,9 +121,34 @@ DB 접속 정보는 환경변수로도 넘길 수 있다: `DONWORRY_DB_HOST` / `
 | DB | MariaDB | 드라이버 `mariadb-java-client` |
 | 마이그레이션 | Flyway (+ `flyway-mysql`) | 스키마 정본, 수동 변경 금지 |
 
+Spring Boot 4 로 올리면서 걸린 두 가지:
+
+- Flyway 자동 구성이 별도 모듈로 분리되어 `flyway-core` 만으로는 마이그레이션이 **조용히 실행되지 않는다**. `spring-boot-starter-flyway` 가 필요하다.
+- Jackson 3 으로 바뀌어 `spring.jackson.serialization.write-dates-as-timestamps` 가 사라졌다. `spring.jackson.datatype.datetime.write-dates-as-timestamps` 를 쓴다.
+
+## 데이터베이스 스키마
+
+Flyway 마이그레이션이 Notion 04-2 의 업무 테이블 25개와 Spring Modulith 인프라 테이블 1개를 만든다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `V1__identity.sql` | merchants, platform_users, login_events, security_actions, merchant_credentials, user_merchant_access |
+| `V2__payment.sql` | payments, payment_authorizations, payment_notifications |
+| `V3__fds.sql` | fds_evaluations, fds_alerts |
+| `V4__investigation.sql` | security_cases, case_subject_locks, case_signals, case_payments, case_decisions, ai_reports |
+| `V5__settlement.sql` | captures, settlements, settlement_items, refunds, settlement_adjustments, cashflow_assumptions, planned_cashflows, funding_options |
+| `V6__modulith_event_publication.sql` | event_publication (업무 테이블 아님) |
+
+규칙:
+
+- 모듈 간 참조에는 DB FK 를 두지 않는다. 같은 모듈 안에서만 FK 를 쓰고, 다른 모듈의 ID 는 공개 조회 계약으로 존재를 검증한다 (04-1).
+- `spring.jpa.hibernate.ddl-auto`는 `none`을 유지한다. `validate`로 바꾸면 `event_publication`의 컬럼 길이를 Hibernate 기본값보다 넓혀 둔 것 때문에 기동이 실패한다 (`V6` 주석 참고).
+- 적용된 마이그레이션은 수정하지 않고 새 버전 파일을 추가한다.
+- 04-2 에 없는데 추가한 것: `cashflow_assumptions`의 `UNIQUE(merchant_id)` (MER-05 가 가맹점당 1행을 `PUT` 으로 갱신하므로), 그리고 재시도·스케줄러 재탐색용 인덱스 몇 개. `status` 류 컬럼은 명세대로 `VARCHAR` 이며 `CHECK` 제약은 걸지 않았다.
+
 ## 아직 없는 것
 
-- Flyway 마이그레이션 스크립트 (`event_publication` 테이블 포함). 이 때문에 `spring.jpa.hibernate.ddl-auto`는 `none`이며, 마이그레이션이 생기면 `validate`로 올린다.
 - `SecurityConfig` — `spring-boot-starter-security`만 들어가 있어 현재는 모든 요청이 인증을 요구한다.
-- 25개 테이블의 엔티티, C01~C07 API·이벤트 구현, 업무 테스트.
+- 25개 테이블에 대응하는 JPA 엔티티·리포지토리, C01~C07 API·이벤트 구현, 업무 테스트.
+- 시연용 시드 데이터(가맹점·API Key·직원 계정).
 - `frontend/`, `ai-server/` 디렉터리.
