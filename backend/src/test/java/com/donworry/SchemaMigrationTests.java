@@ -55,12 +55,35 @@ class SchemaMigrationTests {
         }
     }
 
+    /** ADR-0003: investigation 이 payment 를 조회하지 않고 쓸 연결 시점 스냅샷. */
+    @Test
+    void case_payments_에_연결_시점_결제_스냅샷이_있다() throws Exception {
+        assertColumnExists("case_payments", "order_id");
+        assertColumnExists("case_payments", "amount");
+        assertColumnExists("case_payments", "payment_status");
+    }
+
     @Test
     void 결제의_주문_중복_방지_제약이_존재한다() throws Exception {
         assertUniqueIndexExists("payments", "uk_payments_merchant_order");
         assertUniqueIndexExists("case_payments", "uk_case_payments_payment");
         assertUniqueIndexExists("case_decisions", "uk_case_decisions_payment");
         assertUniqueIndexExists("case_subject_locks", "uk_case_subject_locks");
+    }
+
+    private void assertColumnExists(String table, String column) throws Exception {
+        try (Connection connection = dataSource.getConnection();
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(
+                        "SELECT COUNT(*) FROM information_schema.COLUMNS"
+                                + " WHERE TABLE_SCHEMA = DATABASE()"
+                                + " AND TABLE_NAME = '" + table + "'"
+                                + " AND COLUMN_NAME = '" + column + "'")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getInt(1))
+                    .withFailMessage("%s 에 컬럼 %s 가 없다", table, column)
+                    .isPositive();
+        }
     }
 
     private void assertUniqueIndexExists(String table, String indexName) throws Exception {

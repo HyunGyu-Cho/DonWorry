@@ -92,6 +92,7 @@ DonWorry/
 - `payment → fds.api` (Java Interface, C02 위험평가)
 - `payment → investigation.api` (Java Interface, C03 HELD 커밋 후 Case 연결)
 - `investigation ⇢ payment` (Spring Modulith Event `CaseDecisionMade`, **역방향 Java 직접 의존 금지**)
+  - investigation은 `payment.api`를 조회하지 **않는다**. SEC-01·02가 쓰는 결제 사실은 C03 요청이 넘긴 값을 `case_payments` 스냅샷으로 둔 것이다 ([ADR-0003](docs/decisions/0003-investigation-payment-cycle.md)). `ArchitectureTests`가 이를 강제한다.
 - `investigation → ai-server` (HTTP, C04)
 - `settlement → payment.api` (`PaymentReader` 공개 조회만)
 - `CakeShop ↔ payment` (HTTP, C01 요청 / C06 결과 통보)
@@ -193,6 +194,7 @@ Flyway 마이그레이션이 Notion 04-2 의 업무 테이블 25개와 Spring Mo
 | `V4__investigation.sql` | security_cases, case_subject_locks, case_signals, case_payments, case_decisions, ai_reports |
 | `V5__settlement.sql` | captures, settlements, settlement_items, refunds, settlement_adjustments, cashflow_assumptions, planned_cashflows, funding_options |
 | `V6__modulith_event_publication.sql` | event_publication (업무 테이블 아님) |
+| `V7__case_payments_payment_snapshot.sql` | case_payments에 연결 시점 결제 스냅샷 (ADR-0003) |
 
 규칙:
 

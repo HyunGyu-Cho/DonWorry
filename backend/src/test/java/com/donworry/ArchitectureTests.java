@@ -47,6 +47,29 @@ class ArchitectureTests {
         rule.allowEmptyShould(true).check(CLASSES);
     }
 
+    /**
+     * ADR-0003: investigation 은 payment 에 Java 로 의존하지 않는다.
+     *
+     * <p>{@code payment → investigation.api} 방향은 C03 호출과 CaseDecisionMade 이벤트 타입
+     * 수신으로 유지된다. 역방향이 생기면 Modulith 가 모듈 간선을 집계해 순환으로 판정하므로
+     * {@code ApplicationModules.verify()} 가 실패한다. 그 전에 여기서 원인을 가리키고 막는다.
+     *
+     * <p>SEC-01·02 화면이 쓰는 결제 사실은 C03 요청이 넘긴 값을 {@code case_payments} 에
+     * 스냅샷으로 둔 것을 쓴다. PaymentReader 를 다시 끌어오지 않는다.
+     */
+    @Test
+    void investigation_은_payment_에_의존하지_않는다() {
+        ArchRule rule = noClasses()
+                .that()
+                .resideInAPackage("com.donworry.investigation..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("com.donworry.payment..")
+                .because("ADR-0003 — 역방향이 생기면 investigation ↔ payment 순환이 된다");
+
+        rule.allowEmptyShould(true).check(CLASSES);
+    }
+
     @Test
     void entity_는_controller_나_service_에_의존하지_않는다() {
         ArchRule rule = noClasses()

@@ -59,6 +59,10 @@ Notion이 의도다. 어긋난 것을 발견하면 임의로 한쪽을 고치지
 
 - 업무 모듈은 identity / payment / fds / investigation / settlement 5개. 늘리지 않는다.
 - 다른 모듈의 `repository/`·`entity/`를 직접 참조하지 않는다. 공개 `api/` 계약만 쓴다.
+- **`investigation`은 `payment`를 import하지 않는다.** `payment → investigation.api`는 C03 호출과
+  `CaseDecisionMade` 이벤트 타입으로 유지되고, 역방향이 생기면 모듈 순환이 된다.
+  SEC-01·02가 쓰는 결제 사실은 C03 요청이 넘긴 값을 `case_payments` 스냅샷으로 둔 것을 쓴다
+  ([ADR-0003](docs/decisions/0003-investigation-payment-cycle.md)). `ArchitectureTests`가 강제한다.
 - Controller → Service/api → Repository. Controller가 Repository를 직접 호출하지 않는다.
 - DB 스키마는 Flyway 마이그레이션만 바꾼다. **이미 적용된 마이그레이션 파일은 수정하지 않고** 새 버전을 추가한다.
 - `ddl-auto`는 `validate`. `create` / `create-drop` / `update`로 바꾸지 않는다.
