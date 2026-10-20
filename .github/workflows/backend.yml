@@ -3,11 +3,11 @@ on:
   push:
     branches: [main]
     paths: ['backend/**', '.github/workflows/backend.yml']
-  pull_request:
-    paths: ['backend/**', '.github/workflows/backend.yml']
+  pull_request:                # PR은 항상 실행 — 필수 검사가 '대기 중'으로 멈추지 않게
 
 jobs:
-  check:
+  backend:
+    name: backend   # 필수 검사 이름 — 세 개가 겹치지 않게
     runs-on: ubuntu-latest
     defaults:
       run:
