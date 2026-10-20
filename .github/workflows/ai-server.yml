@@ -1,7 +1,7 @@
 name: ai-server
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths: ['ai-server/**', '.github/workflows/ai-server.yml']
   pull_request:                # PR은 항상 실행 — 필수 검사가 '대기 중'으로 멈추지 않게
 
