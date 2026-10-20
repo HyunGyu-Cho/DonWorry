@@ -1,0 +1,24 @@
+# 공통
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+.env
+*.local.*
+
+# backend
+backend/build/
+backend/.gradle/
+backend/src/main/resources/application-local.yml
+
+# frontend
+frontend/node_modules/
+frontend/dist/
+
+# ai-server
+ai-server/.venv/
+ai-server/__pycache__/
+**/__pycache__/
+ai-server/.pytest_cache/
+ai-server/.ruff_cache/

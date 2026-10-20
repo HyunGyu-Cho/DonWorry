@@ -1,0 +1,18 @@
+# 개발용 DB — docker compose up -d
+services:
+  mariadb:
+    image: mariadb:11.8
+    ports:
+      - "3307:3306"            # 3306은 로컬 MySQL과 겹칠 수 있어 3307로
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: donworry
+      MARIADB_USER: donworry
+      MARIADB_PASSWORD: donworry
+      TZ: UTC
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mariadb-data:/var/lib/mysql
+
+volumes:
+  mariadb-data:
