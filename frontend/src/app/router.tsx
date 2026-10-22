@@ -8,6 +8,8 @@ import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
+import { AlertDetailPage } from '../pages/security/AlertDetailPage'
+import { AlertListPage } from '../pages/security/AlertListPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
@@ -38,7 +40,8 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to="cases" replace /> },
           { path: 'cases', element: <CaseListPage /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
-          { path: 'alerts', element: <EmptyPage title="경보" /> },
+          { path: 'alerts', element: <AlertListPage /> },
+          { path: 'alerts/:id', element: <AlertDetailPage /> },
           { path: 'transactions', element: <EmptyPage title="거래 내역" /> },
         ],
       },
