@@ -1,0 +1,143 @@
+package com.donworry.fds.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.donworry.fds.api.FdsEvaluationRequest;
+import com.donworry.fds.api.FdsResult;
+import com.donworry.fds.entity.FdsEvaluation;
+import com.donworry.fds.repository.FdsEvaluationRepository;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class FdsEvaluationServiceTests {
+
+    @Mock
+    private FdsEvaluationRepository evaluationRepository;
+
+    @Mock
+    private FdsEvaluationTransactionService transactionService;
+
+    @Captor
+    private ArgumentCaptor<FdsEvaluation> evaluationCaptor;
+
+    private FdsEvaluationTransactionService transactionEvaluator;
+
+    private FdsEvaluationService evaluator;
+
+    @BeforeEach
+    void setUp() {
+        transactionEvaluator = new FdsEvaluationTransactionService(evaluationRepository);
+        evaluator = new FdsEvaluationService(evaluationRepository, transactionService);
+    }
+
+    @Test
+    // 세 번째 단시간 결제와 고액 결제가 함께 적중하면 REVIEW를 반환한다.
+    void evaluate_highAmountAndThirdPaymentWithinWindow_returnsReview() {
+        var requestedAt = Instant.parse("2026-10-22T01:09:00Z");
+        when(evaluationRepository.findByEvaluationRequestId(any())).thenReturn(Optional.empty());
+        when(evaluationRepository.findByCustomerRefAndPaymentRequestedAtBetween(
+                        eq("hong-gildong"), eq(requestedAt.minusSeconds(10 * 60)), eq(requestedAt)))
+                .thenReturn(List.of(
+                        priorEvaluation(1L, requestedAt.minusSeconds(5 * 60)),
+                        priorEvaluation(2L, requestedAt.minusSeconds(2 * 60))));
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        var result = transactionEvaluator.evaluate(request(3L, 150_000L, requestedAt));
+
+        assertThat(result.result()).isEqualTo(FdsResult.REVIEW);
+        assertThat(result.riskScore()).isEqualTo(60);
+        assertThat(result.evaluationId()).isEqualTo(1L);
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        assertThat(evaluationCaptor.getValue().getCustomerRef()).isEqualTo("hong-gildong");
+        assertThat(evaluationCaptor.getValue().getPaymentRequestedAt()).isEqualTo(requestedAt);
+        assertThat(evaluationCaptor.getValue().getRuleHits()).hasSize(2);
+        assertThat(evaluationCaptor.getValue().getRuleHits().getFirst().getObservedValue())
+                .isEqualTo("{\"amount\":150000}");
+        assertThat(evaluationCaptor.getValue().getRuleHits().getFirst().getThresholdSnapshot())
+                .isEqualTo("{\"amountGte\":150000,\"score\":35}");
+        assertThat(evaluationCaptor.getValue().getRuleHits().get(1).getObservedValue())
+                .isEqualTo("{\"attemptCount\":3}");
+    }
+
+    @Test
+    // 같은 요청 ID로 재호출하면 기존 평가 결과를 반환한다.
+    void evaluate_existingRequestId_returnsStoredEvaluation() {
+        var request = request(1L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"));
+        var stored = FdsEvaluation.completed(request, FdsResult.REVIEW, 60, Instant.parse("2026-10-22T01:00:01Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(stored, "evaluationId", 1L);
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
+                .thenReturn(Optional.of(stored));
+
+        var result = transactionEvaluator.evaluate(request);
+
+        assertThat(result.evaluationId()).isEqualTo(1L);
+        assertThat(result.result()).isEqualTo(FdsResult.REVIEW);
+        verify(evaluationRepository).findByEvaluationRequestId(request.evaluationRequestId());
+    }
+
+    @Test
+    // 같은 결제를 재평가해도 반복 결제 횟수는 하나로 센다.
+    void evaluate_repeatedPaymentId_countsDistinctPayments() {
+        var requestedAt = Instant.parse("2026-10-22T01:09:00Z");
+        var request = request(3L, 150_000L, requestedAt);
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
+                .thenReturn(Optional.empty());
+        when(evaluationRepository.findByCustomerRefAndPaymentRequestedAtBetween(any(), any(), any()))
+                .thenReturn(List.of(
+                        priorEvaluation(1L, requestedAt.minusSeconds(5 * 60)),
+                        priorEvaluation(3L, requestedAt.minusSeconds(2 * 60)),
+                        priorEvaluation(3L, requestedAt.minusSeconds(30))));
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        var result = transactionEvaluator.evaluate(request);
+
+        assertThat(result.riskScore()).isEqualTo(35);
+        assertThat(result.result()).isEqualTo(FdsResult.ALLOW);
+    }
+
+    @Test
+    // 같은 요청 ID의 동시 저장 충돌 뒤에는 이미 저장된 평가를 반환한다.
+    void evaluate_whenConcurrentInsertConflicts_returnsStoredEvaluation() {
+        var request = request(1L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"));
+        var stored = FdsEvaluation.completed(request, FdsResult.REVIEW, 60, Instant.parse("2026-10-22T01:00:01Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(stored, "evaluationId", 1L);
+        when(transactionService.evaluate(request))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate request"));
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
+                .thenReturn(Optional.of(stored));
+
+        var result = evaluator.evaluate(request);
+
+        assertThat(result.evaluationId()).isEqualTo(1L);
+    }
+
+    private FdsEvaluation priorEvaluation(Long paymentId, Instant requestedAt) {
+        return FdsEvaluation.completed(request(paymentId, 50_000L, requestedAt), FdsResult.ALLOW, 0, requestedAt);
+    }
+
+    private FdsEvaluationRequest request(Long paymentId, long amount, Instant requestedAt) {
+        return new FdsEvaluationRequest(UUID.randomUUID(), paymentId, "hong-gildong", amount, requestedAt);
+    }
+}
