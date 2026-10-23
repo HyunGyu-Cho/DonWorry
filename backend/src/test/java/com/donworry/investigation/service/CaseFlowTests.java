@@ -136,6 +136,27 @@ class CaseFlowTests {
                 .isEqualTo(2);
     }
 
+    // 현재 증거 버전 보고서가 없으면(예: 목 보고서가 재시작으로 비었을 때) 다시 요청해 판정을 이어 갈 수 있다
+    // 이미 있으면 두 번 요청해도 보고서는 하나다
+    @Test
+    void requestReport_missingReport_createsCurrentVersionOnce() throws Exception {
+        SecurityCase securityCase =
+                securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
+        casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
+        assertThat(mockReportGateway.findByCase(securityCase.getId())).isEmpty();
+
+        mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reports.length()").value(1))
+                .andExpect(jsonPath("$.reports[0].evidenceVersion").value(1))
+                // 연결 결제 정보를 찾지 못하면 성공 보고서를 만들지 않고 FAILED로 남긴다 (수동 판정 경로)
+                .andExpect(jsonPath("$.reports[0].status").value("FAILED"))
+                .andExpect(jsonPath("$.reports[0].reportBody").isEmpty());
+        mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reports.length()").value(1));
+    }
+
     // 판정 항목에 null이 있으면 500이 아니라 400으로 거부한다
     @Test
     void decide_withNullItem_returnsBadRequest() throws Exception {
@@ -363,6 +384,22 @@ class CaseFlowTests {
                         .value(800_000))
                 .andExpect(jsonPath("$[?(@.caseId == %d)].maxRiskScore", first.caseId())
                         .value(72));
+    }
+
+    // 결제 정보를 조회하지 못한 결제가 있으면 합계 · 최고 점수는 일부 값이 아니라 null이다 (서버 재시작으로 목업이 비었을 때)
+    @Test
+    void list_missingPaymentInfo_returnsNullTotalAmount() {
+        Long caseId = caseIntakeService.receive(
+                new HeldPayment(System.nanoTime(), 1L, customer(), 100_000L, "AUTH", null, Instant.now()));
+
+        assertThat(caseQueryService.list(null))
+                .filteredOn(summary -> summary.caseId().equals(caseId))
+                .singleElement()
+                .satisfies(summary -> {
+                    assertThat(summary.paymentCount()).isEqualTo(1);
+                    assertThat(summary.totalAmount()).isNull();
+                    assertThat(summary.maxRiskScore()).isNull();
+                });
     }
 
     private DemoHeldPaymentResponse createHeld(String customerRef, long amount, int riskScore) throws Exception {

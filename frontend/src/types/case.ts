@@ -20,6 +20,8 @@ export type CaseHistoryEventType =
   | 'HANDOFF_REQUESTED'
   | 'HANDOFF_ACCEPTED'
   | 'HANDOFF_FAILED'
+  /** CASE_CREATED · CASE_CLOSED 외의 상태 전이. eventData에 from · to (설계 3.9 ⑧) */
+  | 'CASE_STATUS_CHANGED'
   | 'CASE_CLOSED'
 
 // ── 엔터티 (설계 3.9) ──
@@ -34,16 +36,19 @@ export type SecurityCase = {
   closedAt: string | null
 }
 
-/** case_payment + 조회로 합친 P5 결제 정보·P2 FDS 평가. */
+/**
+ * case_payment + 조회로 합친 P5 결제 정보·P2 FDS 평가.
+ * P5·P2에서 조회하지 못하면 백엔드가 null로 보낸다 (추정값을 채우지 않는다). 화면은 '-'로 표시한다.
+ */
 export type CasePayment = {
   casePaymentId: string
   paymentId: string
   linkedAt: string
-  amount: number
-  paymentStatus: PaymentStatus
-  requestedAt: string
+  amount: number | null
+  paymentStatus: PaymentStatus | null
+  requestedAt: string | null
   riskScore: number | null
-  fdsResult: FdsResult
+  fdsResult: FdsResult | null
   ruleHits: string[]
 }
 
@@ -132,7 +137,8 @@ export type AiReport = {
 // ── 화면 조회·요청 모델 ──
 export type CaseSummary = SecurityCase & {
   paymentCount: number
-  totalAmount: number
+  /** 결제 정보를 하나라도 조회하지 못하면 null (일부 합계를 내보내지 않는다). */
+  totalAmount: number | null
   maxRiskScore: number | null
   latestReportStatus: ReportStatus | null
   decidedCount: number

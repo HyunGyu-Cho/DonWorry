@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Card, Input, Select, Space, Table, Typography } from 'antd'
+import { Alert, App, Button, Card, Input, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
-import { getCases } from '../../api/cases'
+import { demoCreateHeldPayment, getCases } from '../../api/cases'
+import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useDemo } from '../../demo/DemoContext'
 import type { CaseStatus, CaseSummary } from '../../types/case'
@@ -26,25 +27,51 @@ const statusOptions: Array<{ value: StatusFilter; label: string }> = [
 export function CaseListPage() {
   const navigate = useNavigate()
   const { merchant } = useDemo()
+  const { toast } = useFeedback()
+  // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
+  const { message } = App.useApp()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<StatusFilter>('OPEN_ONLY')
   const [refreshKey, setRefreshKey] = useState(0)
   // 어떤 요청(가맹점·새로고침)에 대한 응답인지 함께 저장해 늦게 온 응답이 덮어쓰지 않게 한다.
+  // failed: 조회 실패. 빈 목록과 구분해 "처리할 Case 없음"으로 오인하지 않게 하고, 직전 목록은 유지한다.
   const [result, setResult] = useState<{
     merchant: string
     refreshKey: number
     cases: CaseSummary[]
+    failed: boolean
   } | null>(null)
 
   useEffect(() => {
     let alive = true
-    getCases(merchant).then((cases) => {
-      if (alive) setResult({ merchant, refreshKey, cases })
-    })
+    getCases(merchant)
+      .then((cases) => {
+        if (alive) setResult({ merchant, refreshKey, cases, failed: false })
+      })
+      .catch(() => {
+        if (!alive) return
+        message.error('Case 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
+        setResult((prev) => ({
+          merchant,
+          refreshKey,
+          cases: prev?.merchant === merchant ? prev.cases : [],
+          failed: true,
+        }))
+      })
     return () => {
       alive = false
     }
-  }, [merchant, refreshKey])
+  }, [merchant, refreshKey, message])
+
+  const handleDemoHeld = async () => {
+    try {
+      const caseId = await demoCreateHeldPayment()
+      toast.info('시연: 65점 REVIEW 결제가 HELD되어 Case가 생성되었습니다.')
+      navigate(`/security/cases/${caseId}`)
+    } catch {
+      toast.error('시연 결제를 만들지 못했습니다.')
+    }
+  }
   const loading = result?.merchant !== merchant || result.refreshKey !== refreshKey
   // 다른 가맹점의 응답은 표시하지 않는다. 같은 가맹점 새로고침 중에는 기존 목록을 유지한다.
   const cases = useMemo(
@@ -103,7 +130,7 @@ export function CaseListPage() {
       dataIndex: 'totalAmount',
       align: 'right',
       width: 120,
-      render: won,
+      render: (v: CaseSummary['totalAmount']) => (v === null ? '-' : won(v)),
     },
     {
       title: '생성 시각',
@@ -156,12 +183,26 @@ export function CaseListPage() {
         actions={
           <>
             <span className="dw-demo-label">DEMO DATA</span>
+            <Button onClick={handleDemoHeld}>시연: HELD 결제 발생</Button>
             <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((k) => k + 1)}>
               새로고침
             </Button>
           </>
         }
       />
+      {result?.merchant === merchant && result.failed && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Case 목록을 불러오지 못했습니다. 아래 건수와 목록은 실제와 다를 수 있습니다."
+          action={
+            <Button size="small" onClick={() => setRefreshKey((k) => k + 1)}>
+              다시 시도
+            </Button>
+          }
+        />
+      )}
       <div className="dw-stat-grid">
         <StatCard title="열린 Case" value={open.length} foot="종료 전 Case" />
         <StatCard

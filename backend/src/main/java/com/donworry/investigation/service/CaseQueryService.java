@@ -19,7 +19,6 @@ import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -89,20 +88,36 @@ public class CaseQueryService {
                 securityCase.getCreatedAt(),
                 securityCase.getClosedAt(),
                 payments.size(),
-                payments.stream()
-                        .flatMap(Optional::stream)
-                        .map(PaymentInfo::amount)
-                        .filter(Objects::nonNull)
-                        .mapToLong(Long::longValue)
-                        .sum(),
-                payments.stream()
-                        .flatMap(Optional::stream)
-                        .map(PaymentInfo::riskScore)
-                        .filter(Objects::nonNull)
-                        .max(Integer::compare)
-                        .orElse(null),
+                totalAmount(payments),
+                maxRiskScore(payments),
                 reportGateway.latest(caseId).map(ReportSnapshot::status).orElse(null),
                 (int) paymentDecisionRepository.countByCasePaymentSecurityCaseId(caseId));
+    }
+
+    // 금액을 모르는 결제가 있으면 합계도 모른다 (null). 빠진 금액을 0으로 치지 않는다
+    private static Long totalAmount(List<Optional<PaymentInfo>> payments) {
+        long total = 0;
+        for (Optional<PaymentInfo> payment : payments) {
+            Long amount = payment.map(PaymentInfo::amount).orElse(null);
+            if (amount == null) {
+                return null;
+            }
+            total += amount;
+        }
+        return total;
+    }
+
+    // 점수를 모르는 결제가 있으면 최고 점수도 모른다 (null). 남은 결제만으로 낮게 보이게 하지 않는다
+    private static Integer maxRiskScore(List<Optional<PaymentInfo>> payments) {
+        Integer max = null;
+        for (Optional<PaymentInfo> payment : payments) {
+            Integer riskScore = payment.map(PaymentInfo::riskScore).orElse(null);
+            if (riskScore == null) {
+                return null;
+            }
+            max = max == null ? riskScore : Math.max(max, riskScore);
+        }
+        return max;
     }
 
     private CasePaymentResponse payment(CasePayment casePayment) {
