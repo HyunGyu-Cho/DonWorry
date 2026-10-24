@@ -33,7 +33,7 @@ const user = (
 })
 
 // userId는 빈 DB에 시드가 들어간 순서와 같다
-const USERS: AuthUser[] = [
+export const MOCK_USERS: AuthUser[] = [
   user(1, 'admin', 'demo_shop', 'ADMIN', { tenantScope: 'ALL' }),
   user(2, 'boss', 'demo 사장님', 'OPERATOR', {
     merchantId: 1,
@@ -86,7 +86,7 @@ export function buildMockLoginEvents(now: Date): StaffLoginEvent[] {
     result: StaffLoginEvent['result'],
     deviceLabel: string | null,
   ) => {
-    const found = USERS.find((u) => u.loginId === loginId)
+    const found = MOCK_USERS.find((u) => u.loginId === loginId)
     rows.push({
       userId: found?.userId ?? null,
       loginIdAttempted: loginId,
@@ -128,7 +128,7 @@ export function buildMockStaffSessions(now: Date): StaffSession[] {
     startedMinutesAgo: number,
     ended: boolean,
   ): StaffSession => {
-    const found = USERS.find((u) => u.loginId === loginId)!
+    const found = MOCK_USERS.find((u) => u.loginId === loginId)!
     return {
       staffSessionId,
       userId: found.userId,
@@ -157,7 +157,7 @@ const challenges = new Map<string, AuthUser>()
 
 export async function mockStartLogin(loginId: string, password: string): Promise<LoginStep> {
   await mockRespond(null)
-  const found = USERS.find((u) => u.loginId === loginId.trim().toLowerCase())
+  const found = MOCK_USERS.find((u) => u.loginId === loginId.trim().toLowerCase())
   if (!found || password !== DEMO_PASSWORD) throw new InvalidCredentialsError()
   if (!needsOtp(found)) return { status: 'SUCCESS', user: structuredClone(found) }
   const challengeId = `mock-${found.loginId}-${challenges.size + 1}`
