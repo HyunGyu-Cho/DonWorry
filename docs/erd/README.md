@@ -151,7 +151,7 @@ erDiagram
 | --- | --- |
 | `platform_users.role` | `SECURITY_MANAGER` (보안 관리자: 직원 사건 판정 · 2인 승인). `UserRole` enum에 함께 추가 |
 | `security_cases.case_type` | `STAFF_TAKEOVER`(직원 계정 탈취 의심) · `STAFF_SPRAY`(직원 계정 분산 대입 공격). 기존 `PAYMENT_FRAUD`는 그대로 |
-| `security_cases.status` | `APPROVAL_PENDING`(2인 승인 대기) · `ACTION_RUNNING`(조치 진행 중) |
+| `security_cases.status` | `APPROVAL_PENDING`(2인 승인 대기). 조치 진행 중은 기존 `ACTION_PENDING`을 그대로 쓴다 (개인 Issue #10) |
 | `ai_reports.report_body` | 결론 카드 구조 (JSON, PLAN 0-5) |
 
 ### 새 테이블

@@ -4,6 +4,7 @@ import type {
   AiRecommendation,
   CaseHistoryEventType,
   CaseStatus,
+  CaseType,
   Decision,
   FdsResult,
   HandoffStatus,
@@ -18,9 +19,16 @@ export const caseStatusLabel: Record<CaseStatus, Label> = {
   OPEN: { label: '생성됨', color: 'blue' },
   INVESTIGATING: { label: '조사 중', color: 'processing' },
   DECISION_PENDING: { label: '판정 대기', color: 'gold' },
+  APPROVAL_PENDING: { label: '2인 승인 대기', color: 'purple' },
   ACTION_PENDING: { label: '인계 대기', color: 'geekblue' },
   ACTION_FAILED: { label: '인계 실패', color: 'red' },
   CLOSED: { label: '종료', color: 'default' },
+}
+
+export const caseTypeLabel: Record<CaseType, Label> = {
+  PAYMENT_FRAUD: { label: '결제 사기 의심', color: 'blue' },
+  STAFF_TAKEOVER: { label: '직원 계정 탈취 의심', color: 'magenta' },
+  STAFF_SPRAY: { label: '직원 계정 분산 대입 공격', color: 'magenta' },
 }
 
 export const reportStatusLabel: Record<ReportStatus, Label> = {

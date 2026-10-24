@@ -7,8 +7,17 @@
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
 export type PaymentStatus =
   'PENDING' | 'DENIED' | 'DECLINED' | 'HELD' | 'CAPTURED' | 'VOIDED' | 'EXPIRED'
+// APPROVAL_PENDING: AI 권고와 반대인 판정이 2인 승인을 기다리는 중 (새 기획)
 export type CaseStatus =
-  'OPEN' | 'INVESTIGATING' | 'DECISION_PENDING' | 'ACTION_PENDING' | 'ACTION_FAILED' | 'CLOSED'
+  | 'OPEN'
+  | 'INVESTIGATING'
+  | 'DECISION_PENDING'
+  | 'APPROVAL_PENDING'
+  | 'ACTION_PENDING'
+  | 'ACTION_FAILED'
+  | 'CLOSED'
+// 결제 사기 + 직원 계정 사건 2종 (새 기획, security_cases.case_type)
+export type CaseType = 'PAYMENT_FRAUD' | 'STAFF_TAKEOVER' | 'STAFF_SPRAY'
 export type ReportStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
 export type Decision = 'ACCEPT' | 'REJECT'
 export type ActionType = 'CAPTURE' | 'VOID'
@@ -29,11 +38,13 @@ export type SecurityCase = {
   caseId: string
   merchantId: string
   customerRef: string
-  caseType: 'PAYMENT_FRAUD'
+  caseType: CaseType
   status: CaseStatus
   evidenceVersion: number
   createdAt: string
   closedAt: string | null
+  // 직원 사건의 대상 직원 (security_cases.subject_user_id). 결제 사건은 없음
+  subjectUserId?: string | null
 }
 
 /**
