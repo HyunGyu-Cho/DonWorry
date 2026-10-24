@@ -41,6 +41,7 @@
 | [0017](0017-capture-completed-event-contract.md) | 1차 MVP 매입 완료 이벤트 계약 | 채택 — P5 수신 구현 별도 |
 | [0018](0018-payment-mvp-capture-completion.md) | 1차 CAPTURE 완료 통지로 영속 접수 확인 | 제안 — P3·P6 합의 대기 |
 | [0019](0019-security-case-http-contract.md) | P3 Case 조회 · 판정 HTTP 계약 | 제안 — 팀 합의 필요 |
+| [0020](0020-cakeshop-payment-integration-contract.md) | CakeShop 결제 연동 계약 (결제 준비 · 결제창 · 결과 통지 · 픽업 완료) | 제안 — P1 · P2 · P6 · CakeShop 합의 필요 |
 
 ## 현재 적용 상태와 기록의 구분
 

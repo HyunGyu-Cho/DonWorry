@@ -19,6 +19,8 @@
 | [검증](verification.md) | 1차 검증 계획과 과거 실행 기록 |
 | [후속 검토](future-design.md) | 보조 저장·시도별 결과 관리 등 1차 필수에서 분리한 초안 |
 | [ADR-0018](../decisions/0018-payment-mvp-capture-completion.md) | 완료 통지로 접수도 확인하는 제안의 이유·대안·영향 |
+| [CakeShop 연동 계약](cakeshop-contract.md) | C1 · C7 — 결제 준비 · 결제창 · 결과 통지 · 조회 · 픽업 완료의 HTTP 약속과 오류 코드 (제안, 구현 2-29) |
+| [ADR-0020](../decisions/0020-cakeshop-payment-integration-contract.md) | CakeShop 연동 방식의 이유·버린 대안·영향 |
 
 업무의 근거는 Notion FDS 정본과 P6 담당 ERD다. 실제 컬럼은 migration SQL, 의존 방향은 채택된 [ADR-0012](../decisions/0012-payment-settlement-dependency.md)를 따른다. 출처와 차이는 [문서 대조 현황](../README.md)에 기록한다.
 
