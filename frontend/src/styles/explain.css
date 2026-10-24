@@ -1,0 +1,180 @@
+/* 화면 원칙 공통 부품 (components/explain) — docs/frontend/screen-principles.md */
+
+/* 결론 카드 */
+.dw-conclusion {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 28px;
+  align-items: center;
+  padding: 26px 30px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #172554, #1e3a8a);
+  color: #fff;
+}
+.dw-gauge {
+  position: relative;
+  width: 150px;
+  height: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+.dw-gauge-arc {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 150px;
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 52px, #000 53px);
+  mask: radial-gradient(circle at 50% 50%, transparent 52px, #000 53px);
+  clip-path: inset(0 0 50% 0);
+}
+.dw-gauge b {
+  font-size: 34px;
+  line-height: 1;
+}
+.dw-gauge span {
+  font-size: 12px;
+  color: #c8d5ee;
+  margin-top: 4px;
+}
+.dw-conclusion-eyebrow {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #93c5fd;
+  margin-bottom: 6px;
+}
+.dw-conclusion-verdict {
+  margin: 0 0 8px;
+  font-size: 21px;
+  font-weight: 800;
+  color: #fff;
+}
+.dw-conclusion-summary {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #dbe4f5;
+}
+.dw-conclusion-recs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dw-rec {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.dw-rec-negative {
+  background: #b91c1c;
+}
+.dw-rec-positive {
+  background: #15803d;
+}
+.dw-rec-info {
+  background: #1d4ed8;
+}
+
+/* 사실 한 줄 · 평소와 비교 배지 */
+.dw-fact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+}
+.dw-fact-label {
+  flex: 0 0 96px;
+  color: #64748b;
+  font-size: 13px;
+}
+.dw-fact-text {
+  flex: 1;
+  color: #0f172a;
+}
+.dw-cmp {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dw-cmp-same {
+  background: #dcfce7;
+  color: #166534;
+}
+.dw-cmp-new {
+  background: #fef3c7;
+  color: #92400e;
+}
+.dw-cmp-blocked {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* 용어 풀이 */
+.dw-term {
+  border-bottom: 1px dashed #94a3b8;
+  cursor: help;
+}
+.dw-term:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* 작은 ID */
+.dw-small-id.ant-typography {
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 원본 값 펼치기 */
+.dw-raw {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+.dw-raw summary {
+  padding: 10px 14px;
+  cursor: pointer;
+  color: #475569;
+  font-weight: 600;
+}
+.dw-raw dl {
+  margin: 0;
+  padding: 0 14px 12px;
+}
+.dw-raw dl > div {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+}
+.dw-raw dt {
+  flex: 0 0 110px;
+  color: #64748b;
+}
+.dw-raw dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #0f172a;
+  word-break: break-all;
+}
+
+/* 다음 할 일 */
+.dw-next {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+  margin-top: 24px;
+}
+.dw-next-hint {
+  color: #64748b;
+  font-size: 13px;
+}

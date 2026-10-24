@@ -7,6 +7,7 @@ import { useDemo } from '../demo/DemoContext'
 import { useFeedback } from '../components/common/Feedback'
 import { ScreenErrorBoundary } from '../components/common/ScreenErrorBoundary'
 import { MockBadge } from '../components/common/MockBadge'
+import { ModeSwitch } from '../components/explain/ModeSwitch'
 
 function Header() {
   const { role, merchant, setRole, setMerchant, logout } = useDemo()
@@ -20,6 +21,7 @@ function Header() {
       <div className="dw-header-center" />
       <div className="dw-header-tools">
         <MockBadge />
+        <ModeSwitch />
         <span className="dw-muted-label">가맹점</span>
         {role === 'security' ? (
           <Select
