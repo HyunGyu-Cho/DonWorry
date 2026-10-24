@@ -4,6 +4,10 @@ DonWorry는 케이크 주문 서비스 CakeShop에서 발생한 결제를 받아
 
 Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서버로 구성된 모노레포입니다.
 
+> **개인 개발 저장소입니다.** 팀 저장소에서 갈라져 나와, 멘토 피드백(10/23)을 반영한 새 기획을 먼저 구현하고 있습니다.
+> 새 기획의 정본은 Notion **최종 기획+설계서**이고, 테이블 변경 내역은 [ERD 7절](docs/erd/README.md#7-목표-erd-변경-내역-개인-issue-3)에 있습니다.
+> 이 README는 실행 방법과 틀린 안내만 고친 상태이며, 전체 내용은 기능을 만든 뒤 다시 씁니다.
+
 ## 목차
 
 - [Overview](#overview)
@@ -21,20 +25,26 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
 
 - CakeShop(1차 프로젝트)과 연동하는 **2차 팀 프로젝트**이며, 6명이 업무 모듈을 하나씩 맡아 개발합니다.
 - 서버를 여러 개로 나누지 않고, **하나의 Spring Boot 앱을 모듈 5개로 나누는 모듈러 모놀리스** 구조를 씁니다. 모듈 경계는 Spring Modulith 테스트로 강제합니다 ([Modulith 문서](docs/modulith/README.md)).
-- 1차 목표는 **의심 결제가 승인 후 매입 보류(HELD)되고, 보안 직원이 AI 보고서를 참고해 결제별로 판정하고, 매입 또는 승인 취소가 담당 모듈에 인계되는 시연 경로**를 완성하는 것입니다.
+- 새 기획은 기능 축 3개로 나뉩니다.
+  1. **결제 FDS + 구매자 메일**: CakeShop 결제를 Rule로 평가하고, 의심 결제는 매입을 보류한 채 AI 보고서를 참고해 직원이 판정합니다. 구매자에게는 결제 상태만 메일로 알립니다 (사유 · 점수는 알리지 않음)
+  2. **돈워리 직원 계정 보호**: 보안 직원 계정이 탈취되면 사기 결제가 허용될 수 있어, 2단계 인증 · 직원 Rule 7개 · 2인 승인 · 감사 로그로 막습니다
+  3. **자금 관리**: 가맹점 사장님에게 정산 캘린더, 14일 자금 예측, Mock 은행 대출 상품을 보여 줍니다
 - FDS 연계 업무(위험평가 → HELD → Case·AI 조사 → 직원 판정 → 금융 조치 인계)의 흐름·상태값·통신 방식 정본은 Notion **fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계, DB 구현 가이드는 04)입니다. 테이블·컬럼(ERD) 정본은 Notion **팀페이지 / ERD**입니다 ([ERD 요약](docs/erd/README.md)). 이 README는 그 요약입니다.
 - P6 담당 ERD의 1차 범위는 이벤트 수신 후 즉시 매입·수수료 계산·정산 예정금 저장입니다. 픽업 정보와 정산 완료 배치는 2차 범위입니다. Notion 출처와 FDS 인계 계약의 남은 차이는 [문서 대조 현황](docs/README.md)에 기록했습니다.
-- 1차 CakeShop 연동 저장소: [team-sweethan/cakeshop_refactoring](https://github.com/team-sweethan/cakeshop_refactoring) (DonWorry 연동에 맞게 수정 중)
+- CakeShop 연동 저장소: [HyunGyu-Cho/CakeShop](https://github.com/HyunGyu-Cho/CakeShop) (개인 fork, DonWorry 연동에 맞게 수정 예정)
 
 ## Features
 
-> 아래는 1차 MVP 범위입니다. 현재 저장소는 골격 단계이며 기능은 **구현 예정**입니다.
+> 아래는 새 기획 범위입니다. 테이블과 Rule 초기 데이터는 있고, 기능은 **구현 예정**입니다.
 
 - **결제(PG) · P5** — CakeShop 결제 세션, FDS 평가 요청, 모의 카드사 승인, REVIEW 승인 건의 매입 보류(HELD), 승인 취소(VOID), 결제 상태 관리(DENIED · DECLINED · HELD · CAPTURED · VOIDED · EXPIRED), CakeShop 결과 통지
-- **FDS 위험평가 · P2** — 규칙 기반 점수로 ALLOW / REVIEW / DENY 판정(50점 미만 · 50~80 · 80 초과, MVP 임시 기준). 평가 실패는 ERROR이며 자동 ALLOW하지 않음. 결제별 평가 이력은 `fds_evaluations`, 룰별 실행 결과·점수·근거는 `fds_rule_hits`에 저장하는 스키마가 있음. 평가·저장 로직은 미구현이며 `rule_set_version` 컬럼은 없음
+- **FDS 위험평가 · P2** — 차단 목록과 일치하면 즉시 DENY, 아니면 결제 Rule 8개(고액 · 평소보다 큰 금액 · 처음 쓰는 카드 · 신규 계정 · 카드 테스팅 · 거절 후 재시도 · 해외/익명 접속)의 점수를 더해 판정합니다: 0~39 ALLOW · 40~69 REVIEW · 70 이상 DENY. 평가 실패는 ERROR이며 자동 ALLOW하지 않음. Rule 카탈로그는 `fds_rules`, 차단 목록은 `blocklist_entries`
+- **직원 계정 보호 · P1 · P2 · P3** — 2단계 인증(OTP) · 로그인 실패 잠금, 직원 Rule 7개(로그인/OTP 실패 반복 · 사내망 밖/새 기기 · 세션 동시 사용 · 판정 이상 · 탐지 설정 완화 · 분산 로그인 실패 · 비밀번호 뿌리기). AI 권고와 반대인 판정과 Rule 끄기는 2인 승인, 직원 계정 사건은 보안 관리자가 판정, 모든 조작은 감사 로그
+- **구매자 메일 · P5** — 결제 상태 안내와 "본인 결제가 맞나요?" 확인 메일. 구매자 응답은 약한 근거로만 쓰고 AI 재조사로 넘김
 - **Case 조사 · 직원 판정 · P3** — HELD 결제 1건부터 Case 생성. 같은 가맹점·고객이면 최초 생성 후 30분 미만, 판정 전까지 병합. 보안 직원이 결제별 ACCEPT(매입 허용) / REJECT(승인 취소) 판정. 금융 조치 인계가 모두 확인되면 Case 종료
 - **AI 조사 보고서 · P4** — Case 단위 보고서, 결제가 병합되면 새 버전으로 재조사(이전 버전 보존). 읽기 전용 Tool로 증거 조회, 증거 출처는 보고서 JSON 안에 기록. 총 3회 실패하면 직원이 직접 조사해 판정(`report_id` 없이 사유에 근거 기록). AI는 결제를 바꾸지 않음
 - **매입 · 정산 · P6** — CAPTURE 요청 이벤트 수신 후 즉시 매입, 수수료·정산 예정금 계산 및 `SCHEDULED` 저장. 별도 일일 매입 배치는 두지 않음. 픽업·정산 완료·취소 연동은 2차 범위이며, 영속 접수 결과와 실행 결과의 세부 계약은 확인 필요
+- **자금 관리 · P6** — 정산 캘린더, 14일 자금 예측(저장하지 않고 정산 예정금으로 계산), Mock 은행 대출 상품 조회 (신청 · 심사 없음)
 - **조사 기한** — Case 최초 생성 후 24시간을 내부 목표로 경고(권장값, 확정 아님). 기한 초과만으로 자동 판정하지 않음
 
 ## 핵심 흐름
@@ -112,9 +122,8 @@ Gradle은 설치하지 않아도 됩니다. `gradlew`가 정해진 버전을 내
 ### 1. 저장소 내려받기
 
 ```bash
-git clone https://github.com/team-sweethan/DonWorry.git
-cd DonWorry
-git switch dev
+git clone https://github.com/HyunGyu-Cho/DonWorry.git donworry-personal
+cd donworry-personal                # 기본 브랜치 main (dev 브랜치 없음)
 ```
 
 ### 2. DB 실행
@@ -134,6 +143,17 @@ CREATE USER 'donworry'@'%' IDENTIFIED BY 'donworry';
 GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'%';
 ```
 
+> **팀 저장소와 같은 PC에서 쓴다면 DB를 분리합니다.** 두 저장소가 같은 `donworry` DB를 쓰면, 이 저장소의 새 migration이 팀 DB에 들어가 팀 저장소 기동이 깨질 수 있습니다.
+> 관리자 계정으로 개인용 DB를 만들고 (`donworry` 계정의 host에 맞춰 GRANT)
+>
+> ```sql
+> CREATE DATABASE donworry_personal CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+> GRANT ALL PRIVILEGES ON donworry_personal.* TO 'donworry'@'localhost';
+> GRANT ALL PRIVILEGES ON donworry_personal.* TO 'donworry'@'127.0.0.1';
+> ```
+>
+> 3절의 개인 설정 파일에 `url: jdbc:mariadb://localhost:3307/donworry_personal`을 적습니다.
+
 테이블은 백엔드를 실행할 때 Flyway가 `backend/src/main/resources/db/migration/`의 파일을 순서대로 적용해 만듭니다.
 테이블 추가 순서, 로컬 DB 초기화, 오류 해결은 **[Flyway 문서](docs/flyway/README.md)** 를 봅니다.
 
@@ -142,7 +162,7 @@ GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'%';
 
 ### 3. 개인 설정 (필요할 때만)
 
-내 PC의 DB가 기본값(`localhost:3307` / `donworry` / `donworry`)과 다를 때만 개인 설정 파일을 만듭니다. 이 파일은 Git에 올라가지 않습니다.
+내 PC의 DB가 기본값(`localhost:3307` / `donworry` / `donworry`)과 다르거나, 2절처럼 개인용 DB(`donworry_personal`)를 쓸 때 개인 설정 파일을 만듭니다. 이 파일은 Git에 올라가지 않습니다.
 
 ```powershell
 # Windows PowerShell
@@ -241,6 +261,10 @@ cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 3. 사장님 `owner` / `demo1234`로 로그인해 사장님 메뉴를 확인합니다.
 4. 사이드바의 **UI 컴포넌트 보기**에서 공통 UI 예시를 확인합니다.
 5. 백엔드를 함께 띄웠다면 기동 로그에서 Flyway migration 적용을 확인합니다 ([Flyway 작업 가이드 4절](docs/flyway/05-guide.md#4-적용-결과-확인)).
+6. 백엔드의 실제 로그인(`/login`)은 시드 계정으로 확인합니다. 비밀번호는 모두 `1234`입니다.
+   - 기존: `staff_test`(보안 직원) · `boss`(사장님)
+   - 새 기획 시연 직원: `jiwon` 박지원(보안 직원) · `dohyun` 이도현(보안 직원) · `yunseo` 최윤서(보안 관리자)
+   - 2단계 인증(OTP)과 보안 관리자 화면은 아직 없습니다 (PLAN 0-2 · 1-1)
 
 시연 계정은 로컬 확인 전용이며 실제 인증·인가를 제공하지 않습니다. 자세한 내용은 [프론트 README](frontend/README.md)를 봅니다.
 
@@ -304,12 +328,13 @@ DonWorry/
 ## Contributing
 
 1. 작업 전에 [AGENTS.md](AGENTS.md)를 읽습니다.
-2. GitHub Issue를 확인하고 `dev`에서 `feature/<이슈번호>-<작업>` 브랜치를 만듭니다.
+2. 이 저장소의 Issue를 만들고 `main`에서 `feature/<이슈번호>-<작업>` 브랜치를 만듭니다.
 3. 바꾼 영역의 검사 명령을 돌립니다([7. 빌드와 테스트](#7-빌드와-테스트)).
-4. `dev`로 PR을 엽니다. 템플릿의 "미검증" 칸을 비우지 않습니다.
-5. CI 3개(`backend` · `frontend` · `ai-server`) 통과와 승인 1명 후 병합합니다.
-6. `main`·`dev`에 직접 push하지 않습니다. `dev → main`은 시연·마일스톤 때 합칩니다.
+4. `main`으로 PR을 엽니다. 템플릿의 "미검증" 칸을 비우지 않습니다.
+5. CI 3개(`backend` · `frontend` · `ai-server`) 통과 후 병합합니다.
+6. `main`에 직접 push하지 않습니다.
 7. 모듈 경계·의존 방향·기술 선택을 바꾸면 [ADR](docs/decisions/)을 남깁니다.
+8. 팀 저장소로 옮기는 일은 이 저장소의 PR과 따로, 필요할 때 한 번에 합니다. 커밋 · PR에 팀 저장소 Issue 번호나 팀원 멘션을 쓰지 않습니다.
 
 ## Architecture & Developer Playbook
 
@@ -357,7 +382,7 @@ flowchart TB
 - 🧱 **[Spring Modulith 문서](docs/modulith/README.md)**: 모듈러 모놀리스 개념, 채택 이유, 모듈·패키지 구조, 의존 방향과 이벤트, 검사
 - 🗃️ **[Flyway 문서](docs/flyway/README.md)**: 개념, 채택 이유, 우리 설정, 검사(테스트·CI), 작업 가이드, 문제 해결
 - ⚙️ **[CI 문서](docs/ci/README.md)**: 개념, 언제 무엇이 도나, 워크플로별 검사, 문제 해결
-- 🗂️ **[ERD](docs/erd/README.md)**: 1차 MVP 테이블 14개의 소유·관계(ERD 그림)·공통 타입 규칙, 모듈 간 참조 규칙
+- 🗂️ **[ERD](docs/erd/README.md)**: 업무 테이블 29개(1차 MVP 14 + 새 기획 15)의 소유·관계(ERD 그림)·공통 타입 규칙, 모듈 간 참조 규칙, 새 기획 변경 내역(7절)
 - 💳 **[P5 결제 설계](docs/payment/README.md)**: P5 결제 1차 시연 문서
 - 🖥️ **[프론트 README](frontend/README.md)** · **[공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)**: 시연 계정, 담당 페이지 연결 방법
 - 📝 **[문서 정본과 대조 현황](docs/README.md)**: Notion FDS 정본·담당 ERD·P6 상세 설계 링크, 현재 구현과 출처 간 차이·담당 확인 사항
@@ -368,7 +393,9 @@ flowchart TB
 **있는 것**
 
 - 모듈 5개 골격과 모듈 경계·의존 방향·계층 자동 검사
-- 업무 테이블 14개와 `EVENT_PUBLICATION`의 Flyway migration, 개발용 DB(Docker Compose)
+- 업무 테이블 29개(1차 MVP 14 + 새 기획 15)와 `EVENT_PUBLICATION`의 Flyway migration, 개발용 DB(Docker Compose)
+- 시드 데이터: 시연 가맹점 · 사장님 · 직원 계정, Rule 15개(결제 8 · 직원 7), 시연용 가짜 IP 38개, Mock 대출 상품 3개
+- frontend 화면별 Mock 스위치(`VITE_USE_MOCK`, [frontend/.env.example](frontend/.env.example))
 - 서비스 CI 3개와 문서 CI 1개, PR · 이슈 템플릿, 작업 규칙
 - P5 `PaymentStatus`·`PaymentRules`와 순수 규칙 단위 테스트
 - frontend 로컬 시연 로그인·공통 레이아웃·역할별 메뉴·Case/경보 목업·담당자 구현 영역·공통 UI 가이드
@@ -376,7 +403,8 @@ flowchart TB
 
 **아직 없는 것**
 
-- 업무 Entity·Repository — 테이블 14개는 Flyway로 만들어져 있고(#56), Java Entity는 각 담당이 기능 개발 때 추가
-- 실제 서버 인증·로그인 — 지금은 모든 요청 허용 (`identity/security/SecurityConfig`), 프론트 로그인은 로컬 시연용
+- 새 기획 테이블 15개의 Java Entity · Repository — 1차 MVP 테이블은 Entity가 있고, 새 테이블은 각 기능 조각에서 추가
+- 업무 API 접근 제어 — 세션 로그인(`/api/auth/*`)은 있지만 `/api/auth/me` 외 요청은 모두 허용 (`identity/security/SecurityConfig`)
 - 실제 업무 API·이벤트 연동, 서버 데이터에 연결된 업무 화면, AI 보고서 생성
-- 시연용 시드 데이터(가맹점·직원·사장님 계정)
+- 새 기획 테이블(직원 로그인 기록 · 차단 목록 · 2인 승인 · 감사 로그 · 메일 등)을 쓰는 기능 코드 — PLAN 2단계에서 구현
+- 2단계 인증(OTP) · 직원 Rule 탐지 · 구매자 메일 · 자금 예측 · 튜토리얼 화면
