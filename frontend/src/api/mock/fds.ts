@@ -289,6 +289,8 @@ export function buildMockStaffAlerts(now: Date): StaffAlert[] {
       otpFailures: 3,
     }),
     alert(1, 4, 'STAFF_NEW_DEVICE', 'CAUTION', '박지원 · 집 IP에서 로그인 (새 기기)', 780),
+    // 지난 사건 91 (재택근무로 확인 · 경고 해제) — 보고서의 비슷한 과거 사건
+    alert(7, 4, 'STAFF_NEW_DEVICE', 'CAUTION', '박지원 · 집에서 로그인 (재택근무)', 24 * 24 * 60),
   ]
 }
 

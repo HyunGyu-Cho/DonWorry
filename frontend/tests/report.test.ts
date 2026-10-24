@@ -108,6 +108,9 @@ test('toConclusionReport_fromLegacyBody_keepsRecommendationAndEvidence', () => {
   )
   assert.deepEqual(report.unknowns, ['본인 확인'])
   assert.deepEqual(report.limitations, ['AI 권고는 최종 결정이 아님'])
+  // 기존 형식에 없던 비슷한 사건 · 조사 과정은 만들어 넣지 않는다
+  assert.deepEqual(report.similarCases, [])
+  assert.deepEqual(report.trace, [])
 })
 
 // 위험도 표시가 FDS 판정 구간(40 · 70)과 어긋나면 안 된다
