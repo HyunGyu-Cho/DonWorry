@@ -30,6 +30,9 @@ export function setMockActor(next: Actor) {
   actor = next
 }
 
+// 다른 Mock(보고서 등)이 같은 현재 사용자를 쓰도록 내보낸다
+export const getMockActor = (): Actor => actor
+
 const minutesAgo = (now: Date, minutes: number) =>
   new Date(now.getTime() - minutes * 60_000).toISOString()
 const minutesLater = (now: Date, minutes: number) =>
