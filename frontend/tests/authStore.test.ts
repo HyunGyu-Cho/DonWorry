@@ -25,7 +25,9 @@ function deferred<T>() {
 }
 function setup(overrides: Partial<Parameters<typeof createAuthStore>[0]> = {}) {
   return createAuthStore({
-    login: async () => user,
+    startLogin: async () => ({ status: 'SUCCESS', user }),
+    verifyOtp: async () => user,
+    submitRecoveryCode: async () => user,
     getMe: async () => user,
     logout: async () => {},
     ...overrides,
@@ -179,7 +181,7 @@ test('login_whenOldMeFailsLate_preservesNewSession', async () => {
 test('check_whenForbidden_preservesAuthentication', async () => {
   const operator: AuthUser = { ...user, role: 'OPERATOR', tenantScope: null, permissions: [] }
   const store = setup({
-    login: async () => operator,
+    startLogin: async () => ({ status: 'SUCCESS', user: operator }),
     getMe: async () => {
       throw new ApiError(403, 'AUTH_002')
     },
@@ -227,4 +229,63 @@ test('logout_whenFailsAfterRouteCheckStarted_rechecksRoute', async () => {
   assert.equal(meCalls, 2)
   assert.equal(store.getSnapshot().checkedKey, 'finance')
   assert.equal(store.getSnapshot().user, user)
+})
+
+const staff: AuthUser = { ...user, userId: 4, loginId: 'jiwon', role: 'SECURITY_STAFF' }
+
+// 직원은 비밀번호만으로 로그인되면 안 된다 — OTP 전에는 로그인 상태가 아니다
+test('login_whenOtpRequired_staysAnonymousUntilVerified', async () => {
+  const store = setup({
+    startLogin: async () => ({
+      status: 'OTP_REQUIRED',
+      challengeId: 'c-1',
+      expiresAt: '2026-10-24T10:05:00Z',
+    }),
+    verifyOtp: async (challengeId, code) => {
+      assert.equal(challengeId, 'c-1')
+      assert.equal(code, '246810')
+      return staff
+    },
+  })
+  const progress = await store.login('jiwon', '1234')
+  assert.deepEqual(progress, {
+    done: false,
+    challengeId: 'c-1',
+    expiresAt: '2026-10-24T10:05:00Z',
+  })
+  assert.equal(store.getSnapshot().user, null)
+  await store.verifyOtp('c-1', '246810')
+  assert.equal(store.getSnapshot().user?.loginId, 'jiwon')
+  assert.equal(store.getSnapshot().status, 'authenticated')
+})
+
+// OTP가 틀리면 오류를 화면에 넘기고 로그인 상태를 만들지 않는다
+test('verifyOtp_whenWrong_keepsAnonymous', async () => {
+  const store = setup({
+    startLogin: async () => ({ status: 'OTP_REQUIRED', challengeId: 'c-2', expiresAt: 'x' }),
+    verifyOtp: async () => {
+      throw new ApiError(401, 'AUTH_010')
+    },
+  })
+  await store.login('jiwon', '1234')
+  await assert.rejects(store.verifyOtp('c-2', '000000'))
+  assert.equal(store.getSnapshot().user, null)
+})
+
+// 복구 코드도 같은 로그인 완료로 이어진다
+test('submitRecoveryCode_completesLogin', async () => {
+  const store = setup({
+    startLogin: async () => ({ status: 'OTP_REQUIRED', challengeId: 'c-3', expiresAt: 'x' }),
+    submitRecoveryCode: async () => staff,
+  })
+  await store.login('jiwon', '1234')
+  await store.submitRecoveryCode('c-3', 'DW-RECOVERY-0001')
+  assert.equal(store.getSnapshot().user?.role, 'SECURITY_STAFF')
+})
+
+// 사장님은 비밀번호만으로 끝난다
+test('login_whenNoOtp_isDoneImmediately', async () => {
+  const store = setup()
+  assert.deepEqual(await store.login('admin', 'secret'), { done: true })
+  assert.equal(store.getSnapshot().status, 'authenticated')
 })

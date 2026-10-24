@@ -657,3 +657,25 @@ textarea {
     gap: 12px;
   }
 }
+/* 2단계 인증 (1-1) */
+.dw-login-timer {
+  margin: -8px 0 18px;
+  font-size: 13px;
+  color: #64748b;
+}
+.dw-login-otp {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.dw-login-otp .dw-login-error {
+  margin-bottom: 0;
+}
+.dw-login-links {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+.dw-login-links .ant-btn-link {
+  padding-inline: 0;
+}

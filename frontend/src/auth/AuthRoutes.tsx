@@ -9,6 +9,8 @@ import { ManagementLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
+import { isMock } from '../api/mockMode'
+import { ModeSwitch } from '../components/explain/ModeSwitch'
 
 const networkMessage = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
 
@@ -78,6 +80,11 @@ export function LoginRoute() {
   useEffect(() => {
     store.consumeExpired()
   }, [store])
+  // 로그인이 끝나면 역할별 첫 화면으로
+  const goHome = () => {
+    const loggedIn = store.getSnapshot().user
+    navigate(loggedIn ? homeOf(loggedIn) : '/login', { replace: true })
+  }
   if (checkedKey !== key) return <CheckingSession />
   if (error === 'forbidden') return <ScreenResult kind="403" homePath="/admin" />
   if (status === 'authenticated' && user) {
@@ -106,10 +113,19 @@ export function LoginRoute() {
         />
       )}
       <LoginPage
+        demoHint={isMock('identity')}
         onSubmit={async ({ loginId, password }) => {
-          await store.login(loginId, password)
-          const loggedIn = store.getSnapshot().user
-          navigate(loggedIn ? homeOf(loggedIn) : '/login', { replace: true })
+          const progress = await store.login(loginId, password)
+          if (progress.done) goHome()
+          return progress
+        }}
+        onOtp={async (challengeId, code) => {
+          await store.verifyOtp(challengeId, code)
+          goHome()
+        }}
+        onRecovery={async (challengeId, recoveryCode) => {
+          await store.submitRecoveryCode(challengeId, recoveryCode)
+          goHome()
         }}
       />
     </>
@@ -155,6 +171,7 @@ export function ServerSession() {
           </NavLink>
           <div className="dw-header-center" />
           <div className="dw-header-tools">
+            <ModeSwitch />
             <span className="dw-user-name">{user.displayName}</span>
             <span className="dw-role-pill">{navigation.label}</span>
             <LogoutButton />

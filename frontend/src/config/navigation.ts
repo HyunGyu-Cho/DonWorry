@@ -6,28 +6,69 @@ export type NavItem = { label: string; path: string; permission?: Permission }
 export type NavGroup = { title: string; items: NavItem[] }
 
 export const roles: Record<Role, { label: string; userName: string; landing: string }> = {
-  security: { label: '보안 직원', userName: '박지원', landing: '/security/transactions' },
-  owner: { label: '사장님', userName: '김사장', landing: '/owner/actions' },
+  security: { label: '보안 직원', userName: '박지원', landing: '/security/home' },
+  owner: { label: '사장님', userName: '김사장', landing: '/owner/home' },
 }
 
-/** 메뉴 내용은 노션의 담당자 협의 후 수정할 수 있도록 데이터로 분리. */
+// 메뉴 구성은 시연용 프로토타입 v4.2와 같다. 아직 없는 화면은 빈 화면으로 연결한다 (app/router.tsx)
 export const navByRole: Record<Role, NavGroup[]> = {
   security: [
-    { title: '결제', items: [{ label: '거래 내역', path: '/security/transactions' }] },
-    { title: '탐지', items: [{ label: '경보', path: '/security/alerts' }] },
-    { title: 'Case', items: [{ label: 'Case 목록', path: '/security/cases' }] },
+    { title: '홈', items: [{ label: '홈', path: '/security/home' }] },
+    {
+      title: '탐지',
+      items: [
+        { label: 'Rule 카탈로그', path: '/security/rules' },
+        { label: '결제 경보', path: '/security/alerts' },
+        { label: '차단 목록', path: '/security/blocklist' },
+      ],
+    },
+    { title: '조사', items: [{ label: '사건 목록', path: '/security/cases' }] },
+    {
+      title: '조치 · 알림',
+      items: [
+        { label: '조치 센터', path: '/security/actions' },
+        { label: '메일 발송 기록', path: '/security/notifications' },
+      ],
+    },
   ],
   owner: [
     {
-      title: '조치 결과',
-      items: [{ label: '조치 결과', path: '/owner/actions', permission: 'FDS_VIEW' }],
+      title: '홈',
+      items: [
+        { label: '홈', path: '/owner/home' },
+        { label: '보안 확인 결과', path: '/owner/results', permission: 'FDS_VIEW' },
+      ],
     },
     {
       title: '자금',
-      items: [{ label: '정산 현황', path: '/owner/settlements', permission: 'FINANCE_VIEW' }],
+      items: [
+        { label: '정산 캘린더', path: '/owner/settlements', permission: 'FINANCE_VIEW' },
+        { label: '자금 현황', path: '/owner/funds', permission: 'FINANCE_VIEW' },
+        { label: '연계 대출 상품', path: '/owner/loans', permission: 'FINANCE_VIEW' },
+      ],
     },
   ],
 }
+
+// 보안 관리자 — 직원 계정 사건 판정 · 2인 승인 · 직원 접속 감시
+export const managerNavigation: NavGroup[] = [
+  { title: '홈', items: [{ label: '홈', path: '/manager/home' }] },
+  {
+    title: '통제',
+    items: [
+      { label: '2인 승인함', path: '/manager/approvals' },
+      { label: 'Rule 카탈로그', path: '/manager/rules' },
+    ],
+  },
+  {
+    title: '직원 계정 보호',
+    items: [
+      { label: '직원 접속 감시', path: '/manager/access' },
+      { label: '사건 목록', path: '/manager/cases' },
+      { label: '감사 로그', path: '/manager/audit' },
+    ],
+  },
+]
 
 export const adminNavigation = {
   label: '관리자',
@@ -48,8 +89,7 @@ type SessionRole = AuthUser['role']
 const sessionMenus: Record<SessionRole, { label: string; base: string; groups: NavGroup[] }> = {
   ADMIN: { label: adminNavigation.label, base: '/admin', groups: adminNavigation.groups },
   SECURITY_STAFF: { label: roles.security.label, base: '/security', groups: navByRole.security },
-  // 보안 관리자 전용 화면(2인 승인함 · 직원 사건)은 1단계에서 추가한다. 그 전까지 보안 직원 메뉴를 함께 쓴다
-  SECURITY_MANAGER: { label: '보안 관리자', base: '/security', groups: navByRole.security },
+  SECURITY_MANAGER: { label: '보안 관리자', base: '/manager', groups: managerNavigation },
   OPERATOR: { label: roles.owner.label, base: '/owner', groups: navByRole.owner },
 }
 
