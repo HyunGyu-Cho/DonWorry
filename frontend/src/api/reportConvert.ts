@@ -53,6 +53,9 @@ export function toConclusionReport(
       retrievedAt: e.retrievedAt,
       ref: null,
     })),
+    // 기존 형식에는 비슷한 사건 · 조사 과정이 없다 (만들어 넣지 않음)
+    similarCases: [],
+    trace: [],
     limitations: body.recommendation.limitations,
     model: '기존 보고서 형식',
   }

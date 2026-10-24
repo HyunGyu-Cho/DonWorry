@@ -58,6 +58,72 @@ export type PaymentRecommendation = {
   reason: string
 }
 
+// 비슷한 과거 사건 [Spring] — find_similar_cases(P3) 결과. 판정 참고용, 자동 판정에 쓰지 않는다
+export type SimilarMatch =
+  | 'SAME_CARD'
+  | 'SAME_DEVICE'
+  | 'SAME_IP'
+  | 'SAME_EMAIL'
+  | 'SAME_CUSTOMER'
+  | 'SAME_STAFF'
+  | 'RULE_COMBO'
+// 사건 판정 결과 (사기로 끝남 · 정상으로 끝남)
+export type SimilarOutcome = 'FRAUD' | 'NORMAL'
+
+export type SimilarCase = {
+  // 누르면 이 사건의 최종 보고서로 간다 (직원 사건은 보안 관리자만, RPT_010)
+  caseId: string
+  caseType: CaseType
+  title: string
+  occurredAt: string
+  outcome: SimilarOutcome
+  outcomeLabel: string
+  matches: SimilarMatch[]
+  // STRONG = 같은 대상이 겹침, WEAK = Rule 조합만 비슷
+  strength: 'STRONG' | 'WEAK'
+}
+
+// AI 조사 과정 한 단계 [Spring 기록] — 요약만 남기고 원본 데이터 · 프롬프트 전문은 넣지 않는다
+export type ReportToolName =
+  | 'get_fds_evidence'
+  | 'get_case_payments'
+  | 'get_payment_history'
+  | 'get_payment_authentication'
+  | 'get_security_events'
+  | 'get_order_context'
+  | 'find_similar_cases'
+// LLM_FAILED = AI 답이 구조 검증에서 떨어져 다시 쓰는 단계 (ai-server 안에서 최대 3회)
+export type ReportStepKind = 'REQUEST' | 'TOOL' | 'LLM' | 'LLM_FAILED' | 'VALIDATE' | 'SAVE'
+export type ReportStepStatus = 'RUNNING' | 'DONE' | 'FAILED'
+
+export type ReportStep = {
+  stepNo: number
+  kind: ReportStepKind
+  label: string
+  toolName: ReportToolName | null
+  startedAt: string
+  // 진행 중이면 null
+  durationMs: number | null
+  asked: string
+  got: string | null
+  status: ReportStepStatus
+}
+
+// 조사 진행 상태 — 화면이 조사 중에 1초마다 확인한다
+// SUPERSEDED = 조사 중 새 정보(경보 병합 · 구매자 응답)가 와서 새 버전으로 대체됨 (2-18)
+export type ReportRunStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'SUPERSEDED'
+
+export type ReportRun = {
+  caseId: string
+  reportVersion: number
+  status: ReportRunStatus
+  startedAt: string
+  finishedAt: string | null
+  steps: ReportStep[]
+  // 진행 중인 단계 번호, 끝났으면 null
+  currentStepNo: number | null
+}
+
 export type ConclusionReport = {
   schemaVersion: 2
   reportType: ReportType
@@ -79,6 +145,9 @@ export type ConclusionReport = {
   timeline: ReportTimelineItem[]
   paymentRecommendations: PaymentRecommendation[] | null
   evidence: ReportEvidence[]
+  // ── 비슷한 과거 사건 [Spring] · 조사 과정 [Spring 기록] (없으면 빈 목록) ──
+  similarCases: SimilarCase[]
+  trace: ReportStep[]
   // ── 보고서 정보 ──
   limitations: string[]
   model: string

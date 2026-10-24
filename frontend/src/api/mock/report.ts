@@ -1,16 +1,167 @@
-// P4 보고서 Mock — 결론 카드 3유형 (프로토타입 v3.1 문구)
-// 직원 사건 보고서는 api/mock/investigation.ts 사건 101 · 102, api/mock/fds.ts 직원 경보와 같은 장면
+// P4 보고서 Mock — 결론 카드 3유형 (프로토타입 v3.1 문구, 비슷한 사건 · 조사 과정은 v4.2)
+// 직원 사건 보고서는 api/mock/investigation.ts 사건 101 · 102 · 91, api/mock/fds.ts 직원 경보와 같은 장면
 // 결제 사기 보고서(사건 201)는 v3.1 시나리오 ① — 결제 사건 Mock은 1-5에서 맞춘다
+// 사건 102(방금 생긴 분산 공격)는 처음 볼 때 조사가 시작돼 단계가 실시간으로 나온다
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
 import { StaffReportForbiddenError } from '../reportErrors.ts'
 import { getMockActor } from './investigation.ts'
+import { buildRun, finish, llm, llmFailed, req, tool, totalMs } from './reportSteps.ts'
+import type { StepDef } from './reportSteps.ts'
 import { mockRespond } from './respond.ts'
-import type { ConclusionReport } from '../../types/report.ts'
+import type { ConclusionReport, ReportRun, SimilarCase } from '../../types/report.ts'
 
 const MODEL = 'gpt-4.1-mini · OpenAI API (예시)'
 
 const minutesAgo = (now: Date, minutes: number) =>
   new Date(now.getTime() - minutes * 60_000).toISOString()
+
+const DAY = 24 * 60
+
+// 사건별 최신 보고서 버전 · 조사 단계 · 끝난 시각(분 전)
+const RUNS: Record<string, { version: number; doneAgo: number; defs: StepDef[] }> = {
+  '101': {
+    version: 3,
+    doneAgo: 29,
+    defs: [
+      req('직원 경보 4건 · 보고서 v3 (경보가 묶일 때마다 다시 조사)'),
+      tool(
+        'get_security_events',
+        1500,
+        '직원 경보 4건 · 박지원 계정',
+        '로그인 기록 9건 · 사내망 밖 4건 · 같은 세션 동시 사용 1건',
+      ),
+      tool('find_similar_cases', 1000, '같은 직원 계정 · 같은 Rule 조합', '1건 (정상 1)'),
+      llm('위험 근거 4 · 정상 정황 2 · 권고 4'),
+      ...finish(3),
+    ],
+  },
+  '102': {
+    version: 1,
+    doneAgo: 1,
+    defs: [
+      req('직원 경보 2건 · 보고서 v1'),
+      tool(
+        'get_security_events',
+        1500,
+        '직원 경보 2건 · 박지원 · 이도현 계정',
+        '로그인 실패 41회 · 해외 IP 30개 · 성공 0회',
+      ),
+      tool('find_similar_cases', 1000, '같은 공격 IP 묶음 · 같은 Rule 조합', '0건'),
+      llmFailed(1, '구조 검증 실패: 필수 항목 "확인할 것" 누락 → 다시 시도 (최대 3회)'),
+      llm('위험 근거 3 · 정상 정황 2 · 권고 3', 'AI 판단 (2차)'),
+      ...finish(1),
+    ],
+  },
+  '201': {
+    version: 1,
+    doneAgo: 20,
+    defs: [
+      req('결제 1건 · 보고서 v1'),
+      tool('get_case_payments', 900, '이 사건에 묶인 결제', '결제 1건 · 합계 65만 원'),
+      tool('get_fds_evidence', 1100, '결제 1건', 'Rule 3개 적중 · 55점'),
+      tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 12건 · 평균 4만 원'),
+      tool(
+        'get_payment_authentication',
+        800,
+        '단체 행사용 케이크 세트 결제',
+        '처음 쓰는 카드 · 카드사 승인',
+      ),
+      tool(
+        'get_order_context',
+        800,
+        '단체 행사용 케이크 세트 주문',
+        '픽업 예정 · 구매자 응답 없음',
+      ),
+      tool('find_similar_cases', 1000, '같은 고객 · 같은 Rule 조합', '2건 (사기 1 · 정상 1)'),
+      llm('위험 근거 3 · 정상 정황 2 · 권고 2'),
+      ...finish(1),
+    ],
+  },
+  '91': {
+    version: 1,
+    doneAgo: 24 * DAY,
+    defs: [
+      req('직원 경보 1건 · 보고서 v1'),
+      tool(
+        'get_security_events',
+        1500,
+        '직원 경보 1건 · 박지원 계정',
+        '집 인터넷 로그인 1건 · OTP 성공',
+      ),
+      tool('find_similar_cases', 1000, '같은 직원 계정 · 같은 Rule 조합', '0건'),
+      llm('위험 근거 1 · 정상 정황 2 · 권고 1'),
+      ...finish(1),
+    ],
+  },
+  '180': {
+    version: 1,
+    doneAgo: 40 * DAY,
+    defs: [
+      req('결제 1건 · 보고서 v1'),
+      tool('get_case_payments', 900, '이 사건에 묶인 결제', '결제 1건 · 합계 48만 원'),
+      tool('get_fds_evidence', 1100, '결제 1건', 'Rule 2개 적중 · 60점'),
+      tool('find_similar_cases', 1000, '같은 고객 · 같은 Rule 조합', '0건'),
+      llm('위험 근거 2 · 정상 정황 1 · 권고 2'),
+      ...finish(1),
+    ],
+  },
+  '175': {
+    version: 1,
+    doneAgo: 55 * DAY,
+    defs: [
+      req('결제 1건 · 보고서 v1'),
+      tool('get_case_payments', 900, '이 사건에 묶인 결제', '결제 1건 · 합계 52만 원'),
+      tool('get_fds_evidence', 1100, '결제 1건', 'Rule 2개 적중 · 45점'),
+      tool('find_similar_cases', 1000, '같은 Rule 조합', '0건'),
+      llm('위험 근거 2 · 정상 정황 2 · 권고 1'),
+      ...finish(1),
+    ],
+  },
+}
+
+// 모든 단계가 끝난 조사 기록 (보고서 trace와 같다)
+function finishedRun(caseId: string, now: Date): ReportRun {
+  const run = RUNS[caseId]
+  const startedAt = new Date(now.getTime() - run.doneAgo * 60_000 - totalMs(run.defs))
+  return buildRun(caseId, run.version, run.defs, startedAt)
+}
+
+const SIMILAR: Record<string, (now: Date) => SimilarCase[]> = {
+  '101': (now) => [
+    {
+      caseId: '91',
+      caseType: 'STAFF_TAKEOVER',
+      title: '박지원 · 집에서 로그인',
+      occurredAt: minutesAgo(now, 24 * DAY),
+      outcome: 'NORMAL',
+      outcomeLabel: '재택근무로 확인 · 경고 해제',
+      matches: ['SAME_STAFF'],
+      strength: 'STRONG',
+    },
+  ],
+  '201': (now) => [
+    {
+      caseId: '180',
+      caseType: 'PAYMENT_FRAUD',
+      title: '김민수 · 새 카드로 고액 결제',
+      occurredAt: minutesAgo(now, 40 * DAY),
+      outcome: 'FRAUD',
+      outcomeLabel: '카드 도용 확인 · 승인 취소',
+      matches: ['SAME_CUSTOMER', 'RULE_COMBO'],
+      strength: 'STRONG',
+    },
+    {
+      caseId: '175',
+      caseType: 'PAYMENT_FRAUD',
+      title: '다른 고객 · 처음 쓰는 카드로 고액 결제',
+      occurredAt: minutesAgo(now, 55 * DAY),
+      outcome: 'NORMAL',
+      outcomeLabel: '본인 확인 후 정상 · 매입 허용',
+      matches: ['RULE_COMBO'],
+      strength: 'WEAK',
+    },
+  ],
+}
 
 export function buildMockReports(now: Date): ConclusionReport[] {
   const at = (minutes: number) => minutesAgo(now, minutes)
@@ -19,8 +170,8 @@ export function buildMockReports(now: Date): ConclusionReport[] {
       schemaVersion: 2,
       reportType: 'STAFF_TAKEOVER',
       caseId: '101',
-      reportVersion: 1,
-      generatedAt: at(90),
+      reportVersion: 3,
+      generatedAt: at(29),
       riskScore: 82,
       verdict: '박지원 계정이 탈취되어 공격자가 탐지 설정을 끄려 한 것으로 보입니다',
       summary:
@@ -112,6 +263,8 @@ export function buildMockReports(now: Date): ConclusionReport[] {
           ref: { type: 'STAFF_ALERT', id: 4 },
         },
       ],
+      similarCases: SIMILAR['101']?.(now) ?? [],
+      trace: finishedRun('101', now).steps,
       limitations: [
         'IP 위치 · 기기 지문은 단순화했습니다 (시연용).',
         '직원 계정 사건은 본인이 아닌 보안 관리자만 판정합니다.',
@@ -201,6 +354,8 @@ export function buildMockReports(now: Date): ConclusionReport[] {
           ref: null,
         },
       ],
+      similarCases: SIMILAR['102']?.(now) ?? [],
+      trace: finishedRun('102', now).steps,
       limitations: [
         'IP 위치는 시연용 가짜 주소 목록으로 판정했습니다.',
         '직원 계정 사건은 대상 직원이 아닌 보안 관리자가 판정합니다.',
@@ -286,21 +441,193 @@ export function buildMockReports(now: Date): ConclusionReport[] {
           ref: { type: 'FDS_EVALUATION', id: 31 },
         },
       ],
+      similarCases: SIMILAR['201']?.(now) ?? [],
+      trace: finishedRun('201', now).steps,
       limitations: [
         '구매자 응답은 메일을 받은 사람의 응답이라, 계정 탈취 시 공격자가 답할 수도 있습니다.',
         'AI 권고는 최종 결정이 아니며, AI 권고와 반대로 매입을 허용하면 재인증과 2인 승인이 필요합니다.',
       ],
       model: MODEL,
     },
+    ...buildPastReports(now),
   ]
 }
 
-export async function mockGetCaseReport(caseId: string): Promise<ConclusionReport | null> {
-  await mockRespond(null)
-  const found = buildMockReports(new Date()).find((r) => r.caseId === caseId) ?? null
-  // 직원 계정 사건 보고서는 보안 관리자만
-  if (found && found.reportType !== 'PAYMENT_FRAUD' && getMockActor().role !== 'SECURITY_MANAGER') {
+// 비슷한 과거 사건에서 눌러 들어가는 최종 보고서 (이미 판정이 끝난 사건)
+function pastReport(
+  now: Date,
+  caseId: string,
+  reportType: ConclusionReport['reportType'],
+  riskScore: number,
+  verdict: string,
+  summary: string,
+  extra: Pick<
+    ConclusionReport,
+    'recommendations' | 'riskPoints' | 'normalPoints' | 'paymentRecommendations'
+  >,
+): ConclusionReport {
+  const run = finishedRun(caseId, now)
+  return {
+    schemaVersion: 2,
+    reportType,
+    caseId,
+    reportVersion: RUNS[caseId].version,
+    generatedAt: run.finishedAt ?? run.startedAt,
+    riskScore,
+    verdict,
+    summary,
+    ...extra,
+    unknowns: [],
+    checks: [],
+    timeline: [],
+    evidence: [],
+    similarCases: [],
+    trace: run.steps,
+    limitations: ['이미 판정이 끝난 사건의 최종 보고서입니다.'],
+    model: MODEL,
+  }
+}
+
+function buildPastReports(now: Date): ConclusionReport[] {
+  return [
+    pastReport(
+      now,
+      '91',
+      'STAFF_TAKEOVER',
+      35,
+      '재택근무 중 집에서 로그인한 것으로 보입니다',
+      '박지원 계정이 집 인터넷에서 로그인했지만 OTP를 한 번에 통과했고, 같은 날 재택근무 신청이 있었습니다.',
+      {
+        recommendations: [{ label: '경고 해제', kind: 'POSITIVE' }],
+        riskPoints: [
+          {
+            title: '평소와 다른 접속 환경',
+            detail: '사내망 밖 집 인터넷에서 로그인',
+            source: '직원 로그인 기록',
+          },
+        ],
+        normalPoints: [
+          {
+            title: 'OTP 한 번에 통과',
+            detail: '실패 없이 2단계 인증 성공',
+            source: '직원 로그인 기록',
+          },
+          { title: '재택근무 신청 있음', detail: '같은 날 재택근무 일정', source: '관리자 확인' },
+        ],
+        paymentRecommendations: null,
+      },
+    ),
+    pastReport(
+      now,
+      '180',
+      'PAYMENT_FRAUD',
+      74,
+      '카드 도용으로 보여 승인 취소를 권고합니다',
+      '김민수 고객 계정에서 처음 쓰는 카드로 평소보다 큰 48만 원을 결제했고, 구매자가 결제하지 않았다고 답했습니다.',
+      {
+        recommendations: [{ label: '승인 취소 검토', kind: 'NEGATIVE' }],
+        riskPoints: [
+          { title: '처음 쓰는 카드', detail: '이 고객이 처음 쓴 카드', source: 'FDS 평가' },
+          {
+            title: '구매자 부인',
+            detail: '"본인이 결제하지 않았어요" 응답',
+            source: '구매자 확인',
+          },
+        ],
+        normalPoints: [
+          { title: '평소 쓰던 기기', detail: '이 고객이 쓰던 휴대폰에서 결제', source: '결제' },
+        ],
+        paymentRecommendations: [
+          {
+            paymentId: '18',
+            label: '결제 #18 · 생일 케이크 세트',
+            amount: 480000,
+            recommendation: 'REJECT_REVIEW',
+            reason: '구매자가 결제하지 않았다고 응답',
+          },
+        ],
+      },
+    ),
+    pastReport(
+      now,
+      '175',
+      'PAYMENT_FRAUD',
+      45,
+      '처음 쓰는 카드지만 본인 결제로 확인됐습니다',
+      '처음 쓰는 카드로 52만 원을 결제했지만 구매자가 본인 결제라고 답했고, 평소 쓰던 기기와 배송지였습니다.',
+      {
+        recommendations: [{ label: '매입 허용 검토', kind: 'POSITIVE' }],
+        riskPoints: [
+          { title: '처음 쓰는 카드', detail: '이 고객이 처음 쓴 카드', source: 'FDS 평가' },
+          { title: '고액 결제', detail: '52만 원', source: 'FDS 평가' },
+        ],
+        normalPoints: [
+          { title: '구매자 본인 확인', detail: '"제가 결제했어요" 응답', source: '구매자 확인' },
+          {
+            title: '평소 쓰던 기기 · 배송지',
+            detail: '이전 주문과 같은 기기 · 배송지',
+            source: '결제',
+          },
+        ],
+        paymentRecommendations: [
+          {
+            paymentId: '17',
+            label: '결제 #17 · 돌잔치 케이크',
+            amount: 520000,
+            recommendation: 'ACCEPT_REVIEW',
+            reason: '구매자 본인 결제 확인',
+          },
+        ],
+      },
+    ),
+  ]
+}
+
+// 사건 102 조사는 처음 볼 때 시작한다 (시연에서 처음부터 따라가 보게)
+const LIVE_CASE = '102'
+let liveStartedAt: Date | null = null
+
+export function resetMockReportRun() {
+  liveStartedAt = null
+}
+
+export function buildLiveRun(now: Date, startedAt: Date): ReportRun {
+  const run = RUNS[LIVE_CASE]
+  return buildRun(LIVE_CASE, run.version, run.defs, startedAt, now)
+}
+
+// 직원 계정 사건 보고서 · 조사 과정은 보안 관리자만 (대상 직원이 어떤 증거가 잡혔는지 알 수 없게)
+function checkCanRead(report: ConclusionReport | undefined) {
+  if (
+    report &&
+    report.reportType !== 'PAYMENT_FRAUD' &&
+    getMockActor().role !== 'SECURITY_MANAGER'
+  ) {
     throw new StaffReportForbiddenError()
   }
-  return found
+}
+
+export async function mockGetCaseReport(caseId: string): Promise<ConclusionReport | null> {
+  const now = new Date()
+  const found = buildMockReports(now).find((r) => r.caseId === caseId)
+  checkCanRead(found)
+  if (!found || caseId !== LIVE_CASE) return mockRespond(found ?? null)
+  // 조사가 끝나야 보고서가 생긴다
+  liveStartedAt ??= now
+  const run = buildLiveRun(now, liveStartedAt)
+  if (run.status !== 'SUCCEEDED') return mockRespond(null)
+  return mockRespond({
+    ...found,
+    generatedAt: run.finishedAt ?? found.generatedAt,
+    trace: run.steps,
+  })
+}
+
+export async function mockGetReportRun(caseId: string): Promise<ReportRun | null> {
+  const now = new Date()
+  checkCanRead(buildMockReports(now).find((r) => r.caseId === caseId))
+  if (!RUNS[caseId]) return mockRespond(null)
+  if (caseId !== LIVE_CASE) return mockRespond(finishedRun(caseId, now))
+  liveStartedAt ??= now
+  return mockRespond(buildLiveRun(now, liveStartedAt))
 }

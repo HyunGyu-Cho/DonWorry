@@ -64,6 +64,18 @@ export function buildMockStaffCases(now: Date): StaffCase[] {
       createdAt: minutesAgo(now, 1),
       closedAt: null,
       actions: [],
+    }, // 지난 사건 — 101 보고서의 비슷한 과거 사건
+    {
+      caseId: '91',
+      caseType: 'STAFF_TAKEOVER',
+      status: 'CLOSED',
+      subjectUserIds: [4],
+      subjectLabel: '보안 직원 박지원 계정',
+      staffHitIds: [7],
+      groupingBasis: '같은 직원 계정 · 24시간 창',
+      createdAt: minutesAgo(now, 24 * 24 * 60),
+      closedAt: minutesAgo(now, 24 * 24 * 60 - 120),
+      actions: [],
     },
   ]
 }
