@@ -27,6 +27,13 @@ import { useFeedback } from '../../components/common/Feedback'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { tokens } from '../../styles/tokens'
 import { won } from '../../utils/format'
+import { ConclusionCard } from '../../components/explain/ConclusionCard'
+import { FactLine } from '../../components/explain/FactLine'
+import { NextActionButton } from '../../components/explain/NextActionButton'
+import { RawDetails } from '../../components/explain/RawDetails'
+import { SmallId } from '../../components/explain/SmallId'
+import { TermTip } from '../../components/explain/TermTip'
+import { cardName, countryName, koreanWon, placeName, timesUsual } from '../../utils/humanize'
 
 export function ComponentShowcasePage() {
   const { toast, confirmDanger } = useFeedback()
@@ -196,6 +203,54 @@ export function ComponentShowcasePage() {
           </Space>
         </Card>
       </div>
+      <Card
+        title={<span className="dw-section-title">09 · 화면 원칙 부품 (시나리오 ① 결제 예시)</span>}
+        style={{ marginTop: 18 }}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={18}>
+          <ConclusionCard
+            score={78}
+            eyebrow="결제 사기 의심 · 김민수 고객 · 보고서 v1"
+            verdict="카드 도용 가능성이 있어 본인 확인이 필요합니다"
+            summary={`처음 쓰는 카드로 평소보다 큰 ${koreanWon(650000)}을 결제했습니다. 구매자 본인 확인 응답은 아직 없습니다.`}
+            recommendations={[
+              { label: '승인 취소 검토 · 단체 행사용 케이크 세트', kind: 'NEGATIVE' },
+              { label: '구매자 본인 확인 연락', kind: 'INFO' },
+            ]}
+          />
+          <div>
+            <FactLine label="금액" compare="NEW">
+              {koreanWon(650000)} · {timesUsual(650000, 40000)}
+            </FactLine>
+            <FactLine label="카드" compare="NEW">
+              {cardName('1173')} · 이 고객이 처음 쓴 카드 · {countryName('KR')} 발급
+            </FactLine>
+            <FactLine label="기기" compare="SAME">
+              iPhone · Safari · 이 고객이 쓰던 기기
+            </FactLine>
+            <FactLine label="접속 위치" compare="SAME">
+              {placeName('국내 가정용 회선 (서울)')}
+            </FactLine>
+          </div>
+          <div>
+            결제가 <TermTip term="HELD" />
+            되어 사건이 만들어졌습니다. <TermTip term="TWO_PERSON" /> 없이 권고와 반대로 판정할 수
+            없습니다. <SmallId label="결제" value="31" />
+          </div>
+          <RawDetails
+            rows={[
+              ['접속 IP', '121.134.55.10'],
+              ['기기 ID', 'DEV-1A42'],
+              ['카드 지문', 'c1f0…9a2e'],
+            ]}
+          />
+          <NextActionButton
+            to="/dev/components"
+            label="판정하러 가기"
+            hint="근거를 다 봤다면 결제별로 매입 · 승인 취소를 고릅니다"
+          />
+        </Space>
+      </Card>
       <Modal
         title="공통 Modal 예시"
         open={modal}
