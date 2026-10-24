@@ -14,6 +14,7 @@ const base: AuthUser = {
 }
 const admin: AuthUser = { ...base, role: 'ADMIN', tenantScope: 'ALL' }
 const staff: AuthUser = { ...base, role: 'SECURITY_STAFF' }
+const manager: AuthUser = { ...base, role: 'SECURITY_MANAGER' }
 const owner = (permissions: string[]): AuthUser => ({
   ...base,
   role: 'OPERATOR',
@@ -44,4 +45,13 @@ test('다른 역할 화면과 권한 없는 메뉴는 열 수 없다', () => {
   assert.equal(canOpenPath(owner(['FINANCE_VIEW']), '/owner/actions'), false)
   // 없는 화면은 404가 처리하도록 막지 않는다.
   assert.equal(canOpenPath(owner(['FINANCE_VIEW']), '/owner/unknown'), true)
+})
+
+// 보안 관리자가 로그인하자마자 화면이 깨지면 안 된다
+test('sessionNavigation_whenSecurityManager_opensSecurityMenu', () => {
+  const nav = sessionNavigation(manager)
+  assert.equal(nav.label, '보안 관리자')
+  assert.equal(nav.landing, '/security/transactions')
+  assert.equal(canOpenPath(manager, '/security/cases/3'), true)
+  assert.equal(canOpenPath(manager, '/owner/actions'), false)
 })
