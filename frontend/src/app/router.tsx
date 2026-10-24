@@ -10,6 +10,7 @@ import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
 import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
+import { StaffAccessPage } from '../pages/manager/StaffAccessPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
@@ -58,8 +59,9 @@ export const router = createBrowserRouter([
           { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
           { path: 'approvals', element: <EmptyPage title="2인 승인함" slice="1-6" /> },
           { path: 'rules', element: <EmptyPage title="Rule 카탈로그" slice="1-3" /> },
-          { path: 'access', element: <EmptyPage title="직원 접속 감시" slice="1-2" /> },
+          { path: 'access', element: <StaffAccessPage /> },
           { path: 'cases', element: <EmptyPage title="사건 목록" slice="1-5" /> },
+          { path: 'cases/:id', element: <EmptyPage title="사건 상세" slice="1-5" /> },
           { path: 'audit', element: <EmptyPage title="감사 로그" slice="1-6" /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/manager" /> },
         ],

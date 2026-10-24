@@ -24,6 +24,22 @@ export class AccountLockedError extends Error {
   }
 }
 
+// AUTH_012: 보안 관리자만 할 수 있는 직원 계정 조치 (세션 종료 · 잠금 해제)
+export class StaffActionForbiddenError extends Error {
+  constructor() {
+    super('직원 세션 종료와 잠금 해제는 보안 관리자만 할 수 있습니다.')
+    this.name = 'StaffActionForbiddenError'
+  }
+}
+
+// AUTH_013: 이미 끝난 세션 · 이미 풀린 계정
+export class StaffActionDoneError extends Error {
+  constructor() {
+    super('이미 처리되었습니다. 화면을 새로고침해 주세요.')
+    this.name = 'StaffActionDoneError'
+  }
+}
+
 export async function login(loginId: string, password: string): Promise<AuthUser> {
   try {
     return await api<AuthUser>('/auth/login', {

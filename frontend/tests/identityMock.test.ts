@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { InvalidOtpError } from '../src/api/auth.ts'
+import { AccountLockedError, InvalidOtpError } from '../src/api/auth.ts'
 import {
   buildMockLoginEvents,
   DEMO_OTP,
@@ -27,9 +27,11 @@ test('mockVerifyOtp_whenWrongCode_rejects', async () => {
 
 // 직원은 OTP를 거쳐야 하고, 사장님은 비밀번호만으로 끝난다
 test('mockStartLogin_whenStaff_requiresOtp_whenOwner_succeeds', async () => {
-  for (const loginId of ['jiwon', 'yunseo', 'dohyun']) {
+  for (const loginId of ['jiwon', 'yunseo']) {
     assert.equal((await mockStartLogin(loginId, '1234')).status, 'OTP_REQUIRED')
   }
+  // 이도현은 분산 공격 장면에서 잠긴 상태로 시작한다 (직원 접속 감시에서 잠금 해제)
+  await assert.rejects(mockStartLogin('dohyun', '1234'), AccountLockedError)
   const owner = await mockStartLogin('boss', '1234')
   assert.equal(owner.status, 'SUCCESS')
   assert.equal(owner.status === 'SUCCESS' && owner.user.role, 'OPERATOR')

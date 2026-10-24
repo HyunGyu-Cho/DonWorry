@@ -178,3 +178,113 @@
   color: #64748b;
   font-size: 13px;
 }
+
+/* 직원 접속 감시 (1-2) */
+.dw-muted-small {
+  font-size: 12px;
+  color: #64748b;
+}
+.dw-row-warn > td {
+  background: #fff7f7 !important;
+}
+.dw-attack-lead {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: #334155;
+}
+.dw-ip-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dw-ip-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  color: #14532d;
+  background: #bbf7d0;
+  border: 2px solid #4ade80;
+}
+.dw-ip-dot-1 {
+  width: 28px;
+  height: 28px;
+}
+.dw-ip-dot-2 {
+  width: 36px;
+  height: 36px;
+}
+.dw-ip-dot-3 {
+  width: 44px;
+  height: 44px;
+  background: #fecaca;
+  border-color: #f87171;
+  color: #7f1d1d;
+}
+.dw-attack-accounts {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.dw-attack-account {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 22px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  min-width: 200px;
+}
+.dw-heat {
+  display: grid;
+  grid-template-columns: 56px repeat(24, minmax(0, 1fr));
+  gap: 3px;
+  align-items: center;
+}
+.dw-heat-row {
+  display: contents;
+}
+.dw-heat-hour {
+  font-size: 10px;
+  color: #94a3b8;
+}
+.dw-heat-day {
+  font-size: 12px;
+  color: #64748b;
+}
+.dw-heat-cell {
+  height: 22px;
+  border-radius: 3px;
+}
+.dw-heat-NONE {
+  background: #f1f5f9;
+}
+.dw-heat-OFFICE_OK {
+  background: #bfdbfe;
+}
+.dw-heat-OUTSIDE_OK {
+  background: #f9a8d4;
+}
+.dw-heat-FAIL {
+  background: #fdba74;
+}
+.dw-heat-OUTSIDE_FAIL {
+  background: #ef4444;
+}
+.dw-heat-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #475569;
+}
+.dw-heat-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
