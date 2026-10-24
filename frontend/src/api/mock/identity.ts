@@ -1,6 +1,8 @@
 // P1 identity Mock — 시드(migration)와 같은 계정 · 가짜 IP를 쓴다 (docs/erd 7절)
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
-import { InvalidCredentialsError, InvalidOtpError } from '../auth.ts'
+import { AccountLockedError, InvalidCredentialsError, InvalidOtpError } from '../auth.ts'
+import { ApiError } from '../client.ts'
+import { setMockActor } from './investigation.ts'
 import { mockRespond } from './respond.ts'
 import type {
   AuthUser,
@@ -152,16 +154,50 @@ export function buildMockStaffSessions(now: Date): StaffSession[] {
   ]
 }
 
-// 진행 중인 2단계 인증 요청: challengeId → 사용자
-const challenges = new Map<string, AuthUser>()
+// Mock 로그인 세션 — 서버 쿠키 대신 브라우저 세션 저장소 (node 테스트에서는 메모리)
+const SESSION_KEY = 'dw-mock-session-user'
+let memorySession: AuthUser | null = null
+
+function saveSession(user: AuthUser | null) {
+  memorySession = user
+  try {
+    if (user) sessionStorage.setItem(SESSION_KEY, JSON.stringify(user))
+    else sessionStorage.removeItem(SESSION_KEY)
+  } catch {
+    // 저장소가 없는 환경(node 테스트 · 막힌 브라우저)은 메모리만 쓴다
+  }
+  // 다른 Mock(사건 · 보고서)이 같은 사람을 현재 사용자로 본다
+  if (user) setMockActor({ userId: user.userId, role: user.role, displayName: user.displayName })
+}
+
+function loadSession(): AuthUser | null {
+  try {
+    const saved = sessionStorage.getItem(SESSION_KEY)
+    if (saved) return JSON.parse(saved) as AuthUser
+  } catch {
+    // 저장소가 없으면 메모리 값
+  }
+  return memorySession
+}
+
+function signIn(user: AuthUser): AuthUser {
+  const copy = structuredClone(user)
+  saveSession(copy)
+  return copy
+}
+
+// 진행 중인 2단계 인증 요청: challengeId → 사용자 · 틀린 횟수
+const challenges = new Map<string, { user: AuthUser; failures: number }>()
+// OTP를 이만큼 틀리면 계정을 잠근다 (Mock은 이번 요청만 끝냄)
+export const MAX_OTP_FAILURES = 5
 
 export async function mockStartLogin(loginId: string, password: string): Promise<LoginStep> {
   await mockRespond(null)
   const found = MOCK_USERS.find((u) => u.loginId === loginId.trim().toLowerCase())
   if (!found || password !== DEMO_PASSWORD) throw new InvalidCredentialsError()
-  if (!needsOtp(found)) return { status: 'SUCCESS', user: structuredClone(found) }
-  const challengeId = `mock-${found.loginId}-${challenges.size + 1}`
-  challenges.set(challengeId, found)
+  if (!needsOtp(found)) return { status: 'SUCCESS', user: signIn(found) }
+  const challengeId = `mock-${found.loginId}-${Date.now()}`
+  challenges.set(challengeId, { user: found, failures: 0 })
   return {
     status: 'OTP_REQUIRED',
     challengeId,
@@ -172,9 +208,17 @@ export async function mockStartLogin(loginId: string, password: string): Promise
 async function finishChallenge(challengeId: string, ok: boolean): Promise<AuthUser> {
   await mockRespond(null)
   const found = challenges.get(challengeId)
-  if (!found || !ok) throw new InvalidOtpError()
+  if (!found) throw new InvalidOtpError()
+  if (!ok) {
+    found.failures += 1
+    if (found.failures >= MAX_OTP_FAILURES) {
+      challenges.delete(challengeId)
+      throw new AccountLockedError()
+    }
+    throw new InvalidOtpError()
+  }
   challenges.delete(challengeId)
-  return structuredClone(found)
+  return signIn(found.user)
 }
 
 export const mockVerifyOtp = (challengeId: string, code: string) =>
@@ -182,6 +226,19 @@ export const mockVerifyOtp = (challengeId: string, code: string) =>
 
 export const mockSubmitRecoveryCode = (challengeId: string, recoveryCode: string) =>
   finishChallenge(challengeId, recoveryCode.trim().toUpperCase() === DEMO_RECOVERY_CODE)
+
+// 로그인하지 않았으면 실제 서버처럼 401
+export async function mockGetMe(): Promise<AuthUser> {
+  await mockRespond(null, 100)
+  const user = loadSession()
+  if (!user) throw new ApiError(401, 'AUTH_001')
+  return structuredClone(user)
+}
+
+export async function mockLogout(): Promise<void> {
+  await mockRespond(null, 100)
+  saveSession(null)
+}
 
 export function mockGetLoginEvents(query: LoginEventQuery = {}): Promise<StaffLoginEvent[]> {
   const rows = buildMockLoginEvents(new Date()).filter(

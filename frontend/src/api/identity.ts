@@ -1,12 +1,20 @@
 // P1 identity API 계약 — 2단계 인증 로그인 · 직원 로그인 기록 · 접속 세션
 // VITE_USE_MOCK에 identity가 있으면 Mock, 없으면 실제 API를 쓴다
-// 로그인 화면은 1-1에서 login() 대신 startLogin()으로 바꾼다 (백엔드 2-1과 함께)
-import { AccountLockedError, InvalidCredentialsError, InvalidOtpError } from './auth.ts'
+// 로그인 화면(1-1)은 startLogin → verifyOtp · submitRecoveryCode 순서로 쓴다
+import {
+  AccountLockedError,
+  getMe as realGetMe,
+  InvalidCredentialsError,
+  InvalidOtpError,
+  logout as realLogout,
+} from './auth.ts'
 import { api, ApiError } from './client.ts'
 import { isMock } from './mockMode.ts'
 import {
   mockGetLoginEvents,
+  mockGetMe,
   mockGetStaffSessions,
+  mockLogout,
   mockStartLogin,
   mockSubmitRecoveryCode,
   mockVerifyOtp,
@@ -36,8 +44,11 @@ const postJson = <T>(path: string, body: unknown) =>
     body: JSON.stringify(body),
   }).catch(mapAuthError)
 
-const realStartLogin = (loginId: string, password: string) =>
-  postJson<LoginStep>('/auth/login', { loginId, password })
+// 백엔드 2-1 전에는 /auth/login이 사용자를 바로 돌려준다 → 한 단계 로그인 성공으로 본다
+async function realStartLogin(loginId: string, password: string): Promise<LoginStep> {
+  const res = await postJson<LoginStep | AuthUser>('/auth/login', { loginId, password })
+  return 'status' in res ? res : { status: 'SUCCESS', user: res }
+}
 
 const realVerifyOtp = (challengeId: string, code: string) =>
   postJson<AuthUser>('/auth/otp', { challengeId, code })
@@ -68,3 +79,6 @@ export const submitRecoveryCode = mock ? mockSubmitRecoveryCode : realSubmitReco
 export const getLoginEvents = mock ? mockGetLoginEvents : realGetLoginEvents
 // 직원 접속 세션 (기본: 진행 중인 것만)
 export const getStaffSessions = mock ? mockGetStaffSessions : realGetStaffSessions
+// 지금 로그인한 사용자 (없으면 401)
+export const getMe = mock ? mockGetMe : realGetMe
+export const logout = mock ? mockLogout : realLogout

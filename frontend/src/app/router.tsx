@@ -24,7 +24,6 @@ export const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
   { path: '/admin', element: <Navigate to="/admin/fds" replace /> },
-  { path: '/security', element: <Navigate to="/security/transactions" replace /> },
   {
     element: <ServerSession />,
     children: [
@@ -39,19 +38,40 @@ export const router = createBrowserRouter([
       {
         path: '/security',
         children: [
-          { path: 'cases', element: <CaseListPage /> },
-          { path: 'cases/:id', element: <CaseDetailPage /> },
+          { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
+          { path: 'rules', element: <EmptyPage title="Rule 카탈로그" slice="1-3" /> },
           { path: 'alerts', element: <AlertListPage /> },
           { path: 'alerts/:id', element: <AlertDetailPage /> },
-          { path: 'transactions', element: <EmptyPage title="거래 내역" /> },
+          { path: 'blocklist', element: <EmptyPage title="차단 목록" slice="1-4" /> },
+          { path: 'cases', element: <CaseListPage /> },
+          { path: 'cases/:id', element: <CaseDetailPage /> },
+          { path: 'actions', element: <EmptyPage title="조치 센터" slice="1-6" /> },
+          { path: 'notifications', element: <EmptyPage title="메일 발송 기록" slice="1-8" /> },
+          // 예전 첫 화면 주소로 들어와도 홈으로 보낸다
+          { path: 'transactions', element: <Navigate to="/security/home" replace /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/security" /> },
+        ],
+      },
+      {
+        path: '/manager',
+        children: [
+          { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
+          { path: 'approvals', element: <EmptyPage title="2인 승인함" slice="1-6" /> },
+          { path: 'rules', element: <EmptyPage title="Rule 카탈로그" slice="1-3" /> },
+          { path: 'access', element: <EmptyPage title="직원 접속 감시" slice="1-2" /> },
+          { path: 'cases', element: <EmptyPage title="사건 목록" slice="1-5" /> },
+          { path: 'audit', element: <EmptyPage title="감사 로그" slice="1-6" /> },
+          { path: '*', element: <ScreenResult kind="404" homePath="/manager" /> },
         ],
       },
       {
         path: '/owner',
         children: [
-          { path: 'actions', element: <EmptyPage title="조치 결과" /> },
-          { path: 'settlements', element: <EmptyPage title="정산 현황" /> },
+          { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
+          { path: 'results', element: <EmptyPage title="보안 확인 결과" slice="1-8" /> },
+          { path: 'settlements', element: <EmptyPage title="정산 캘린더" slice="1-10" /> },
+          { path: 'funds', element: <EmptyPage title="자금 현황" slice="1-10" /> },
+          { path: 'loans', element: <EmptyPage title="연계 대출 상품" slice="1-10" /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
         ],
       },
