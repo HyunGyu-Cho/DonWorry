@@ -48,6 +48,8 @@ type SessionRole = AuthUser['role']
 const sessionMenus: Record<SessionRole, { label: string; base: string; groups: NavGroup[] }> = {
   ADMIN: { label: adminNavigation.label, base: '/admin', groups: adminNavigation.groups },
   SECURITY_STAFF: { label: roles.security.label, base: '/security', groups: navByRole.security },
+  // 보안 관리자 전용 화면(2인 승인함 · 직원 사건)은 1단계에서 추가한다. 그 전까지 보안 직원 메뉴를 함께 쓴다
+  SECURITY_MANAGER: { label: '보안 관리자', base: '/security', groups: navByRole.security },
   OPERATOR: { label: roles.owner.label, base: '/owner', groups: navByRole.owner },
 }
 
