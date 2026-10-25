@@ -9,6 +9,7 @@ import {
 import { ApiError } from '../../api/client'
 import { AccountLockedError, InvalidCredentialsError, InvalidOtpError } from '../../api/auth'
 import type { LoginProgress } from '../../auth/authStore'
+import type { Scenario } from '../../config/scenarios'
 
 export type LoginValues = { loginId: string; password: string }
 type LoginPageProps = {
@@ -19,6 +20,8 @@ type LoginPageProps = {
   onRecovery?: (challengeId: string, recoveryCode: string) => Promise<void>
   // Mock 모드에서만 시연 계정 안내를 보인다
   demoHint?: boolean
+  // 랜딩에서 고른 시연 시나리오 — 아이디만 채우고 비밀번호는 채우지 않는다
+  scenario?: Scenario | null
 }
 type Feedback = 'ready' | 'invalid' | 'input' | 'network' | 'otp' | 'recovery' | 'locked'
 type Challenge = { challengeId: string; expiresAt: string }
@@ -54,7 +57,13 @@ function useRemaining(expiresAt: string | null) {
   return left === 0 ? null : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
 }
 
-export function LoginPage({ onSubmit, onOtp, onRecovery, demoHint = false }: LoginPageProps) {
+export function LoginPage({
+  onSubmit,
+  onOtp,
+  onRecovery,
+  demoHint = false,
+  scenario = null,
+}: LoginPageProps) {
   const submittingRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
@@ -154,11 +163,21 @@ export function LoginPage({ onSubmit, onOtp, onRecovery, demoHint = false }: Log
             <>
               <h2 id="login-title">로그인</h2>
               <p className="dw-login-description">계정으로 로그인하고 업무를 시작하세요.</p>
+              {scenario && (
+                <Alert
+                  className="dw-login-scenario"
+                  type="info"
+                  showIcon
+                  message={`시나리오 ${scenario.mark} ${scenario.title}`}
+                  description={`${scenario.roleLabel} 계정을 채워 두었어요. 비밀번호를 넣고 로그인하세요.`}
+                />
+              )}
               <Form<LoginValues>
                 layout="vertical"
                 onFinish={submitPassword}
                 onValuesChange={() => setFeedback(null)}
                 requiredMark={false}
+                initialValues={scenario ? { loginId: scenario.loginId } : undefined}
                 size="large"
                 disabled={submitting}
               >

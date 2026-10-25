@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Result, Spin } from 'antd'
 import { LogoutOutlined } from '@ant-design/icons'
-import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from './useAuth'
 import { canOpenPath, sessionNavigation } from '../config/navigation'
 import type { AuthUser } from '../types/auth'
@@ -9,6 +9,7 @@ import { ManagementLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
+import { scenarioById } from '../config/scenarios'
 import { isMock } from '../api/mockMode'
 import { ModeSwitch } from '../components/explain/ModeSwitch'
 
@@ -75,6 +76,9 @@ export function LogoutButton() {
 
 export function LoginRoute() {
   const { store, status, user, checkedKey, error, expired, key } = useSessionCheck()
+  // 랜딩에서 고른 시연 시나리오 (?scenario=1) — 아이디만 미리 채운다
+  const [params] = useSearchParams()
+  const scenario = scenarioById(Number(params.get('scenario')))
   const [showExpired] = useState(expired)
   const navigate = useNavigate()
   useEffect(() => {
@@ -114,6 +118,7 @@ export function LoginRoute() {
       )}
       <LoginPage
         demoHint={isMock('identity')}
+        scenario={scenario}
         onSubmit={async ({ loginId, password }) => {
           const progress = await store.login(loginId, password)
           if (progress.done) goHome()
