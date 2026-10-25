@@ -1,9 +1,11 @@
 // P3 결제 사건 Mock — 시나리오 ① 김민수 결제 사기(사건 201)와 지난 사건 180 · 175
 // 결제 · 경보 · 보고서 번호는 api/mock/payment.ts · fdsEvaluations.ts · report.ts와 같다
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
-import { CaseVersionConflictError } from '../caseErrors.ts'
-import { mockAudit } from './investigation.ts'
+import { CaseVersionConflictError, ReauthRequiredError } from '../caseErrors.ts'
+import { mockConsumeReauth } from './identity.ts'
+import { mockAudit, mockCreateApproval, mockOverrideApprovals } from './investigation.ts'
 import { buildMockPayments } from './payment.ts'
+import { buildMockReports } from './report.ts'
 import { mockRespond } from './respond.ts'
 import type {
   ActionHandoff,
@@ -14,6 +16,7 @@ import type {
   HandoffRow,
   PaymentDecision,
   SubmitDecisionsRequest,
+  SubmitDecisionsResult,
 } from '../../types/case.ts'
 import type { RuleCode } from '../../types/fds.ts'
 
@@ -207,7 +210,7 @@ export function buildMockCases(now: Date): CaseDetail[] {
 
 // 화면에서 판정한 내용은 새로고침 전까지만 남는다
 let store: CaseDetail[] | null = null
-const current = () => (store ??= buildMockCases(new Date()))
+const current = () => syncOverrides((store ??= buildMockCases(new Date())))
 
 export function resetMockCases() {
   store = null
@@ -240,31 +243,47 @@ export function mockGetCase(caseId: string): Promise<CaseDetail | null> {
   return mockRespond(current().find((d) => d.securityCase.caseId === caseId) ?? null)
 }
 
-// 판정 확정 → 결제별 조치 인계(매입 · 승인 취소)는 바로 접수된 것으로 둔다. 모두 판정되면 종료
-export async function mockSubmitDecisions(
-  caseId: string,
+type Decided = SubmitDecisionsRequest['decisions']
+
+function addHistory(
+  found: CaseDetail,
+  eventType: CaseHistory['eventType'],
+  actorId: number | null,
+  at: string,
+  eventData: Record<string, string> = {},
+) {
+  const caseId = found.securityCase.caseId
+  found.history.push({
+    historyId: `${caseId}-${found.history.length + 1}`,
+    caseId,
+    eventType,
+    actorType: actorId === null ? 'SYSTEM' : 'STAFF',
+    actorId: actorId === null ? null : String(actorId),
+    eventData,
+    createdAt: at,
+  })
+}
+
+// 판정 반영 → 결제별 조치 인계(매입 · 승인 취소)는 바로 접수된 것으로 둔다. 모두 판정되면 종료
+function applyDecisions(
+  found: CaseDetail,
   staffId: number,
-  request: SubmitDecisionsRequest,
-): Promise<void> {
-  await mockRespond(null)
-  const found = current().find((d) => d.securityCase.caseId === caseId)
-  if (!found) throw new Error(`사건 ${caseId}을 찾을 수 없습니다.`)
-  if (found.securityCase.evidenceVersion !== request.evidenceVersion) {
-    throw new CaseVersionConflictError()
-  }
-  const now = new Date().toISOString()
+  decisions: Decided,
+  reportId: string | null,
+  at: string,
+) {
   let seq = found.decisions.length
-  for (const d of request.decisions) {
+  for (const d of decisions) {
     if (found.decisions.some((x) => x.casePaymentId === d.casePaymentId)) continue
     const decisionId = `${d.casePaymentId}-D${++seq}`
     found.decisions.push({
       decisionId,
       casePaymentId: d.casePaymentId,
       staffId: String(staffId),
-      reportId: request.reportId,
+      reportId,
       decision: d.decision,
       reason: d.reason,
-      decidedAt: now,
+      decidedAt: at,
     })
     found.handoffs.push({
       handoffId: `${decisionId}-H`,
@@ -272,33 +291,110 @@ export async function mockSubmitDecisions(
       actionType: d.decision === 'ACCEPT' ? 'CAPTURE' : 'VOID',
       status: 'ACCEPTED',
       targetOperationId: null,
-      requestedAt: now,
-      acceptedAt: now,
+      requestedAt: at,
+      acceptedAt: at,
       lastErrorCode: null,
     })
     const p = found.payments.find((x) => x.casePaymentId === d.casePaymentId)
     if (p) p.paymentStatus = d.decision === 'ACCEPT' ? 'CAPTURED' : 'VOIDED'
   }
-  const add = (eventType: CaseHistory['eventType'], actor: 'STAFF' | 'SYSTEM') =>
-    found.history.push({
-      historyId: `${caseId}-${found.history.length + 1}`,
-      caseId,
-      eventType,
-      actorType: actor,
-      actorId: actor === 'STAFF' ? String(staffId) : null,
-      eventData: {},
-      createdAt: now,
-    })
-  add('DECISION_CONFIRMED', 'STAFF')
-  mockAudit('DECISION_CONFIRMED', ['SECURITY_CASE', Number(caseId)], {
-    decisions: request.decisions.map((d) => d.decision),
-  })
-  add('HANDOFF_ACCEPTED', 'SYSTEM')
+  addHistory(found, 'DECISION_CONFIRMED', staffId, at)
+  addHistory(found, 'HANDOFF_ACCEPTED', null, at)
   if (found.decisions.length === found.payments.length) {
     found.securityCase.status = 'CLOSED'
-    found.securityCase.closedAt = now
-    add('CASE_CLOSED', 'SYSTEM')
+    found.securityCase.closedAt = at
+    addHistory(found, 'CASE_CLOSED', null, at)
+  } else {
+    found.securityCase.status = 'DECISION_PENDING'
   }
+}
+
+// 관리자 승인을 기다리던 판정: 승인되면 반영, 거절되면 판정 대기로 (Rule 끄기와 같이 읽을 때 반영)
+function syncOverrides(cases: CaseDetail[]): CaseDetail[] {
+  for (const found of cases) {
+    if (found.securityCase.status !== 'APPROVAL_PENDING') continue
+    const req = mockOverrideApprovals().find(
+      (a) => a.payload?.caseId === found.securityCase.caseId && a.status !== 'PENDING',
+    )
+    if (!req || !req.decidedAt) continue
+    if (req.status === 'APPROVED') {
+      addHistory(found, 'CASE_STATUS_CHANGED', req.decidedBy, req.decidedAt, {
+        to: 'APPROVED',
+        comment: req.decisionComment ?? '',
+      })
+      applyDecisions(
+        found,
+        req.requestedBy,
+        (req.payload?.decisions ?? []) as Decided,
+        (req.payload?.reportId ?? null) as string | null,
+        req.decidedAt,
+      )
+    } else {
+      found.securityCase.status = 'DECISION_PENDING'
+      addHistory(found, 'CASE_STATUS_CHANGED', req.decidedBy, req.decidedAt, {
+        to: 'REJECTED',
+        comment: req.decisionComment ?? '',
+      })
+    }
+  }
+  return cases
+}
+
+// AI 권고가 "승인 취소 검토"인데 매입 허용을 고른 결제 (권고 반대 판단은 서버 몫 — 화면 표시는 참고)
+function oppositeDecisions(caseId: string, decisions: Decided): Decided {
+  const report = buildMockReports(new Date()).find((r) => r.caseId === caseId)
+  const recs = report?.paymentRecommendations ?? []
+  return decisions.filter((d) => {
+    const payment = current()
+      .find((c) => c.securityCase.caseId === caseId)
+      ?.payments.find((p) => p.casePaymentId === d.casePaymentId)
+    const rec = recs.find((r) => r.paymentId === payment?.paymentId)?.recommendation
+    return d.decision === 'ACCEPT' && rec === 'REJECT_REVIEW'
+  })
+}
+
+// 판정 확정. 권고 반대가 섞이면 재인증 표를 확인하고 묶음 전체를 관리자 승인 대기로
+export async function mockSubmitDecisions(
+  caseId: string,
+  staffId: number,
+  request: SubmitDecisionsRequest,
+): Promise<SubmitDecisionsResult> {
+  await mockRespond(null)
+  const found = current().find((d) => d.securityCase.caseId === caseId)
+  if (!found) throw new Error(`사건 ${caseId}을 찾을 수 없습니다.`)
+  if (found.securityCase.evidenceVersion !== request.evidenceVersion) {
+    throw new CaseVersionConflictError()
+  }
+  const now = new Date().toISOString()
+  const opposite = oppositeDecisions(caseId, request.decisions)
+  if (opposite.length === 0) {
+    applyDecisions(found, staffId, request.decisions, request.reportId, now)
+    mockAudit('DECISION_CONFIRMED', ['SECURITY_CASE', Number(caseId)], {
+      decisions: request.decisions.map((d) => d.decision),
+    })
+    return { outcome: 'DECIDED', approvalId: null }
+  }
+  if (!mockConsumeReauth(request.reauthToken, staffId)) throw new ReauthRequiredError()
+  const titles = buildMockPayments(new Date())
+  const first = found.payments.find((p) => p.casePaymentId === opposite[0].casePaymentId)
+  const title = titles.find((t) => t.paymentId === first?.paymentId)?.orderTitle ?? '결제'
+  const approval = await mockCreateApproval({
+    requestType: 'DECISION_OVERRIDE',
+    targetType: 'PAYMENT_DECISION',
+    targetId: Number(opposite[0].casePaymentId),
+    targetLabel: `${found.securityCase.subjectLabel} · ${title} 매입 허용 (AI 권고 "취소 검토"와 반대)`,
+    payload: {
+      caseId,
+      decisions: request.decisions,
+      evidenceVersion: request.evidenceVersion,
+      reportId: request.reportId,
+      reauthenticated: true,
+    },
+    reason: opposite.map((d) => d.reason).join(' / '),
+  })
+  found.securityCase.status = 'APPROVAL_PENDING'
+  addHistory(found, 'CASE_STATUS_CHANGED', staffId, now, { to: 'APPROVAL_PENDING' })
+  return { outcome: 'APPROVAL_PENDING', approvalId: approval.approvalId }
 }
 
 // 조치 센터: 모든 결제 사건의 조치 인계를 최신순으로

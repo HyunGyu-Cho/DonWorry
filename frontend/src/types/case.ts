@@ -179,6 +179,14 @@ export type SubmitDecisionsRequest = {
   evidenceVersion: number
   reportId: string | null
   decisions: Array<{ casePaymentId: string; decision: Decision; reason: string }>
+  // AI 권고와 반대인 판정이 섞였을 때만 — 재인증 표 (1-5b)
+  reauthToken?: string | null
+}
+
+// 판정 결과 (1-5b): 바로 반영됐는지, 권고 반대라 관리자 승인을 기다리는지 — 판단은 서버가 한다
+export type SubmitDecisionsResult = {
+  outcome: 'DECIDED' | 'APPROVAL_PENDING'
+  approvalId: number | null
 }
 
 // 조치 센터 1행 (GET /security-cases/handoffs, 1-6 보강) — 사건 · 결제를 따로 부르지 않게 이름까지 담는다

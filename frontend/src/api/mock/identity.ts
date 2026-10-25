@@ -12,6 +12,7 @@ import { getMockActor, setMockActor } from './investigation.ts'
 import { mockRespond } from './respond.ts'
 import type {
   AuthUser,
+  ReauthTicket,
   IpInfo,
   LoginEventQuery,
   LoginStep,
@@ -260,6 +261,33 @@ export const mockVerifyOtp = (challengeId: string, code: string) =>
 
 export const mockSubmitRecoveryCode = (challengeId: string, recoveryCode: string) =>
   finishChallenge(challengeId, recoveryCode.trim().toUpperCase() === DEMO_RECOVERY_CODE)
+
+// 재인증 표: 5분 · 한 번만 (토큰 → 사용자 · 만료 시각)
+const reauthTickets = new Map<string, { userId: number; expiresAt: number }>()
+const REAUTH_MINUTES = 5
+
+export async function mockReauth(code: string): Promise<ReauthTicket> {
+  await mockRespond(null)
+  const user = loadSession()
+  if (!user) throw new ApiError(401, 'AUTH_001')
+  if (code.trim() !== DEMO_OTP) throw new InvalidOtpError()
+  const expiresAt = Date.now() + REAUTH_MINUTES * 60_000
+  const reauthToken = `mock-reauth-${user.userId}-${Date.now()}`
+  reauthTickets.set(reauthToken, { userId: user.userId, expiresAt })
+  return { reauthToken, expiresAt: new Date(expiresAt).toISOString() }
+}
+
+// 사건 Mock이 판정할 때 쓴다: 맞는 사람의 유효한 표면 true, 쓰면 사라진다
+export function mockConsumeReauth(
+  token: string | null | undefined,
+  userId: number,
+  now = Date.now(),
+) {
+  if (!token) return false
+  const found = reauthTickets.get(token)
+  reauthTickets.delete(token)
+  return Boolean(found && found.userId === userId && found.expiresAt > now)
+}
 
 // 로그인하지 않았으면 실제 서버처럼 401
 export async function mockGetMe(): Promise<AuthUser> {

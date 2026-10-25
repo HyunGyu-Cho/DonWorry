@@ -18,6 +18,7 @@ import {
   mockGetStaffAccounts,
   mockGetStaffSessions,
   mockLogout,
+  mockReauth,
   mockTerminateStaffSession,
   mockUnlockStaffAccount,
   mockStartLogin,
@@ -28,6 +29,7 @@ import type {
   AuthUser,
   LoginEventQuery,
   LoginStep,
+  ReauthTicket,
   StaffAccount,
   StaffLoginEvent,
   StaffSession,
@@ -61,6 +63,9 @@ async function realStartLogin(loginId: string, password: string): Promise<LoginS
 const realVerifyOtp = (challengeId: string, code: string) =>
   postJson<AuthUser>('/auth/otp', { challengeId, code })
 
+// 재인증: 로그인한 직원이 OTP를 다시 넣는다 (2-1에서 백엔드). 틀리면 AUTH_010
+const realReauth = (code: string) => postJson<ReauthTicket>('/identity/reauth', { code })
+
 const realSubmitRecoveryCode = (challengeId: string, recoveryCode: string) =>
   postJson<AuthUser>('/auth/recovery-code', { challengeId, recoveryCode })
 
@@ -91,6 +96,8 @@ export const startLogin = mock ? mockStartLogin : realStartLogin
 export const verifyOtp = mock ? mockVerifyOtp : realVerifyOtp
 // OTP 기기를 잃었을 때 1회용 복구 코드
 export const submitRecoveryCode = mock ? mockSubmitRecoveryCode : realSubmitRecoveryCode
+// 위험한 판정 직전 OTP 재인증 → 5분짜리 1회용 표
+export const reauth = mock ? mockReauth : realReauth
 // 직원 로그인 기록 (보안 직원 · 관리자 화면)
 export const getLoginEvents = mock ? mockGetLoginEvents : realGetLoginEvents
 // 직원 접속 세션 (기본: 진행 중인 것만)

@@ -133,3 +133,30 @@ export const ACTION_LABEL: Record<CaseActionType, string> = {
   REVIEW_DECISIONS: '이 계정의 최근 판정 재검토',
   CLEAR_FLAG: '경고 해제',
 }
+
+const HISTORY_TEXT: Record<string, string> = {
+  CASE_CREATED: '사건 자동 생성',
+  PAYMENT_LINKED: '결제 경보 연결',
+  DECISION_CONFIRMED: '직원 판정 확정',
+  HANDOFF_REQUESTED: '조치 요청',
+  HANDOFF_ACCEPTED: '조치 접수 (매입 · 승인 취소)',
+  HANDOFF_FAILED: '조치 요청 실패',
+  CASE_CLOSED: '사건 종료',
+}
+const STATUS_CHANGE_TEXT: Record<string, string> = {
+  APPROVAL_PENDING: '권고 반대 판정 · 관리자 승인 요청 (OTP 재인증 완료)',
+  APPROVED: '관리자 승인 · 판정 반영',
+  REJECTED: '관리자 거절 · 다시 판정 대기',
+  DECISION_PENDING: 'AI 조사 완료 · 판정 대기',
+}
+
+// 결제 사건 기록 한 줄 → 제목 · 덧붙일 말 (상태 변경은 eventData.to로 나눈다)
+export function historyText(h: { eventType: string; eventData: Record<string, string> }): {
+  title: string
+  sub?: string
+} {
+  if (h.eventType !== 'CASE_STATUS_CHANGED')
+    return { title: HISTORY_TEXT[h.eventType] ?? h.eventType }
+  const title = STATUS_CHANGE_TEXT[h.eventData.to] ?? STATUS_CHANGE_TEXT.DECISION_PENDING
+  return h.eventData.comment ? { title, sub: `메모: ${h.eventData.comment}` } : { title }
+}

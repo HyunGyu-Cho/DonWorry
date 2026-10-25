@@ -80,3 +80,9 @@ export type StaffAccount = {
   // 마지막 로그인이 사내망 밖이었는지
   lastLoginOutside: boolean
 }
+
+// 재인증 표 (POST /identity/reauth, 1-5b) — 위험한 판정 직전에 OTP를 다시 넣으면 받는다. 5분 · 한 번만
+export type ReauthTicket = {
+  reauthToken: string
+  expiresAt: string
+}
