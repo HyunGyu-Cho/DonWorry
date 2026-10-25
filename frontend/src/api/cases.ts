@@ -10,8 +10,9 @@ import type {
   ReportBody,
   SecurityCase,
   SubmitDecisionsRequest,
+  SubmitDecisionsResult,
 } from '../types/case'
-import { CaseVersionConflictError } from './caseErrors'
+import { CaseVersionConflictError, ReauthRequiredError } from './caseErrors'
 import { api, ApiError } from './client'
 import { isMock } from './mockMode'
 import { mockGetCase, mockGetCases, mockGetHandoffs, mockSubmitDecisions } from './mock/cases'
@@ -23,7 +24,7 @@ import { mockGetCase, mockGetCases, mockGetHandoffs, mockSubmitDecisions } from 
  */
 
 // 판정 저장 시 화면이 본 증거 버전·보고서가 현재와 다를 때 (설계 3.5). Mock도 같이 쓰므로 caseErrors.ts에 둔다
-export { CaseVersionConflictError }
+export { CaseVersionConflictError, ReauthRequiredError }
 
 // 백엔드 응답 모양 — ID만 숫자이고 나머지는 화면 타입과 같다
 type Id = number
@@ -100,27 +101,35 @@ async function realSubmitDecisions(
   caseId: string,
   staffId: number,
   request: SubmitDecisionsRequest,
-) {
+): Promise<SubmitDecisionsResult> {
   try {
-    await api<ServerDetail>(`/security-cases/${caseId}/decisions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        staffId,
-        evidenceVersion: request.evidenceVersion,
-        reportId: request.reportId === null ? null : Number(request.reportId),
-        decisions: request.decisions.map((d) => ({
-          casePaymentId: Number(d.casePaymentId),
-          decision: d.decision,
-          reason: d.reason,
-        })),
-      }),
-    })
+    const res = await api<SubmitDecisionsResult | ServerDetail>(
+      `/security-cases/${caseId}/decisions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffId,
+          evidenceVersion: request.evidenceVersion,
+          reportId: request.reportId === null ? null : Number(request.reportId),
+          decisions: request.decisions.map((d) => ({
+            casePaymentId: Number(d.casePaymentId),
+            decision: d.decision,
+            reason: d.reason,
+          })),
+          reauthToken: request.reauthToken ?? null,
+        }),
+      },
+    )
+    // 2-10 전 백엔드는 사건 상세를 돌려준다 → 바로 반영으로 본다
+    return 'outcome' in res ? res : { outcome: 'DECIDED', approvalId: null }
   } catch (error) {
     // INV_003 증거 버전 변경, INV_004 최신 보고서 아님 — 둘 다 다시 확인 후 판정해야 한다
     if (error instanceof ApiError && (error.code === 'INV_003' || error.code === 'INV_004')) {
       throw new CaseVersionConflictError()
     }
+    // INV_017 권고 반대 판정에 재인증 표가 없음 · 만료 (2-10)
+    if (error instanceof ApiError && error.code === 'INV_017') throw new ReauthRequiredError()
     throw error
   }
 }

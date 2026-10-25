@@ -2,10 +2,15 @@ import { ArrowLeftOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Input, Radio, Result, Spin, Table, Tag } from 'antd'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { CaseVersionConflictError, getCase, submitDecisions } from '../../api/cases'
+import {
+  CaseVersionConflictError,
+  getCase,
+  ReauthRequiredError,
+  submitDecisions,
+} from '../../api/cases'
 import { getRules, getStaffAlerts } from '../../api/fdsRules'
 import { getLoginEvents, getStaffAccounts, getStaffSessions } from '../../api/identity'
-import { getStaffCase, requestCaseActions } from '../../api/investigation'
+import { getApprovals, getStaffCase, requestCaseActions } from '../../api/investigation'
 import { CaseActionForbiddenError, StaffCaseForbiddenError } from '../../api/investigationErrors'
 import { getPaymentContext } from '../../api/payment'
 import { getCaseReport, getReportRun } from '../../api/report'
@@ -17,12 +22,13 @@ import { useDemo } from '../../demo/DemoContext'
 import type { CaseDetail } from '../../types/case'
 import type { StaffAccount, StaffLoginEvent, StaffSession } from '../../types/auth'
 import type { FdsRule, RuleCode, StaffAlert } from '../../types/fds'
-import type { StaffCase } from '../../types/investigation'
+import type { ApprovalRequest, StaffCase } from '../../types/investigation'
 import type { PaymentContext } from '../../types/payment'
 import type { ConclusionReport, ReportRun } from '../../types/report'
 import { decisionMode } from '../../utils/caseRules'
 import {
   ACTION_LABEL,
+  historyText,
   paymentFlowCards,
   staffFlowCards,
   staffVerdicts,
@@ -41,7 +47,13 @@ import {
 import { caseTypeLabel, paymentStatusLabel } from './case/caseLabels'
 
 type Common = { rules: FdsRule[]; report: ConclusionReport | null; run: ReportRun | null }
-type PaymentData = Common & { kind: 'payment'; detail: CaseDetail; contexts: PaymentContext[] }
+type PaymentData = Common & {
+  kind: 'payment'
+  detail: CaseDetail
+  contexts: PaymentContext[]
+  // 이 사건의 권고 반대 판정 승인 요청 (최신 먼저)
+  overrides: ApprovalRequest[]
+}
 type StaffData = Common & {
   kind: 'staff'
   staffCase: StaffCase
@@ -51,17 +63,6 @@ type StaffData = Common & {
   events: StaffLoginEvent[]
 }
 type Loaded = PaymentData | StaffData | 'missing' | 'forbidden' | 'error'
-
-const HISTORY_TEXT: Record<string, string> = {
-  CASE_CREATED: '사건 자동 생성',
-  PAYMENT_LINKED: '결제 경보 연결',
-  DECISION_CONFIRMED: '직원 판정 확정',
-  HANDOFF_REQUESTED: '조치 요청',
-  HANDOFF_ACCEPTED: '조치 접수 (매입 · 승인 취소)',
-  HANDOFF_FAILED: '조치 요청 실패',
-  CASE_STATUS_CHANGED: 'AI 조사 완료 · 판정 대기',
-  CASE_CLOSED: '사건 종료',
-}
 
 // 보고서 · 조사 진행 상태 (보고서가 없거나 권한이 없으면 null)
 async function fetchReport(caseId: string) {
@@ -78,14 +79,18 @@ async function fetchCase(id: string, merchant: string): Promise<Loaded> {
     const rules = await getRules()
     const detail = await getCase(id, merchant)
     if (detail) {
-      const [contexts, rep] = await Promise.all([
+      const [contexts, rep, approvals] = await Promise.all([
         Promise.all(detail.payments.map((p) => getPaymentContext(p.paymentId))),
         fetchReport(id),
+        getApprovals().catch(() => []),
       ])
       return {
         kind: 'payment',
         detail,
         contexts: contexts.filter((c): c is PaymentContext => c !== null),
+        overrides: approvals
+          .filter((a) => a.requestType === 'DECISION_OVERRIDE' && a.payload?.caseId === id)
+          .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt)),
         rules,
         ...rep,
       }
@@ -204,6 +209,40 @@ function StaffTargets({ data, now }: { data: StaffData; now: Date }) {
           </dl>
         )
       })}
+    </Card>
+  )
+}
+
+// 권고 반대 판정이 관리자 승인을 기다리는 동안 판정 칸 대신 보인다
+function OverridePendingCard(props: { approval: ApprovalRequest; manager: boolean; now: Date }) {
+  const { approval, manager, now } = props
+  return (
+    <Card title="관리자 승인 대기" extra={<Tag color="purple">승인 대기</Tag>}>
+      <div className="dw-case-decision">
+        <Alert
+          type="warning"
+          showIcon
+          message="AI 권고와 반대로 매입 허용을 요청했어요"
+          description="보안 관리자가 승인하면 판정이 반영되고 매입이 진행돼요. 직원 계정이 털려도 혼자서는 의심 결제를 통과시킬 수 없게 하는 장치예요."
+        />
+        <dl className="dw-rule-rows">
+          <dt>요청</dt>
+          <dd>
+            {approval.requestedByName} · {relativeTime(approval.requestedAt, now)} ·{' '}
+            {approval.payload?.reauthenticated ? 'OTP 재인증 완료' : '재인증 정보 없음'}
+          </dd>
+          <dt>사유</dt>
+          <dd>{approval.reason}</dd>
+          <dt>대상</dt>
+          <dd>{approval.targetLabel}</dd>
+        </dl>
+        {manager && (
+          <Link to="/manager/approvals">
+            <Button type="primary">관리자 승인함에서 처리</Button>
+          </Link>
+        )}
+        <RawDetails title="원본 값" rows={[['승인 요청 번호', approval.approvalId]]} />
+      </div>
     </Card>
   )
 }
@@ -413,41 +452,70 @@ export function CaseDetailPage() {
     const mode = aiRunning
       ? ({ kind: 'blocked', message: 'AI 조사가 끝나면 판정할 수 있습니다.' } as const)
       : decisionMode(detail.securityCase.evidenceVersion, detail.reports)
-    right = manager ? (
-      <Card>
-        <b>보안 직원이 판정합니다</b>
-        <p className="dw-muted dw-small">
-          관리자는 AI 권고와 반대되는 판정이 올라오면 관리자 승인함에서 승인합니다.
-        </p>
-      </Card>
-    ) : (
-      <DecisionPanel
-        payments={detail.payments}
-        titleOf={titleOf}
-        decisions={detail.decisions}
-        recommendations={report?.paymentRecommendations ?? []}
-        mode={mode}
-        evidenceVersion={detail.securityCase.evidenceVersion}
-        onSubmit={async (request) => {
-          try {
-            await submitDecisions(detail.securityCase.caseId, user?.userId ?? 0, request)
-            void toast.success('판정을 확정했습니다. 조치가 요청됐어요.')
-            await load()
-            return true
-          } catch (e) {
-            void toast.error(
-              e instanceof CaseVersionConflictError ? e.message : '판정을 저장하지 못했습니다.',
-            )
-            if (e instanceof CaseVersionConflictError) await load()
-            return false
-          }
-        }}
-      />
-    )
+    const pending = loaded.overrides.find((a) => a.status === 'PENDING')
+    const rejected =
+      detail.securityCase.status === 'DECISION_PENDING'
+        ? loaded.overrides.find((a) => a.status === 'REJECTED')
+        : undefined
+    right =
+      detail.securityCase.status === 'APPROVAL_PENDING' && pending ? (
+        <OverridePendingCard approval={pending} manager={manager} now={now} />
+      ) : manager ? (
+        <Card>
+          <b>보안 직원이 판정합니다</b>
+          <p className="dw-muted dw-small">
+            관리자는 AI 권고와 반대되는 판정이 올라오면 관리자 승인함에서 승인합니다.
+          </p>
+        </Card>
+      ) : (
+        <>
+          {rejected && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message="관리자가 권고 반대 판정을 거절했어요"
+              description={`${rejected.decisionComment ?? '이유 없음'} — 다시 확인하고 판정해 주세요.`}
+            />
+          )}
+          <DecisionPanel
+            payments={detail.payments}
+            titleOf={titleOf}
+            decisions={detail.decisions}
+            recommendations={report?.paymentRecommendations ?? []}
+            mode={mode}
+            evidenceVersion={detail.securityCase.evidenceVersion}
+            onSubmit={async (request) => {
+              try {
+                const result = await submitDecisions(
+                  detail.securityCase.caseId,
+                  user?.userId ?? 0,
+                  request,
+                )
+                void toast.success(
+                  result.outcome === 'APPROVAL_PENDING'
+                    ? '관리자 승인을 요청했어요. 승인되면 판정이 반영되고 매입이 진행돼요.'
+                    : '판정을 확정했습니다. 조치가 요청됐어요.',
+                )
+                await load()
+                return true
+              } catch (e) {
+                void toast.error(
+                  e instanceof CaseVersionConflictError || e instanceof ReauthRequiredError
+                    ? e.message
+                    : '판정을 저장하지 못했습니다.',
+                )
+                if (e instanceof CaseVersionConflictError) await load()
+                return false
+              }
+            }}
+          />
+        </>
+      )
     history = detail.history.map((h) => ({
       key: h.historyId,
       at: h.createdAt,
-      title: HISTORY_TEXT[h.eventType] ?? h.eventType,
+      ...historyText(h),
     }))
   } else {
     const { staffCase } = loaded

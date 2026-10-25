@@ -427,3 +427,8 @@ export function mockApprovedReleases(): {
       decidedAt: a.decidedAt as string,
     }))
 }
+
+// 사건 Mock이 권고 반대 판정을 반영할 때 쓴다: 권고 반대 판정 승인 요청 전부 (최신 먼저)
+export function mockOverrideApprovals(): ApprovalRequest[] {
+  return structuredClone(current().approvals.filter((a) => a.requestType === 'DECISION_OVERRIDE'))
+}

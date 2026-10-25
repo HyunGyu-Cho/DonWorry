@@ -1,6 +1,7 @@
 import { Alert, Button, Card, Input, Modal, Spin, Table, Tabs, Tag, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getStaffAlerts } from '../../api/fdsRules'
 import { decideApproval, getApprovals } from '../../api/investigation'
 import {
@@ -42,6 +43,7 @@ async function fetchApprovals(): Promise<Data | null> {
 const DONE_TEXT: Record<string, string> = {
   RULE_DISABLE: 'Rule이 꺼졌습니다. 다음 결제부터 이 Rule은 점수를 더하지 않아요.',
   BLOCKLIST_RELEASE: '차단을 풀었습니다. 이 값의 결제는 이제 점수로만 판단해요.',
+  DECISION_OVERRIDE: '승인했습니다. 판정이 반영되고 매입이 진행돼요.',
 }
 
 export function ApprovalsPage() {
@@ -149,6 +151,15 @@ export function ApprovalsPage() {
       render: (_, a) => (
         <div>
           <b>{a.targetLabel}</b>
+          {typeof a.payload?.caseId === 'string' && (
+            <Link
+              to={`/manager/cases/${a.payload.caseId}`}
+              className="dw-small"
+              style={{ marginLeft: 8 }}
+            >
+              사건 보기
+            </Link>
+          )}
           <div className="dw-pa-chips" style={{ display: 'flex', marginTop: 4 }}>
             <Tooltip title={APPROVAL_TYPE[a.requestType].note}>
               <Tag color={APPROVAL_TYPE[a.requestType].color}>
