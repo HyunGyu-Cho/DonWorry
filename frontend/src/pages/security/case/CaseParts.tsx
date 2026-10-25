@@ -185,6 +185,13 @@ export function AiSummaryCard(props: {
           </Tag>
         ))}
       </div>
+      {/* 끝난 조사도 사건 화면에서 바로 다시 볼 수 있게 (자세한 건 [AI 보고서]의 과정 탭) */}
+      {report.trace.length > 0 && (
+        <details className="dw-case-trace-again">
+          <summary>조사 과정 다시 보기</summary>
+          <TracePanel steps={report.trace} model={report.model} />
+        </details>
+      )}
     </Card>
   )
 }

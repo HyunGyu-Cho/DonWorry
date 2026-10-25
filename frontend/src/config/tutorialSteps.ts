@@ -105,15 +105,15 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
   2: [
     {
       title: '홈에서 할 일 보기',
-      todo: '[직원 계정 사건] 칸을 눌러 보세요.',
-      look: ['직원 계정 사건은 보안 관리자만 볼 수 있어요'],
+      todo: '[의심 사건] 칸을 눌러 보세요.',
+      look: ['직원 계정이 공격받은 사건이에요. 당사자 직원은 볼 수 없고 관리자만 판정해요'],
       path: '/manager/home',
       target: 'home-staff-cases',
     },
     {
       title: '분산 공격 사건 열기',
       todo: '"직원 계정 2개 (박지원 · 이도현)" 사건을 눌러 보세요.',
-      look: ['IP 하나당 1~2번만 실패해서 IP 기준으로는 안 보이는 공격이에요'],
+      look: ['IP 하나당 1~3번만 실패해서 IP 기준으로는 안 보이는 공격이에요'],
       path: '/manager/cases',
       target: 'case-102',
     },
@@ -137,17 +137,20 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
     },
     {
       title: 'AI 보고서 읽기',
-      todo: '[AI 보고서]를 누르고 [AI가 조사한 과정] 탭에서 실패 → 재시도를 다시 보세요.',
+      todo: '[AI 보고서]를 누르고 [AI가 조사한 과정] 탭에서 실패 → 재시도를 다시 보세요. 다 봤으면 왼쪽 [로그인 모니터링] 메뉴로 가요.',
       look: ['끝난 조사의 과정은 보고서 화면에서 크게 볼 수 있어요'],
       path: '/manager/cases/102/report',
       target: 'report-open',
     },
     {
-      title: '직원 접속 감시',
-      todo: '[직원 접속 감시]에서 공격 IP와 로그인 지도를 보세요.',
-      look: ['7일 × 24시간 지도에 평소와 다른 시간대가 보여요'],
+      title: 'IP가 아니라 계정으로 묶어 보기',
+      todo: '[계정별로 묶어 보기]를 눌러 보세요. 흩어진 IP 30개가 계정별로 모여요.',
+      look: [
+        'IP마다 세면 1~3번씩이라 기존 규칙에 안 걸려요',
+        '계정으로 묶으면 10분에 41번 — 직원은 보통 회사 PC 한두 대에서만 로그인해요',
+      ],
       path: '/manager/access',
-      target: 'nav-manager-access',
+      target: 'access-by-account',
     },
   ],
   3: [
@@ -190,7 +193,7 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
   4: [
     {
       title: '홈에서 할 일 보기',
-      todo: '[관리자 승인 대기] 칸을 눌러 보세요.',
+      todo: '[승인 대기] 칸을 눌러 보세요.',
       look: ['의심 세션에서 온 요청이 있으면 먼저 알려 줘요'],
       path: '/manager/home',
       target: 'home-approvals',
@@ -207,7 +210,7 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
     },
     {
       title: '의심 세션 끊기',
-      todo: '[직원 접속 감시]에서 낯선 기기의 세션을 강제 종료해 보세요.',
+      todo: '[로그인 모니터링]에서 낯선 기기의 세션을 강제 종료해 보세요.',
       look: ['사내 세션과 동시에 쓰이는 세션이 표시돼요'],
       path: '/manager/access',
       target: 'nav-manager-access',

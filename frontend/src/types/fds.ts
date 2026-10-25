@@ -75,7 +75,7 @@ export type NewBlocklistEntry = {
   expiresAt?: string
 }
 
-// 직원 경보 1건 (staff_rule_hits). 비밀번호 뿌리기처럼 여러 계정이면 userId가 null
+// 직원 경보 1건 (staff_rule_hits). 패스워드 스프레이처럼 여러 계정이면 userId가 null
 export type StaffAlert = {
   staffHitId: number
   userId: number | null

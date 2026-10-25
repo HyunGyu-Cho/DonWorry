@@ -32,8 +32,8 @@ export const SCENARIOS: Scenario[] = [
     title: '직원 계정 분산 공격',
     roleLabel: '보안 관리자',
     loginId: 'yunseo',
-    summary: 'IP 30곳에서 1~2번씩 로그인을 시도해 직원 계정을 노려요.',
-    sees: ['직원 접속 감시', '계정 기준으로 묶은 사건', 'AI 조사 실패 → 재시도', '계정 조치'],
+    summary: 'IP 30곳에서 1~3번씩 로그인을 시도해 직원 계정들을 노려요.',
+    sees: ['로그인 모니터링', '계정 기준으로 묶은 사건', 'AI 조사 실패 → 재시도', '계정 조치'],
     minutes: 5,
   },
   {

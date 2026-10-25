@@ -1,4 +1,4 @@
-// 직원 접속 감시 화면(1-2)의 계산 — React 없이 순수 함수만 (node 테스트가 직접 불러온다)
+// 로그인 모니터링 화면(1-2)의 계산 — React 없이 순수 함수만 (node 테스트가 직접 불러온다)
 // 날짜 · 시간은 한국 시간 기준
 import type { StaffLoginEvent, StaffSession } from '../types/auth.ts'
 

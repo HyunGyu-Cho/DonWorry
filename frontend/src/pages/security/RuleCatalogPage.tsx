@@ -217,7 +217,10 @@ function RuleCard(props: RuleCardProps) {
         </Tag>
         <Tag color={STATE_TAG[state][1]}>{STATE_TAG[state][0]}</Tag>
       </div>
-      <h3>{rule.displayName}</h3>
+      <h3>
+        {rule.displayName}
+        {guide.english && <small className="dw-rule-english"> {guide.english}</small>}
+      </h3>
       <dl className="dw-rule-rows">
         <dt>기준</dt>
         <dd>{rule.criteria}</dd>

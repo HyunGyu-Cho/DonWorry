@@ -178,7 +178,7 @@ export function StaffAccessPage() {
   if (error) {
     return (
       <>
-        <PageHeader title="직원 접속 감시" />
+        <PageHeader title="로그인 모니터링" />
         <Alert
           type="warning"
           showIcon
@@ -191,7 +191,7 @@ export function StaffAccessPage() {
   if (!data || !summary) {
     return (
       <>
-        <PageHeader title="직원 접속 감시" />
+        <PageHeader title="로그인 모니터링" />
         <div className="dw-error-view" role="status">
           <Spin size="large" />
         </div>
@@ -383,8 +383,8 @@ export function StaffAccessPage() {
   return (
     <>
       <PageHeader
-        title="직원 접속 감시"
-        description="돈워리 직원(보안 직원 · 관리자) 계정의 로그인과 세션을 지켜봅니다. 직원은 사내망 업무 PC에서 비밀번호 + OTP로 로그인합니다."
+        title="로그인 모니터링"
+        description="돈워리 직원(보안 직원 · 관리자) 계정의 로그인과 세션을 모니터링해요. 직원은 보통 사내망 업무 PC 한두 대에서 비밀번호 + OTP로 로그인해요."
         actions={
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
             새로고침
@@ -432,6 +432,7 @@ export function StaffAccessPage() {
           extra={
             <Segmented
               size="small"
+              data-tour="access-by-account"
               value={attackView}
               onChange={(v) => setAttackView(v as 'ip' | 'account')}
               options={[
@@ -442,6 +443,12 @@ export function StaffAccessPage() {
           }
           style={{ marginBottom: 20 }}
         >
+          {/* 처음 보는 사람용 한 줄 — 왜 IP가 여러 개면 문제인지 */}
+          <p className="dw-attack-why">
+            보통은 "같은 IP가 10분에 {PER_IP_THRESHOLD}번 틀리면 차단"으로 막아요. 공격자는 이걸
+            피하려고 IP를 수십 개로 나눠 하나당 1~3번씩만 시도해요. 그래서 IP마다 세면 안 걸리고,
+            <b> 계정 기준으로 묶어야</b> 공격이 보여요.
+          </p>
           {attackView === 'ip' ? (
             <>
               <p className="dw-attack-lead">

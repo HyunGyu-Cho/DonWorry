@@ -10,7 +10,7 @@ import {
   SelfApprovalError,
   StaffCaseForbiddenError,
 } from '../investigationErrors.ts'
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import type { AuthUser, IpInfo } from '../../types/auth.ts'
 import type {
   ApprovalDecision,
@@ -226,7 +226,7 @@ let state: MockState | null = null
 
 function current(): MockState {
   if (!state) {
-    const now = new Date()
+    const now = mockEpoch()
     state = {
       cases: buildMockStaffCases(now),
       approvals: buildMockApprovals(now),

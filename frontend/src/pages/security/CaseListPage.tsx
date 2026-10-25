@@ -187,7 +187,7 @@ export function CaseListPage({ scope = 'payment' }: { scope?: Scope }) {
   return (
     <>
       <PageHeader
-        title={scope === 'payment' ? '사건 목록' : '직원 계정 사건'}
+        title={scope === 'payment' ? '사건 목록' : '의심 사건 (직원 계정)'}
         description={
           scope === 'payment'
             ? '결제 경보를 묶어 만든 사건입니다. 사건마다 AI가 조사하고, 보안 직원이 판정합니다.'

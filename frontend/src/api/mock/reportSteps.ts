@@ -31,19 +31,19 @@ export const tool = (name: ReportToolName, ms: number, asked: string, got: strin
   asked,
   got,
 ]
-export const llm = (got: string, label = 'AI 판단'): StepDef => [
+export const llm = (got: string, label = 'AI 판단', ms = 3200): StepDef => [
   'LLM',
   label,
   null,
-  3200,
+  ms,
   '근거 요약 · 판단 요청',
   got,
 ]
-export const llmFailed = (attempt: number, got: string): StepDef => [
+export const llmFailed = (attempt: number, got: string, ms = 2600): StepDef => [
   'LLM_FAILED',
   `AI 판단 (${attempt}차)`,
   null,
-  2600,
+  ms,
   '근거 요약 · 판단 요청',
   got,
 ]

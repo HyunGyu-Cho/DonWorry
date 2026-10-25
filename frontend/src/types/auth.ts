@@ -65,7 +65,7 @@ export type StaffSession = {
   endReason: SessionEndReason | null
 }
 
-// 직원 계정 목록 (직원 접속 감시 · 직원 정보 탭, 1-2)
+// 직원 계정 목록 (로그인 모니터링 · 직원 정보 탭, 1-2)
 export type StaffAccount = {
   userId: number
   displayName: string

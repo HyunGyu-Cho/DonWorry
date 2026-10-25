@@ -10,22 +10,30 @@ import { isDone, progressText, resolveStep } from '../../utils/tutorialView'
 import { useScreenMode } from '../explain/useScreenMode'
 import { DEMO_CHANGED, TUTORIAL_EVENT, tutorialStore, useTutorial } from './tutorialStore'
 
-// 카드가 기본으로 놓이는 오른쪽 아래 자리 (CSS .dw-tut와 같게)
+// 카드가 놓일 수 있는 자리 (CSS .dw-tut · .dw-tut--left와 같게) — 오른쪽 아래, 메뉴 옆 왼쪽 아래
 const CARD_W = 340
 const CARD_GAP = 20
+const LEFT_X = 240
+
+// right = 기본 자리, left = 왼쪽 아래로 비킴, mini = 어느 쪽도 대상을 가려서 작게 접음
+export type CardPlace = 'right' | 'left' | 'mini'
 
 // 노란 테두리 — 화면이 늦게 그려져도 붙도록 잠깐씩 다시 찾는다. 없으면 조용히 넘어간다
-// 테두리 대상이 카드 자리(오른쪽 아래)와 겹치면 dodge = true → 카드를 왼쪽으로 옮긴다
+// 테두리 대상이 카드 자리와 겹치면 비킬 자리를 고른다 (오른쪽 → 왼쪽 → 작게 접기)
 function useTourHighlight(target: string | undefined, cardHeight: number) {
-  const [dodge, setDodge] = useState(false)
+  const [place, setPlace] = useState<CardPlace>('right')
   useEffect(() => {
     if (!target) return
-    const overlapsCard = (el: Element) => {
-      if (window.innerWidth <= 600) return false
+    const overlaps = (el: Element, x: number) => {
       const r = el.getBoundingClientRect()
-      const left = window.innerWidth - CARD_GAP - CARD_W
       const top = window.innerHeight - CARD_GAP - cardHeight
-      return r.right > left && r.bottom > top && r.width > 0 && r.top < window.innerHeight
+      return (
+        r.width > 0 &&
+        r.right > x &&
+        r.left < x + CARD_W &&
+        r.bottom > top &&
+        r.top < window.innerHeight
+      )
     }
     const mark = () => {
       // 한 요소에 이름표가 여러 개일 수 있다 (띄어쓰기로 구분)
@@ -37,8 +45,12 @@ function useTourHighlight(target: string | undefined, cardHeight: number) {
         .querySelectorAll(`[data-tour~="${target}"]`)
         .forEach((el) => el.classList.add('dw-tour-on'))
       const found = [...document.querySelectorAll(`[data-tour~="${target}"]`)]
-      // 카드 안의 버튼(tutorial-actions)은 피할 필요가 없다
-      setDodge(found.some((el) => !el.closest('.dw-tut') && overlapsCard(el)))
+      // 카드 안의 버튼(tutorial-actions)은 피할 필요가 없다. 좁은 화면은 카드가 화면 폭이라 그대로
+      const targets = found.filter((el) => !el.closest('.dw-tut'))
+      if (window.innerWidth <= 600 || targets.length === 0) return setPlace('right')
+      const rightX = window.innerWidth - CARD_GAP - CARD_W
+      const hits = (x: number) => targets.some((el) => overlaps(el, x))
+      setPlace(!hits(rightX) ? 'right' : !hits(LEFT_X) ? 'left' : 'mini')
     }
     const first = setTimeout(mark, 0)
     const timer = setInterval(mark, 400)
@@ -48,7 +60,7 @@ function useTourHighlight(target: string | undefined, cardHeight: number) {
       document.querySelectorAll('.dw-tour-on').forEach((el) => el.classList.remove('dw-tour-on'))
     }
   }, [target, cardHeight])
-  return target ? dodge : false
+  return target ? place : 'right'
 }
 
 // 튜토리얼 패널 — 오른쪽 아래 안내 카드 (튜토리얼 모드에서만)
@@ -71,7 +83,7 @@ export function TutorialPanel() {
 
   const done = isDone(steps, effective)
   const step = active && !done ? steps[effective] : undefined
-  const dodge = useTourHighlight(
+  const place = useTourHighlight(
     mode === 'TUTORIAL' && !tutorial.collapsed ? step?.target : undefined,
     320,
   )
@@ -90,9 +102,23 @@ export function TutorialPanel() {
   }, [doneOn, effective])
   const [busy, setBusy] = useState(false)
   const [rerunSent, setRerunSent] = useState(false)
+  const [openedStep, setOpenedStep] = useState<number | null>(null)
 
-  const cardClass = `dw-tut${dodge ? ' dw-tut--left' : ''}`
+  const cardClass = `dw-tut${place === 'left' ? ' dw-tut--left' : ''}`
   if (mode !== 'TUTORIAL') return null
+  // 어느 쪽에 둬도 대상을 가리면 작게 접어 둔다 — 누르면 이 단계 동안은 펼쳐 둔다
+  if (place === 'mini' && openedStep !== effective && !tutorial.collapsed) {
+    return (
+      <button
+        type="button"
+        className="dw-tut-fab"
+        onClick={() => setOpenedStep(effective)}
+        aria-label="튜토리얼 안내 펼치기"
+      >
+        🧭 {scenario?.mark} {progressText(steps, effective)} · {step?.todo ?? '안내 펼치기'}
+      </button>
+    )
+  }
   if (tutorial.collapsed) {
     return (
       <button

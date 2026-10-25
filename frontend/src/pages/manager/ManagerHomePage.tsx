@@ -30,7 +30,7 @@ export function ManagerHomePage() {
   return (
     <HomeFrame
       title="홈"
-      description="관리자만 할 수 있는 일부터 보여 드려요. 칸을 누르면 그 화면으로 가요."
+      description="관리자는 직원 혼자 못 하는 일을 승인하고, 직원 계정이 공격받으면 대응해요. 칸을 누르면 그 화면으로 가요."
       state={state}
       onRetry={retry}
     >
@@ -58,28 +58,24 @@ function ManagerHomeBody({
         <HomeTile
           to="/manager/approvals"
           tour="home-approvals"
-          label="관리자 승인 대기"
+          label="승인 대기"
           value={`${approvals.length}건`}
-          note={
-            risky > 0
-              ? `의심 세션에서 온 요청 ${risky}건 — 먼저 확인하세요`
-              : '직원이 요청한 판정 · Rule · 차단 해제'
-          }
+          note={`직원 혼자 할 수 없는 위험한 변경이에요 (Rule 끄기 · 차단 해제 · AI와 반대 판정). 관리자가 승인해야 반영돼요.${risky > 0 ? ` ${risky}건은 의심 접속에서 왔어요 — 먼저 확인하세요.` : ''}`}
           tone={risky > 0 ? 'bad' : approvals.length > 0 ? 'warn' : 'ok'}
         />
         <HomeTile
           to="/manager/cases"
           tour="home-staff-cases"
-          label="직원 계정 사건"
+          label="의심 사건"
           value={`${openStaff.length}건`}
-          note="끝나지 않은 계정 공격 · 탈취 의심"
+          note="직원 계정이 공격받은 사건이에요 (비밀번호 대입 · 계정 탈취 의심). 당사자 직원은 볼 수 없고 관리자만 판정해요."
           tone={openStaff.length > 0 ? 'bad' : 'ok'}
         />
         <HomeTile
           to="/manager/audit"
-          label="의심 세션에서 한 행동"
-          value={`${suspicious.length}건`}
-          note="탈취가 의심되는 접속에서 남은 감사 로그"
+          label="감사 로그"
+          value={`확인 필요 ${suspicious.length}건`}
+          note="털렸을 수 있는 접속(평소와 다른 기기 · 해외 IP 등)에서 한 행동만 셌어요. 누가 무엇을 바꾸려 했는지 확인하세요."
           tone={suspicious.length > 0 ? 'warn' : 'ok'}
         />
       </div>

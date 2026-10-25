@@ -30,7 +30,7 @@ test('mockStartLogin_whenStaff_requiresOtp_whenOwner_succeeds', async () => {
   for (const loginId of ['jiwon', 'yunseo']) {
     assert.equal((await mockStartLogin(loginId, '1234')).status, 'OTP_REQUIRED')
   }
-  // 이도현은 분산 공격 장면에서 잠긴 상태로 시작한다 (직원 접속 감시에서 잠금 해제)
+  // 이도현은 분산 공격 장면에서 잠긴 상태로 시작한다 (로그인 모니터링에서 잠금 해제)
   await assert.rejects(mockStartLogin('dohyun', '1234'), AccountLockedError)
   const owner = await mockStartLogin('boss', '1234')
   assert.equal(owner.status, 'SUCCESS')
@@ -56,8 +56,8 @@ test('mockLoginEvents_distributedAttack_hasFiveOrMoreIpsPerAccount', () => {
       (accountsByIp.get(row.ip.address) ?? new Set()).add(row.loginIdAttempted),
     )
   }
-  // 분산 로그인 실패: 한 계정에 IP 5개 이상
+  // 분산 무차별 대입: 한 계정에 IP 5개 이상
   assert.ok((ipsByAccount.get('jiwon')?.size ?? 0) >= 5)
-  // 비밀번호 뿌리기: 한 IP가 직원 계정 2개 이상
+  // 패스워드 스프레이: 한 IP가 직원 계정 2개 이상
   assert.ok([...accountsByIp.values()].some((accounts) => accounts.size >= 2))
 })

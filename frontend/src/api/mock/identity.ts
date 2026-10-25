@@ -9,7 +9,7 @@ import {
 } from '../auth.ts'
 import { ApiError } from '../client.ts'
 import { getMockActor, setMockActor } from './investigation.ts'
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import type {
   AuthUser,
   ReauthTicket,
@@ -137,7 +137,7 @@ export function buildMockLoginEvents(now: Date): StaffLoginEvent[] {
   // 직원 계정 탈취: 집에서 로그인(새 기기) → 해외 Tor IP에서 비밀번호 성공 후 OTP 3회 실패
   add(780, 'jiwon', HOME_IP, 'SUCCESS', '집 PC · Chrome · Windows')
   for (const m of [95, 94, 93]) add(m, 'jiwon', ATTACK_IP, 'BAD_OTP', 'Unknown · Firefox · Linux')
-  // 분산 공격: 10분 안에 IP 30개에서 실패 40회. 일부 IP는 두 계정을 번갈아 시도(비밀번호 뿌리기)
+  // 분산 공격: 10분 안에 IP 30개에서 실패 41회 (박지원 30 · 이도현 10 · 없는 아이디 1, IP당 1~3회). 일부 IP는 두 계정을 번갈아 시도(패스워드 스프레이)
   for (let i = 0; i < 40; i += 1) {
     const target = i % 4 === 3 ? 'dohyun' : 'jiwon'
     add(9 - i * 0.2, target, DISTRIBUTED_IPS[i % 30], 'BAD_PASSWORD', null)
@@ -303,7 +303,7 @@ export async function mockLogout(): Promise<void> {
 }
 
 export function mockGetLoginEvents(query: LoginEventQuery = {}): Promise<StaffLoginEvent[]> {
-  const rows = buildMockLoginEvents(new Date()).filter(
+  const rows = buildMockLoginEvents(mockEpoch()).filter(
     (row) =>
       (!query.loginId || row.loginIdAttempted === query.loginId) &&
       (!query.ip || row.ip.address === query.ip) &&
@@ -328,15 +328,15 @@ export function resetMockIdentity() {
   saveSession(null)
 }
 
-function sessionsNow(now: Date): StaffSession[] {
-  return buildMockStaffSessions(now).map((s) => {
+function sessionsNow(): StaffSession[] {
+  return buildMockStaffSessions(mockEpoch()).map((s) => {
     const endedAt = terminated.get(s.staffSessionId)
     return endedAt && s.endedAt === null ? { ...s, endedAt, endReason: 'FORCED' } : s
   })
 }
 
 export function mockGetStaffSessions(activeOnly = true): Promise<StaffSession[]> {
-  const rows = sessionsNow(new Date())
+  const rows = sessionsNow()
   return mockRespond(activeOnly ? rows.filter((row) => row.endedAt === null) : rows)
 }
 
@@ -363,7 +363,7 @@ export function buildMockStaffAccounts(now: Date): StaffAccount[] {
 }
 
 export function mockGetStaffAccounts(): Promise<StaffAccount[]> {
-  return mockRespond(buildMockStaffAccounts(new Date()))
+  return mockRespond(buildMockStaffAccounts(mockEpoch()))
 }
 
 const requireManager = () => {
@@ -372,15 +372,15 @@ const requireManager = () => {
 
 export async function mockTerminateStaffSession(staffSessionId: number): Promise<StaffSession> {
   requireManager()
-  const found = sessionsNow(new Date()).find((s) => s.staffSessionId === staffSessionId)
+  const found = sessionsNow().find((s) => s.staffSessionId === staffSessionId)
   if (!found || found.endedAt !== null) throw new StaffActionDoneError()
   terminated.set(staffSessionId, new Date().toISOString())
-  return mockRespond(sessionsNow(new Date()).find((s) => s.staffSessionId === staffSessionId)!)
+  return mockRespond(sessionsNow().find((s) => s.staffSessionId === staffSessionId)!)
 }
 
 export async function mockUnlockStaffAccount(userId: number): Promise<StaffAccount> {
   requireManager()
   if (!lockedUsers.has(userId)) throw new StaffActionDoneError()
   lockedUsers.delete(userId)
-  return mockRespond(buildMockStaffAccounts(new Date()).find((a) => a.userId === userId)!)
+  return mockRespond(buildMockStaffAccounts(mockEpoch()).find((a) => a.userId === userId)!)
 }

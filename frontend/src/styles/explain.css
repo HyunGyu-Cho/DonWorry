@@ -179,7 +179,7 @@
   font-size: 13px;
 }
 
-/* 직원 접속 감시 (1-2) */
+/* 로그인 모니터링 (1-2) */
 .dw-muted-small {
   font-size: 12px;
   color: #64748b;
@@ -1731,4 +1731,27 @@ i.dw-stl-chip {
 .dw-tut--left {
   right: auto;
   left: 240px;
+}
+.dw-attack-why {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-size: 13px;
+}
+.dw-rule-english {
+  font-size: 12px;
+  font-weight: 400;
+  color: #94a3b8;
+}
+.dw-case-trace-again {
+  margin-top: 12px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+}
+.dw-case-trace-again > summary {
+  cursor: pointer;
+  color: #2563eb;
+  font-size: 13px;
 }
