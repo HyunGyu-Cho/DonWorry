@@ -91,3 +91,13 @@ export type StaffAlertQuery = {
   from?: string
   severity?: Severity
 }
+
+// Rule별 최근 적중 (GET /fds/rules/hit-stats?days=7). 결제 Rule 적중(MATCH)과 직원 경보를 합친다
+export type RuleHitStat = {
+  ruleCode: RuleCode
+  // 하루별 적중 수, 오래된 날 → 오늘 (한국 시간 날짜 기준, 길이 = days)
+  daily: number[]
+  total: number
+  // 기간과 관계없이 마지막 적중 시각, 없으면 null
+  lastHitAt: string | null
+}

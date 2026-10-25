@@ -26,8 +26,9 @@ test('mockDecideApproval_whenRequesterApprovesOwn_rejects', async () => {
   const created = await mockCreateApproval({
     requestType: 'RULE_DISABLE',
     targetType: 'FDS_RULE',
-    targetId: 2,
-    targetLabel: '"고액 결제" Rule',
+    // 고액 결제(2)는 Mock에서 이미 승인 대기 중이라 평소보다 큰 금액(3)으로 요청한다
+    targetId: 3,
+    targetLabel: '"평소보다 큰 금액" Rule',
     reason: '테스트',
   })
   await assert.rejects(

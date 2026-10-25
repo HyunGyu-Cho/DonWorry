@@ -11,6 +11,7 @@ import { CaseListPage } from '../pages/security/CaseListPage'
 import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { StaffAccessPage } from '../pages/manager/StaffAccessPage'
+import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
@@ -40,7 +41,7 @@ export const router = createBrowserRouter([
         path: '/security',
         children: [
           { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
-          { path: 'rules', element: <EmptyPage title="Rule 카탈로그" slice="1-3" /> },
+          { path: 'rules', element: <RuleCatalogPage /> },
           { path: 'alerts', element: <AlertListPage /> },
           { path: 'alerts/:id', element: <AlertDetailPage /> },
           { path: 'blocklist', element: <EmptyPage title="차단 목록" slice="1-4" /> },
@@ -58,7 +59,7 @@ export const router = createBrowserRouter([
         children: [
           { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
           { path: 'approvals', element: <EmptyPage title="2인 승인함" slice="1-6" /> },
-          { path: 'rules', element: <EmptyPage title="Rule 카탈로그" slice="1-3" /> },
+          { path: 'rules', element: <RuleCatalogPage /> },
           { path: 'access', element: <StaffAccessPage /> },
           { path: 'cases', element: <EmptyPage title="사건 목록" slice="1-5" /> },
           { path: 'cases/:id', element: <EmptyPage title="사건 상세" slice="1-5" /> },
