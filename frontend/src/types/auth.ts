@@ -64,3 +64,19 @@ export type StaffSession = {
   endedAt: string | null
   endReason: SessionEndReason | null
 }
+
+// 직원 계정 목록 (직원 접속 감시 · 직원 정보 탭, 1-2)
+export type StaffAccount = {
+  userId: number
+  displayName: string
+  role: UserRole
+  locked: boolean
+  // 잠긴 이유 한 문장 (잠기지 않았으면 null)
+  lockedReason: string | null
+  otpEnrolled: boolean
+  // 등록된 업무 PC — 서버가 준 설명만 (IP 원문은 workPc.address로 펼치기 안에서만)
+  workPc: IpInfo | null
+  lastLoginAt: string | null
+  // 마지막 로그인이 사내망 밖이었는지
+  lastLoginOutside: boolean
+}

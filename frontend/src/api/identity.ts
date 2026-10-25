@@ -7,14 +7,19 @@ import {
   InvalidCredentialsError,
   InvalidOtpError,
   logout as realLogout,
+  StaffActionDoneError,
+  StaffActionForbiddenError,
 } from './auth.ts'
 import { api, ApiError } from './client.ts'
 import { isMock } from './mockMode.ts'
 import {
   mockGetLoginEvents,
   mockGetMe,
+  mockGetStaffAccounts,
   mockGetStaffSessions,
   mockLogout,
+  mockTerminateStaffSession,
+  mockUnlockStaffAccount,
   mockStartLogin,
   mockSubmitRecoveryCode,
   mockVerifyOtp,
@@ -23,6 +28,7 @@ import type {
   AuthUser,
   LoginEventQuery,
   LoginStep,
+  StaffAccount,
   StaffLoginEvent,
   StaffSession,
 } from '../types/auth.ts'
@@ -33,6 +39,8 @@ function mapAuthError(error: unknown): never {
     if (error.code === 'AUTH_004') throw new InvalidCredentialsError()
     if (error.code === 'AUTH_010') throw new InvalidOtpError()
     if (error.code === 'AUTH_011') throw new AccountLockedError()
+    if (error.code === 'AUTH_012') throw new StaffActionForbiddenError()
+    if (error.code === 'AUTH_013') throw new StaffActionDoneError()
   }
   throw error
 }
@@ -67,6 +75,14 @@ function realGetLoginEvents(query: LoginEventQuery = {}) {
 const realGetStaffSessions = (activeOnly = true) =>
   api<StaffSession[]>(`/identity/staff/sessions?active=${activeOnly}`)
 
+const realGetStaffAccounts = () => api<StaffAccount[]>('/identity/staff/accounts')
+
+const realTerminateStaffSession = (staffSessionId: number) =>
+  postJson<StaffSession>(`/identity/staff/sessions/${staffSessionId}/terminate`, {})
+
+const realUnlockStaffAccount = (userId: number) =>
+  postJson<StaffAccount>(`/identity/staff/accounts/${userId}/unlock`, {})
+
 const mock = isMock('identity')
 
 // 1단계: 아이디 · 비밀번호. 직원이면 OTP_REQUIRED, 사장님이면 SUCCESS
@@ -79,6 +95,11 @@ export const submitRecoveryCode = mock ? mockSubmitRecoveryCode : realSubmitReco
 export const getLoginEvents = mock ? mockGetLoginEvents : realGetLoginEvents
 // 직원 접속 세션 (기본: 진행 중인 것만)
 export const getStaffSessions = mock ? mockGetStaffSessions : realGetStaffSessions
+// 직원 계정 목록 (보안 관리자)
+export const getStaffAccounts = mock ? mockGetStaffAccounts : realGetStaffAccounts
+// 직원 세션 강제 종료 · 계정 잠금 해제 (보안 관리자만, AUTH_012 · AUTH_013은 2-2에서 백엔드)
+export const terminateStaffSession = mock ? mockTerminateStaffSession : realTerminateStaffSession
+export const unlockStaffAccount = mock ? mockUnlockStaffAccount : realUnlockStaffAccount
 // 지금 로그인한 사용자 (없으면 401)
 export const getMe = mock ? mockGetMe : realGetMe
 export const logout = mock ? mockLogout : realLogout
