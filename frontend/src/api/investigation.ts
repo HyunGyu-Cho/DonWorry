@@ -4,6 +4,7 @@
 import { api, ApiError } from './client.ts'
 import {
   ApprovalClosedError,
+  ApprovalDuplicateError,
   CaseActionForbiddenError,
   SelfApprovalError,
 } from './investigationErrors.ts'
@@ -28,12 +29,13 @@ import type {
   StaffCase,
 } from '../types/investigation.ts'
 
-// 백엔드 오류 코드 → 화면용 오류 (INV_010 ~ INV_012는 2-9에서 백엔드에 추가)
+// 백엔드 오류 코드 → 화면용 오류 (INV_010 ~ INV_012는 2-9, INV_013은 2-10에서 백엔드에 추가)
 function mapInvestigationError(error: unknown): never {
   if (error instanceof ApiError) {
     if (error.code === 'INV_010') throw new SelfApprovalError()
     if (error.code === 'INV_011') throw new CaseActionForbiddenError()
     if (error.code === 'INV_012') throw new ApprovalClosedError()
+    if (error.code === 'INV_013') throw new ApprovalDuplicateError()
   }
   throw error
 }

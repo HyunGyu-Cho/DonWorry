@@ -1,12 +1,17 @@
 // P2 fds Mock — Rule은 seed_fds_rules와 같고, 차단 목록 · 직원 경보는 프로토타입 v3.1 시나리오
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
+import { RuleActionForbiddenError, RuleAlreadyEnabledError } from '../fdsErrors.ts'
 import { mockRespond } from './respond.ts'
+import { getMockActor, mockApprovedRuleDisables } from './investigation.ts'
+import { canToggle, hitStats, HIT_DAYS } from '../../utils/ruleCatalog.ts'
+import { PAYMENT_RULE_CODES, STAFF_RULE_CODES } from '../../types/fds.ts'
 import type {
   BlocklistEntry,
   FdsRule,
   NewBlocklistEntry,
   RuleAction,
   RuleCode,
+  RuleHitStat,
   Severity,
   StaffAlert,
   StaffAlertQuery,
@@ -294,11 +299,94 @@ export function buildMockStaffAlerts(now: Date): StaffAlert[] {
   ]
 }
 
-// 화면에서 추가한 항목은 새로고침 전까지만 남는다
+// 화면에서 추가한 항목 · 다시 켠 시각은 새로고침 전까지만 남는다
 const addedEntries: BlocklistEntry[] = []
+const enabledAt = new Map<number, { at: string; by: number }>()
+
+// 테스트 · 시연 다시 시작용
+export function resetMockFds() {
+  addedEntries.length = 0
+  enabledAt.clear()
+}
+
+// 승인된 끄기 요청이 마지막 다시 켜기보다 나중이면 꺼진 Rule
+function currentRules(): FdsRule[] {
+  const disables = mockApprovedRuleDisables()
+  return MOCK_RULES.map((rule) => {
+    const on = enabledAt.get(rule.ruleId)
+    const off = disables
+      .filter((d) => d.ruleId === rule.ruleId && (!on || d.decidedAt > on.at))
+      .sort((a, b) => b.decidedAt.localeCompare(a.decidedAt))[0]
+    if (off) return { ...rule, enabled: false, updatedAt: off.decidedAt }
+    if (on) return { ...rule, enabled: true, updatedBy: on.by, updatedAt: on.at }
+    return rule
+  })
+}
 
 export function mockGetRules(): Promise<FdsRule[]> {
-  return mockRespond(MOCK_RULES)
+  return mockRespond(currentRules())
+}
+
+// 다시 켜기는 규칙을 강화하는 쪽이라 승인 없이 바로 반영된다
+export async function mockEnableRule(ruleId: number): Promise<FdsRule> {
+  await mockRespond(null)
+  const actor = getMockActor()
+  const rule = currentRules().find((r) => r.ruleId === ruleId)
+  if (!rule) throw new Error(`Rule ${ruleId}을 찾을 수 없습니다.`)
+  const security = actor.role === 'SECURITY_STAFF' || actor.role === 'SECURITY_MANAGER'
+  if (!security || !canToggle(rule)) throw new RuleActionForbiddenError()
+  if (rule.enabled) throw new RuleAlreadyEnabledError()
+  enabledAt.set(ruleId, { at: new Date().toISOString(), by: actor.userId })
+  return structuredClone(currentRules().find((r) => r.ruleId === ruleId) as FdsRule)
+}
+
+// 결제 Rule 적중 (분 전). 오늘은 시연 시나리오, 지난 6일은 평소 수준
+// 결제 사기 15분 전 (고액 · 평소 5배 · 처음 쓰는 카드), 카드 테스팅 3분 전, 차단 목록 재시도 2분 전, 거절 후 재시도 50분 전
+const TODAY_PAYMENT_HITS: [RuleCode, number][] = [
+  ['BLOCKLIST', 2],
+  ['CARD_TESTING', 3],
+  ['NEW_ACCOUNT', 3],
+  ['GEO_MISMATCH', 3],
+  ['DECLINE_RETRY', 50],
+  ['HIGH_AMOUNT', 15],
+  ['AMOUNT_SPIKE', 15],
+  ['NEW_CARD', 15],
+]
+// 6일 전 → 1일 전 하루 적중 수
+const PAST_PAYMENT_HITS: Partial<Record<RuleCode, number[]>> = {
+  BLOCKLIST: [0, 1, 0, 0, 1, 0],
+  HIGH_AMOUNT: [2, 1, 3, 0, 2, 1],
+  AMOUNT_SPIKE: [1, 0, 2, 0, 1, 1],
+  NEW_CARD: [3, 2, 4, 1, 3, 2],
+  NEW_ACCOUNT: [1, 2, 1, 1, 0, 2],
+  CARD_TESTING: [0, 0, 1, 0, 0, 0],
+  DECLINE_RETRY: [1, 0, 0, 2, 1, 0],
+  GEO_MISMATCH: [0, 1, 0, 1, 0, 0],
+}
+
+export function buildMockRuleHits(now: Date): { ruleCode: RuleCode; at: string }[] {
+  const hits = TODAY_PAYMENT_HITS.map(([ruleCode, minutes]) => ({
+    ruleCode,
+    at: minutesAgo(now, minutes),
+  }))
+  for (const [code, counts] of Object.entries(PAST_PAYMENT_HITS)) {
+    counts?.forEach((count, i) => {
+      const day = 6 - i
+      for (let n = 0; n < count; n++) {
+        hits.push({ ruleCode: code as RuleCode, at: minutesAgo(now, day * 1440 + 60 + n * 47) })
+      }
+    })
+  }
+  for (const alert of buildMockStaffAlerts(now)) {
+    hits.push({ ruleCode: alert.ruleCode, at: alert.detectedAt })
+  }
+  return hits
+}
+
+export function mockGetRuleHitStats(days = HIT_DAYS): Promise<RuleHitStat[]> {
+  const now = new Date()
+  const codes = [...PAYMENT_RULE_CODES, ...STAFF_RULE_CODES]
+  return mockRespond(hitStats(buildMockRuleHits(now), codes, now, days))
 }
 
 export function mockGetBlocklist(activeOnly = true): Promise<BlocklistEntry[]> {

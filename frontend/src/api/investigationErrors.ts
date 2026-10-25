@@ -23,3 +23,11 @@ export class ApprovalClosedError extends Error {
     this.name = 'ApprovalClosedError'
   }
 }
+
+// 같은 대상에 승인 대기 중인 요청이 이미 있음 (INV_013)
+export class ApprovalDuplicateError extends Error {
+  constructor() {
+    super('같은 대상에 승인을 기다리는 요청이 이미 있습니다.')
+    this.name = 'ApprovalDuplicateError'
+  }
+}

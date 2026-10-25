@@ -3,6 +3,7 @@
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
 import {
   ApprovalClosedError,
+  ApprovalDuplicateError,
   CaseActionForbiddenError,
   SelfApprovalError,
 } from '../investigationErrors.ts'
@@ -273,6 +274,15 @@ export function mockGetApprovals(status?: ApprovalStatus): Promise<ApprovalReque
 export async function mockCreateApproval(input: NewApprovalRequest): Promise<ApprovalRequest> {
   await mockRespond(null)
   const s = current()
+  // 같은 대상에 대기 중인 요청이 있으면 또 만들지 않는다 (Rule 끄기 요청이 두 번 쌓이지 않게)
+  const pending = s.approvals.some(
+    (a) =>
+      a.status === 'PENDING' &&
+      a.requestType === input.requestType &&
+      a.targetType === input.targetType &&
+      a.targetId === input.targetId,
+  )
+  if (pending) throw new ApprovalDuplicateError()
   const now = new Date()
   const created: ApprovalRequest = {
     approvalId: Math.max(0, ...s.approvals.map((a) => a.approvalId)) + 1,
@@ -330,4 +340,13 @@ export function mockGetAuditLogs(query: AuditLogQuery = {}): Promise<AuditLog[]>
       (!query.to || row.occurredAt <= query.to),
   )
   return mockRespond(rows)
+}
+
+// fds Mock이 Rule 꺼짐을 계산할 때 쓴다: 승인된 Rule 끄기 요청 (대상 rule_id · 승인 시각)
+export function mockApprovedRuleDisables(): { ruleId: number; decidedAt: string }[] {
+  return current()
+    .approvals.filter(
+      (a) => a.requestType === 'RULE_DISABLE' && a.status === 'APPROVED' && a.decidedAt !== null,
+    )
+    .map((a) => ({ ruleId: a.targetId, decidedAt: a.decidedAt as string }))
 }
