@@ -16,6 +16,10 @@ import { BlocklistPage } from '../pages/security/BlocklistPage'
 import { ReportPage } from '../pages/security/ReportPage'
 import { NotificationsPage } from '../pages/security/NotificationsPage'
 import { OwnerResultsPage } from '../pages/owner/OwnerResultsPage'
+import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
+import { SecurityHomePage } from '../pages/security/SecurityHomePage'
+import { ManagerHomePage } from '../pages/manager/ManagerHomePage'
+import { LandingPage } from '../pages/public/LandingPage'
 import { SettlementCalendarPage } from '../pages/owner/SettlementCalendarPage'
 import { FundsPage } from '../pages/owner/FundsPage'
 import { LoanProductsPage } from '../pages/owner/LoanProductsPage'
@@ -35,7 +39,8 @@ function DemoSession() {
 // 서버 인가는 #68 5단계다.
 export const router = createBrowserRouter([
   // 로그인 화면이 로그인된 사용자를 역할별 첫 화면으로 보낸다.
-  { path: '/', element: <Navigate to="/login" replace /> },
+  // 랜딩 — 서비스 소개 + 시연 시나리오 고르기 (로그인 없이)
+  { path: '/', element: <LandingPage /> },
   { path: '/login', element: <LoginRoute /> },
   // 구매자 본인 확인 — 로그인 없이 메일 속 1회용 링크로 연다
   { path: '/confirm/:token', element: <BuyerConfirmPage /> },
@@ -59,7 +64,7 @@ export const router = createBrowserRouter([
       {
         path: '/security',
         children: [
-          { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
+          { path: 'home', element: <SecurityHomePage /> },
           { path: 'rules', element: <RuleCatalogPage /> },
           { path: 'alerts', element: <AlertListPage /> },
           { path: 'alerts/:id', element: <AlertDetailPage /> },
@@ -77,7 +82,7 @@ export const router = createBrowserRouter([
       {
         path: '/manager',
         children: [
-          { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
+          { path: 'home', element: <ManagerHomePage /> },
           { path: 'approvals', element: <ApprovalsPage /> },
           { path: 'rules', element: <RuleCatalogPage /> },
           { path: 'access', element: <StaffAccessPage /> },
@@ -91,7 +96,7 @@ export const router = createBrowserRouter([
       {
         path: '/owner',
         children: [
-          { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
+          { path: 'home', element: <OwnerHomePage /> },
           { path: 'results', element: <OwnerResultsPage /> },
           { path: 'settlements', element: <SettlementCalendarPage /> },
           { path: 'funds', element: <FundsPage /> },
