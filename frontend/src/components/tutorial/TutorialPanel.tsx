@@ -1,0 +1,234 @@
+import { Button, Tag } from 'antd'
+import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { demoBuyerAnswered } from '../../api/report'
+import { useAuth } from '../../auth/useAuth'
+import { MAILPIT_URL } from '../../config/demoLinks'
+import { SCENARIOS, scenarioById } from '../../config/scenarios'
+import { TUTORIAL_STEPS } from '../../config/tutorialSteps'
+import { isDone, progressText, resolveStep } from '../../utils/tutorialView'
+import { useScreenMode } from '../explain/useScreenMode'
+import { DEMO_CHANGED, tutorialStore, useTutorial } from './tutorialStore'
+
+// 노란 테두리 — 화면이 늦게 그려져도 붙도록 잠깐씩 다시 찾는다. 없으면 조용히 넘어간다
+function useTourHighlight(target: string | undefined) {
+  useEffect(() => {
+    if (!target) return
+    const mark = () => {
+      // 한 요소에 이름표가 여러 개일 수 있다 (띄어쓰기로 구분)
+      const names = (el: Element) => (el.getAttribute('data-tour') ?? '').split(' ')
+      document.querySelectorAll('.dw-tour-on').forEach((el) => {
+        if (!names(el).includes(target)) el.classList.remove('dw-tour-on')
+      })
+      document
+        .querySelectorAll(`[data-tour~="${target}"]`)
+        .forEach((el) => el.classList.add('dw-tour-on'))
+    }
+    mark()
+    const timer = setInterval(mark, 400)
+    return () => {
+      clearInterval(timer)
+      document.querySelectorAll('.dw-tour-on').forEach((el) => el.classList.remove('dw-tour-on'))
+    }
+  }, [target])
+}
+
+// 튜토리얼 패널 — 오른쪽 아래 안내 카드 (튜토리얼 모드에서만)
+export function TutorialPanel() {
+  const { mode } = useScreenMode()
+  const { user } = useAuth()
+  const { pathname } = useLocation()
+  const tutorial = useTutorial()
+  const scenario = tutorial.scenarioId === null ? null : scenarioById(tutorial.scenarioId)
+  const steps = scenario ? TUTORIAL_STEPS[scenario.id] : []
+  const wrongUser = !!scenario && !!user && user.loginId !== scenario.loginId
+  const active = mode === 'TUTORIAL' && !!scenario && !wrongUser
+  // 안내한 화면에 들어오면 그 단계로
+  const effective = active ? resolveStep(steps, tutorial, pathname) : tutorial.step
+  useEffect(() => {
+    if (active && (effective !== tutorial.step || tutorial.path !== pathname)) {
+      tutorialStore.setStep(effective, pathname)
+    }
+  }, [active, effective, tutorial.step, tutorial.path, pathname])
+
+  const done = isDone(steps, effective)
+  const step = active && !done ? steps[effective] : undefined
+  useTourHighlight(mode === 'TUTORIAL' && !tutorial.collapsed ? step?.target : undefined)
+  const [busy, setBusy] = useState(false)
+  const [rerunSent, setRerunSent] = useState(false)
+
+  if (mode !== 'TUTORIAL') return null
+  if (tutorial.collapsed) {
+    return (
+      <button
+        type="button"
+        className="dw-tut-fab"
+        onClick={() => tutorialStore.setCollapsed(false)}
+        aria-label="튜토리얼 안내 펼치기"
+      >
+        🧭 안내 {scenario && !done ? `${scenario.mark} ${progressText(steps, effective)}` : '열기'}
+      </button>
+    )
+  }
+
+  const head = (
+    <div className="dw-tut-head">
+      <b>{scenario ? `${scenario.mark} ${scenario.title}` : '튜토리얼'}</b>
+      <Button size="small" type="text" onClick={() => tutorialStore.setCollapsed(true)}>
+        접기
+      </Button>
+    </div>
+  )
+
+  // 시나리오 고르기 — 지금 계정으로 할 수 있는 것만
+  if (!scenario || wrongUser) {
+    const mine = SCENARIOS.filter((s) => s.loginId === user?.loginId)
+    return (
+      <aside className="dw-tut" aria-label="튜토리얼 안내">
+        {head}
+        {wrongUser && scenario && (
+          <p className="dw-tut-warn">
+            시나리오 {scenario.mark}은 {scenario.roleLabel} 계정으로 해요. 로그아웃하고 다시 골라
+            주세요.
+          </p>
+        )}
+        <p className="dw-muted dw-small">지금 계정으로 해 볼 수 있는 시나리오예요.</p>
+        <div className="dw-tut-pick">
+          {mine.map((s) => (
+            <Button key={s.id} block onClick={() => tutorialStore.start(s.id)}>
+              {s.mark} {s.title} · 약 {s.minutes}분
+            </Button>
+          ))}
+          {mine.length === 0 && <p className="dw-muted">이 계정으로 하는 시나리오가 없어요.</p>}
+        </div>
+        <Link to="/" className="dw-small">
+          다른 역할의 시나리오는 랜딩에서 →
+        </Link>
+      </aside>
+    )
+  }
+
+  const restart = () => {
+    tutorialStore.setStep(0, null)
+    // 새로 고침하면 시연 데이터(Mock)가 처음 상태로 돌아간다
+    window.location.assign(steps[0].path)
+  }
+
+  if (done) {
+    const next = SCENARIOS.find((s) => s.id === scenario.id + 1)
+    return (
+      <aside className="dw-tut" aria-label="튜토리얼 안내">
+        {head}
+        <p className="dw-tut-title">시나리오 {scenario.mark} 끝 · 이런 걸 봤어요</p>
+        <ul className="dw-tut-list">
+          {steps.map((s) => (
+            <li key={s.title}>{s.title}</li>
+          ))}
+        </ul>
+        <div className="dw-tut-actions">
+          <Button onClick={restart}>처음부터 다시</Button>
+          {next &&
+            (next.loginId === user?.loginId ? (
+              <Button type="primary" onClick={() => tutorialStore.start(next.id)}>
+                다음 시나리오 {next.mark}
+              </Button>
+            ) : (
+              <Link to="/">
+                <Button type="primary">다음 시나리오 {next.mark} (다른 계정)</Button>
+              </Link>
+            ))}
+        </div>
+      </aside>
+    )
+  }
+
+  const current = steps[effective]
+  const buyerAnswered = async () => {
+    if (!demoBuyerAnswered) return
+    setBusy(true)
+    try {
+      await demoBuyerAnswered()
+      setRerunSent(true)
+      window.dispatchEvent(new Event(DEMO_CHANGED))
+      tutorialStore.setStep(effective + 1, pathname)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <aside className="dw-tut" aria-label="튜토리얼 안내">
+      {head}
+      <div className="dw-tut-progress">
+        <span>{progressText(steps, effective)}</span>
+        <div className="dw-tut-bar">
+          <i style={{ width: `${((effective + 1) / steps.length) * 100}%` }} />
+        </div>
+      </div>
+      <p className="dw-tut-title">{current.title}</p>
+      <p className="dw-tut-todo">
+        <Tag color="gold">지금 할 일</Tag>
+        {current.todo}
+      </p>
+      <ul className="dw-tut-list">
+        {current.look.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
+      {current.special === 'WAIT' && (
+        <p className="dw-muted dw-small">약 10초 걸려요. 끝나면 [다음]을 눌러 주세요.</p>
+      )}
+      {current.special === 'RERUN' && (
+        <div className="dw-tut-special" data-tour="tutorial-actions">
+          <a href="/confirm/demo-check-31" target="_blank" rel="noreferrer">
+            <Button size="small">구매자 화면 열기 ↗</Button>
+          </a>
+          {MAILPIT_URL && (
+            <a href={MAILPIT_URL} target="_blank" rel="noreferrer">
+              <Button size="small">Mailpit 열기 ↗</Button>
+            </a>
+          )}
+          {demoBuyerAnswered ? (
+            <Button
+              size="small"
+              type="primary"
+              loading={busy}
+              disabled={rerunSent}
+              onClick={() => void buyerAnswered()}
+            >
+              구매자 답변 도착시키기 (시연)
+            </Button>
+          ) : (
+            <span className="dw-muted dw-small">
+              실제 서버에서는 구매자 화면에서 답하면 다시 조사가 시작돼요.
+            </span>
+          )}
+        </div>
+      )}
+      <div className="dw-tut-actions">
+        <Button
+          size="small"
+          disabled={effective === 0}
+          onClick={() => tutorialStore.setStep(effective - 1, pathname)}
+        >
+          이전
+        </Button>
+        <Button
+          size="small"
+          type="primary"
+          onClick={() => tutorialStore.setStep(effective + 1, pathname)}
+        >
+          {effective === steps.length - 1 ? '끝내기' : '다음'}
+        </Button>
+      </div>
+      <div className="dw-tut-foot">
+        <button type="button" onClick={restart}>
+          처음부터 다시
+        </button>
+        <button type="button" onClick={() => tutorialStore.stop()}>
+          시나리오 바꾸기
+        </button>
+      </div>
+    </aside>
+  )
+}

@@ -73,7 +73,7 @@ function OwnerHomeBody(props: {
           description="카드 승인은 됐지만 돈워리 보안팀이 확인하고 있어요. 결과는 메일로도 알려 드려요."
           action={
             <Link to="/owner/results">
-              <Button>주문 보기</Button>
+              <Button data-tour="home-checking">주문 보기</Button>
             </Link>
           }
         />

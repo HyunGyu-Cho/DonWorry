@@ -10,6 +10,9 @@ import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { scenarioById } from '../config/scenarios'
+import { TutorialPanel } from '../components/tutorial/TutorialPanel'
+import { tutorialStore } from '../components/tutorial/tutorialStore'
+import { useScreenMode } from '../components/explain/useScreenMode'
 import { isMock } from '../api/mockMode'
 import { ModeSwitch } from '../components/explain/ModeSwitch'
 
@@ -79,6 +82,7 @@ export function LoginRoute() {
   // 랜딩에서 고른 시연 시나리오 (?scenario=1) — 아이디만 미리 채운다
   const [params] = useSearchParams()
   const scenario = scenarioById(Number(params.get('scenario')))
+  const { setMode } = useScreenMode()
   const [showExpired] = useState(expired)
   const navigate = useNavigate()
   useEffect(() => {
@@ -86,6 +90,11 @@ export function LoginRoute() {
   }, [store])
   // 로그인이 끝나면 역할별 첫 화면으로
   const goHome = () => {
+    // 랜딩에서 시나리오를 골랐으면 튜토리얼을 켜고 1단계부터
+    if (scenario) {
+      tutorialStore.start(scenario.id)
+      setMode('TUTORIAL')
+    }
     const loggedIn = store.getSnapshot().user
     navigate(loggedIn ? homeOf(loggedIn) : '/login', { replace: true })
   }
@@ -181,6 +190,8 @@ export function ServerSession() {
             <span className="dw-role-pill">{navigation.label}</span>
             <LogoutButton />
           </div>
+          {/* 화면 오른쪽 아래에 떠 있는 안내 카드 (튜토리얼 모드에서만, 본문은 Outlet이 그린다) */}
+          <TutorialPanel />
         </header>
       }
     >

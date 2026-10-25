@@ -84,7 +84,9 @@ export function FundsPage() {
           description={`${koreanWon(forecast.neededAmount)}이 더 있으면 14일 동안 모자라지 않아요.`}
           action={
             <Link to="/owner/loans">
-              <Button danger>대출 상품 보기</Button>
+              <Button danger data-tour="fund-loans">
+                대출 상품 보기
+              </Button>
             </Link>
           }
         />

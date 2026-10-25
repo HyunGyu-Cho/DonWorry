@@ -69,6 +69,7 @@ function SecurityHomeBody({
         />
         <HomeTile
           to="/security/alerts"
+          tour="home-alerts"
           label="확인할 결제 경보"
           value={`${attention}건`}
           note={`직원 확인 ${counts.REVIEW} · 거절 ${counts.DENY} · 평가 실패 ${counts.ERROR}`}

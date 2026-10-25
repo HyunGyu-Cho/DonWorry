@@ -57,6 +57,7 @@ function ManagerHomeBody({
       <div className="dw-home-tiles">
         <HomeTile
           to="/manager/approvals"
+          tour="home-approvals"
           label="관리자 승인 대기"
           value={`${approvals.length}건`}
           note={
@@ -68,6 +69,7 @@ function ManagerHomeBody({
         />
         <HomeTile
           to="/manager/cases"
+          tour="home-staff-cases"
           label="직원 계정 사건"
           value={`${openStaff.length}건`}
           note="끝나지 않은 계정 공격 · 탈취 의심"

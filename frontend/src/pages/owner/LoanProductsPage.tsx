@@ -90,7 +90,7 @@ export function LoanProductsPage() {
           message="지금은 14일 동안 모자라는 날이 없어요. 참고용으로 보세요."
         />
       )}
-      <div className="dw-loan-grid">
+      <div className="dw-loan-grid" data-tour="loan-list">
         {sortLoans(data.products, needed).map((p) => (
           <Card
             key={p.loanProductId}
