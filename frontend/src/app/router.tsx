@@ -16,6 +16,9 @@ import { BlocklistPage } from '../pages/security/BlocklistPage'
 import { ReportPage } from '../pages/security/ReportPage'
 import { NotificationsPage } from '../pages/security/NotificationsPage'
 import { OwnerResultsPage } from '../pages/owner/OwnerResultsPage'
+import { SettlementCalendarPage } from '../pages/owner/SettlementCalendarPage'
+import { FundsPage } from '../pages/owner/FundsPage'
+import { LoanProductsPage } from '../pages/owner/LoanProductsPage'
 import { BuyerConfirmPage } from '../pages/public/BuyerConfirmPage'
 import { CheckoutPage } from '../pages/public/CheckoutPage'
 import { TestShopPage, TestShopResultPage } from '../pages/public/TestShopPage'
@@ -90,9 +93,9 @@ export const router = createBrowserRouter([
         children: [
           { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
           { path: 'results', element: <OwnerResultsPage /> },
-          { path: 'settlements', element: <EmptyPage title="정산 캘린더" slice="1-10" /> },
-          { path: 'funds', element: <EmptyPage title="자금 현황" slice="1-10" /> },
-          { path: 'loans', element: <EmptyPage title="연계 대출 상품" slice="1-10" /> },
+          { path: 'settlements', element: <SettlementCalendarPage /> },
+          { path: 'funds', element: <FundsPage /> },
+          { path: 'loans', element: <LoanProductsPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
         ],
       },
