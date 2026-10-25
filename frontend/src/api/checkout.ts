@@ -3,9 +3,21 @@
 // 로그인 없이 결제창 토큰으로만 접근한다. 금액은 CakeShop 서버의 결제 준비 요청에서만 정해진다
 import { CheckoutAlreadyPaidError, CheckoutExpiredError } from './checkoutErrors.ts'
 import { api, ApiError } from './client.ts'
-import { mockGetCheckoutSession, mockGetDemoCards, mockPayCheckout } from './mock/checkout.ts'
+import {
+  mockCreateTestOrder,
+  mockGetCheckoutSession,
+  mockGetDemoCards,
+  mockGetTestProducts,
+  mockPayCheckout,
+} from './mock/checkout.ts'
 import { isMock } from './mockMode.ts'
-import type { CheckoutResult, CheckoutSession, DemoCard } from '../types/checkout.ts'
+import type {
+  CheckoutResult,
+  CheckoutSession,
+  DemoCard,
+  TestOrder,
+  TestProduct,
+} from '../types/checkout.ts'
 
 // PAY_022 결제창 만료 · 없음, PAY_023 이미 결제함 (2-29에서 백엔드 추가)
 function mapCheckoutError(error: unknown): never {
@@ -39,6 +51,14 @@ async function realPayCheckout(token: string, cardToken: string): Promise<Checko
 }
 
 const realGetDemoCards = () => api<DemoCard[]>('/checkout/demo-cards')
+// 테스트 상점 API는 2단계(2-29)에서 demo 프로필 전용으로 추가 — 서버가 가맹점 키로 결제 준비를 대신 부른다
+const realGetTestProducts = () => api<TestProduct[]>('/demo/test-shop/products')
+const realCreateTestOrder = (productId: string) =>
+  api<TestOrder>('/demo/test-shop/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productId }),
+  })
 
 const mock = isMock('payment')
 
@@ -48,3 +68,7 @@ export const getCheckoutSession = mock ? mockGetCheckoutSession : realGetCheckou
 export const payCheckout = mock ? mockPayCheckout : realPayCheckout
 // 시연용 모의 카드 목록 (demo 프로필 전용)
 export const getDemoCards = mock ? mockGetDemoCards : realGetDemoCards
+// 테스트 상점 상품 목록 (demo 프로필 전용)
+export const getTestProducts = mock ? mockGetTestProducts : realGetTestProducts
+// 테스트 주문 만들기 → 결제창 토큰 (demo 프로필 전용)
+export const createTestOrder = mock ? mockCreateTestOrder : realCreateTestOrder

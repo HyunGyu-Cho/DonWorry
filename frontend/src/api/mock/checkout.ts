@@ -9,6 +9,8 @@ import type {
   CheckoutResult,
   CheckoutSession,
   DemoCard,
+  TestOrder,
+  TestProduct,
 } from '../../types/checkout.ts'
 
 export const DEMO_CARDS: DemoCard[] = [
@@ -31,10 +33,32 @@ const SEEDS: [string, string, string, string, number, string, number][] = [
 ]
 
 const paid = new Map<string, CheckoutResult>()
+// 테스트 상점에서 만든 결제창 — 돌아갈 곳이 CakeShop이 아니라 테스트 상점 결과 화면
+const testOrders = new Set<string>()
+const TEST_SHOP_RETURN = '/demo/shop/result'
 
 export function resetMockCheckout() {
   paid.clear()
+  testOrders.clear()
 }
+
+// 테스트 상점 상품 — 결제창 토큰은 Mock 시드를 다시 쓴다
+const TEST_PRODUCTS: (TestProduct & { seedToken: string })[] = [
+  {
+    productId: 'cake-set',
+    title: '단체 행사용 케이크 세트',
+    amount: 650000,
+    note: '고액 주문',
+    seedToken: 'demo-session-31',
+  },
+  {
+    productId: 'strawberry',
+    title: '딸기 생크림 케이크',
+    amount: 38000,
+    note: '평범한 주문',
+    seedToken: 'demo-session-33',
+  },
+]
 
 const maskEmail = (name: string) => `${name.slice(0, 1)}***@example.com`
 
@@ -107,7 +131,7 @@ export async function mockPayCheckout(token: string, cardToken: string): Promise
     outcome,
     title,
     message,
-    returnUrl: `${RETURN_URL}?paymentId=${session.paymentId}&orderRef=${session.orderRef}`,
+    returnUrl: `${testOrders.has(token) ? TEST_SHOP_RETURN : RETURN_URL}?paymentId=${session.paymentId}&orderRef=${session.orderRef}`,
   }
   paid.set(token, result)
   // 처리 중 화면을 볼 수 있게 조금 늦게 돌려준다
@@ -116,4 +140,24 @@ export async function mockPayCheckout(token: string, cardToken: string): Promise
 
 export function mockGetDemoCards(): Promise<DemoCard[]> {
   return mockRespond(DEMO_CARDS)
+}
+
+export function mockGetTestProducts(): Promise<TestProduct[]> {
+  return mockRespond(
+    TEST_PRODUCTS.map((p) => ({
+      productId: p.productId,
+      title: p.title,
+      amount: p.amount,
+      note: p.note,
+    })),
+  )
+}
+
+// 테스트 주문 만들기 — 같은 상품을 다른 카드로 여러 번 해 볼 수 있게 결제 기록을 지운다
+export async function mockCreateTestOrder(productId: string): Promise<TestOrder> {
+  const product = TEST_PRODUCTS.find((p) => p.productId === productId)
+  if (!product) throw new CheckoutExpiredError()
+  paid.delete(product.seedToken)
+  testOrders.add(product.seedToken)
+  return mockRespond({ sessionToken: product.seedToken })
 }

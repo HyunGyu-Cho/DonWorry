@@ -17,6 +17,8 @@ import { ReportPage } from '../pages/security/ReportPage'
 import { NotificationsPage } from '../pages/security/NotificationsPage'
 import { OwnerResultsPage } from '../pages/owner/OwnerResultsPage'
 import { BuyerConfirmPage } from '../pages/public/BuyerConfirmPage'
+import { CheckoutPage } from '../pages/public/CheckoutPage'
+import { TestShopPage, TestShopResultPage } from '../pages/public/TestShopPage'
 import { ActionCenterPage } from '../pages/security/ActionCenterPage'
 import { ApprovalsPage } from '../pages/manager/ApprovalsPage'
 import { AuditLogPage } from '../pages/manager/AuditLogPage'
@@ -34,6 +36,10 @@ export const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   // 구매자 본인 확인 — 로그인 없이 메일 속 1회용 링크로 연다
   { path: '/confirm/:token', element: <BuyerConfirmPage /> },
+  // 돈워리 결제창 · 시연용 테스트 상점 — 로그인 없이 연다
+  { path: '/checkout/:token', element: <CheckoutPage /> },
+  { path: '/demo/shop', element: <TestShopPage /> },
+  { path: '/demo/shop/result', element: <TestShopResultPage /> },
   // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
   { path: '/admin', element: <Navigate to="/admin/fds" replace /> },
   {

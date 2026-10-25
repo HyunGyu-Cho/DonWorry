@@ -1068,3 +1068,89 @@
   font-size: 12.5px;
   color: #dc2626;
 }
+
+/* 결제창 · 테스트 상점 (1-9) */
+.dw-public--wide .dw-public-head,
+.dw-public--wide .dw-public-card,
+.dw-public--wide .dw-public-foot {
+  max-width: 640px;
+}
+.dw-checkout-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.dw-checkout-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+.dw-checkout-card:hover {
+  border-color: #93c5fd;
+}
+.dw-checkout-card.is-selected {
+  border: 2px solid #2563eb;
+  padding: 11px;
+  background: #eff6ff;
+}
+.dw-checkout-paying {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 0;
+}
+.dw-checkout-charge {
+  display: block;
+  margin-bottom: 4px;
+  color: #0f172a;
+}
+.dw-checkout-foot {
+  margin-top: 12px;
+}
+.dw-shop-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.dw-shop-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+.dw-shop-item .ant-btn {
+  margin-top: 8px;
+}
+.dw-shop-thumb {
+  font-size: 40px;
+  text-align: center;
+  padding: 12px 0;
+  border-radius: 10px;
+  background: #fdf2f8;
+  margin-bottom: 8px;
+}
+.dw-shop-guide {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+}
+.dw-shop-guide ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+.dw-shop-guide li span {
+  font-weight: 600;
+}

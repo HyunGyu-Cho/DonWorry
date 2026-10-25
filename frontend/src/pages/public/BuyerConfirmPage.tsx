@@ -6,6 +6,7 @@ import { ConfirmAlreadyAnsweredError, ConfirmLinkExpiredError } from '../../api/
 import type { BuyerAnswer, BuyerConfirmRequest } from '../../types/payment'
 import { koreanWon, relativeTime } from '../../utils/humanize'
 import { linkExpiresText } from '../../utils/buyerOwner'
+import { PublicShell } from '../../components/public/PublicShell'
 
 type Loaded = BuyerConfirmRequest | 'expired' | 'error'
 
@@ -29,18 +30,14 @@ const THANKS: Record<BuyerAnswer, { title: string; text: string }> = {
   },
 }
 
+const FOOT =
+  '돈워리는 가맹점의 결제를 안전하게 처리하는 서비스예요. 이 페이지는 로그인 없이 메일 속 링크로만 열려요.'
+
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="dw-public">
-      <header className="dw-public-head">
-        <b>돈워리</b> <span>결제 확인</span>
-      </header>
-      <main className="dw-public-card">{children}</main>
-      <footer className="dw-public-foot">
-        돈워리는 가맹점의 결제를 안전하게 처리하는 서비스예요. 이 페이지는 로그인 없이 메일 속
-        링크로만 열려요.
-      </footer>
-    </div>
+    <PublicShell title="결제 확인" foot={FOOT}>
+      {children}
+    </PublicShell>
   )
 }
 
