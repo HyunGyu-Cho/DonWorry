@@ -2,6 +2,8 @@
 // 결제 · 경보 · 보고서 번호는 api/mock/payment.ts · fdsEvaluations.ts · report.ts와 같다
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
 import { CaseVersionConflictError } from '../caseErrors.ts'
+import { mockAudit } from './investigation.ts'
+import { buildMockPayments } from './payment.ts'
 import { mockRespond } from './respond.ts'
 import type {
   ActionHandoff,
@@ -9,6 +11,7 @@ import type {
   CaseHistory,
   CasePayment,
   CaseSummary,
+  HandoffRow,
   PaymentDecision,
   SubmitDecisionsRequest,
 } from '../../types/case.ts'
@@ -287,10 +290,35 @@ export async function mockSubmitDecisions(
       createdAt: now,
     })
   add('DECISION_CONFIRMED', 'STAFF')
+  mockAudit('DECISION_CONFIRMED', ['SECURITY_CASE', Number(caseId)], {
+    decisions: request.decisions.map((d) => d.decision),
+  })
   add('HANDOFF_ACCEPTED', 'SYSTEM')
   if (found.decisions.length === found.payments.length) {
     found.securityCase.status = 'CLOSED'
     found.securityCase.closedAt = now
     add('CASE_CLOSED', 'SYSTEM')
   }
+}
+
+// 조치 센터: 모든 결제 사건의 조치 인계를 최신순으로
+export function mockGetHandoffs(): Promise<HandoffRow[]> {
+  const payments = buildMockPayments(new Date())
+  const rows: HandoffRow[] = []
+  for (const d of current()) {
+    for (const h of d.handoffs) {
+      const decision = d.decisions.find((x) => x.decisionId === h.decisionId)
+      const p = d.payments.find((x) => x.casePaymentId === decision?.casePaymentId)
+      rows.push({
+        ...h,
+        caseId: d.securityCase.caseId,
+        subjectLabel: d.securityCase.subjectLabel,
+        paymentId: p?.paymentId ?? '',
+        paymentTitle: payments.find((x) => x.paymentId === p?.paymentId)?.orderTitle ?? null,
+        amount: p?.amount ?? null,
+        paymentStatus: p?.paymentStatus ?? null,
+      })
+    }
+  }
+  return mockRespond(rows.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt)))
 }

@@ -13,6 +13,9 @@ import { AlertListPage } from '../pages/security/AlertListPage'
 import { StaffAccessPage } from '../pages/manager/StaffAccessPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
+import { ActionCenterPage } from '../pages/security/ActionCenterPage'
+import { ApprovalsPage } from '../pages/manager/ApprovalsPage'
+import { AuditLogPage } from '../pages/manager/AuditLogPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
@@ -49,7 +52,7 @@ export const router = createBrowserRouter([
           { path: 'cases', element: <CaseListPage /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
           { path: 'cases/:id/report', element: <EmptyPage title="AI 보고서" slice="1-7" /> },
-          { path: 'actions', element: <EmptyPage title="조치 센터" slice="1-6" /> },
+          { path: 'actions', element: <ActionCenterPage /> },
           { path: 'notifications', element: <EmptyPage title="메일 발송 기록" slice="1-8" /> },
           // 예전 첫 화면 주소로 들어와도 홈으로 보낸다
           { path: 'transactions', element: <Navigate to="/security/home" replace /> },
@@ -60,13 +63,13 @@ export const router = createBrowserRouter([
         path: '/manager',
         children: [
           { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
-          { path: 'approvals', element: <EmptyPage title="2인 승인함" slice="1-6" /> },
+          { path: 'approvals', element: <ApprovalsPage /> },
           { path: 'rules', element: <RuleCatalogPage /> },
           { path: 'access', element: <StaffAccessPage /> },
           { path: 'cases', element: <CaseListPage scope="staff" /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
           { path: 'cases/:id/report', element: <EmptyPage title="AI 보고서" slice="1-7" /> },
-          { path: 'audit', element: <EmptyPage title="감사 로그" slice="1-6" /> },
+          { path: 'audit', element: <AuditLogPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/manager" /> },
         ],
       },

@@ -5,6 +5,7 @@ import type {
   CaseHistory,
   CasePayment,
   CaseSummary,
+  HandoffRow,
   PaymentDecision,
   ReportBody,
   SecurityCase,
@@ -13,7 +14,7 @@ import type {
 import { CaseVersionConflictError } from './caseErrors'
 import { api, ApiError } from './client'
 import { isMock } from './mockMode'
-import { mockGetCase, mockGetCases, mockSubmitDecisions } from './mock/cases'
+import { mockGetCase, mockGetCases, mockGetHandoffs, mockSubmitDecisions } from './mock/cases'
 
 /**
  * P3 Case 조회·판정 API (`/api/security-cases`, #98).
@@ -131,6 +132,22 @@ export const getCase = mock
   ? (caseId: string, _merchant: string) => mockGetCase(caseId)
   : realGetCase
 export const submitDecisions = mock ? mockSubmitDecisions : realSubmitDecisions
+
+// 조치 센터 — 결제 조치(매입 진행 · 승인 취소) 인계 목록. 2-10에서 백엔드 추가 (ID는 문자열로 바꿈)
+async function realGetHandoffs(): Promise<HandoffRow[]> {
+  const rows = await api<Array<Record<string, unknown>>>('/security-cases/handoffs', {
+    cache: 'no-store',
+  })
+  return rows.map((r) => ({
+    ...(r as unknown as HandoffRow),
+    handoffId: String(r.handoffId),
+    decisionId: String(r.decisionId),
+    caseId: String(r.caseId),
+    paymentId: String(r.paymentId),
+    targetOperationId: r.targetOperationId === null ? null : String(r.targetOperationId),
+  }))
+}
+export const getHandoffs = mock ? mockGetHandoffs : realGetHandoffs
 
 /** 시연 전용: P5 HELD 이벤트 대신 50~79점 HELD 결제를 만든다. 실제 연동 후 지운다. */
 export async function demoCreateHeldPayment(): Promise<string> {

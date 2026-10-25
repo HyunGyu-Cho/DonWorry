@@ -180,3 +180,15 @@ export type SubmitDecisionsRequest = {
   reportId: string | null
   decisions: Array<{ casePaymentId: string; decision: Decision; reason: string }>
 }
+
+// 조치 센터 1행 (GET /security-cases/handoffs, 1-6 보강) — 사건 · 결제를 따로 부르지 않게 이름까지 담는다
+export type HandoffRow = ActionHandoff & {
+  caseId: string
+  subjectLabel: string
+  paymentId: string
+  // 상품 이름 · 금액 (조회하지 못하면 null)
+  paymentTitle: string | null
+  amount: number | null
+  // 실제 결제 상태 — 매입 · 취소가 끝났는지 (조치 "완료" 판단)
+  paymentStatus: PaymentStatus | null
+}

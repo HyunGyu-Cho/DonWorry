@@ -39,3 +39,11 @@ export class StaffCaseForbiddenError extends Error {
     this.name = 'StaffCaseForbiddenError'
   }
 }
+
+// 거절할 때는 이유가 필요하다 (INV_015) — 거절당한 사람이 이유를 알아야 한다
+export class RejectReasonRequiredError extends Error {
+  constructor() {
+    super('거절할 때는 이유를 적어 주세요.')
+    this.name = 'RejectReasonRequiredError'
+  }
+}

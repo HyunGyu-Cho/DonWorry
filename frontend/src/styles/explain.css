@@ -748,3 +748,8 @@
 .dw-case-hist > span:first-child {
   flex: 0 0 72px;
 }
+
+/* 2인 승인함 · 감사 로그 (1-6) — 의심 세션에서 온 줄 */
+.dw-pa-risk td {
+  background: #fef2f2;
+}
