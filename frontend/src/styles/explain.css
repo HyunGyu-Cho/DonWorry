@@ -395,7 +395,7 @@
 }
 .dw-rule-rows {
   display: grid;
-  grid-template-columns: 56px 1fr;
+  grid-template-columns: max-content 1fr;
   gap: 4px 8px;
   margin: 0;
   font-size: 13px;
@@ -572,4 +572,179 @@
 }
 .dw-pa-fresh td {
   background: #fffbeb;
+}
+
+/* 사건 목록 · 상세 (1-5) */
+.dw-case-strip {
+  margin-bottom: 16px;
+}
+.dw-case-strip .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dw-case-strip-left {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.dw-case-autoflow {
+  font-size: 12.5px;
+  color: #475569;
+  margin-left: 6px;
+}
+.dw-case-steps {
+  max-width: 820px;
+}
+.dw-case-flow-card {
+  margin-bottom: 16px;
+}
+.dw-case-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px minmax(260px, 340px);
+  gap: 12px;
+  align-items: center;
+}
+.dw-case-flow-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dw-flowcard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+}
+.dw-flowcard.is-link:hover {
+  border-color: #2563eb;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+}
+.dw-flowcard-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.dw-flowcard-desc {
+  font-size: 12.5px;
+  color: #475569;
+}
+.dw-flowcard-alone {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.dw-case-flow-arrow {
+  font-size: 28px;
+  color: #94a3b8;
+  text-align: center;
+}
+.dw-casecard {
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #172554, #1e3a8a);
+  color: #fff;
+}
+.dw-casecard-top {
+  font-size: 12px;
+  color: #c8d5ee;
+}
+.dw-casecard-title {
+  font-size: 17px;
+  font-weight: 800;
+  margin: 4px 0 8px;
+}
+.dw-casecard-basis {
+  font-size: 12.5px;
+  color: #dbe4f5;
+}
+.dw-casecard-tl {
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+.dw-casecard-tl li {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+.dw-casecard-tl span {
+  color: #93a4c8;
+  min-width: 56px;
+}
+.dw-casecard-foot {
+  font-weight: 700;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 8px;
+}
+.dw-case-ai {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.dw-case-ai-verdict {
+  font-size: 15px;
+}
+.dw-case-ai-summary {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.dw-case-ai-running {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.dw-case-decision {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dw-case-drow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.dw-case-drow-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dw-case-opposite {
+  font-size: 12.5px;
+  color: #b45309;
+  background: #fffbeb;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.dw-case-decision-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.dw-case-verdicts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dw-case-hist {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  padding: 7px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+.dw-case-hist > span:first-child {
+  flex: 0 0 72px;
 }

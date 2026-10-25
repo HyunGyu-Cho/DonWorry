@@ -3,6 +3,8 @@
  * API DTO 확정 전이므로 필드 구성은 백엔드 계약에 맞춰 바뀔 수 있다.
  */
 
+import type { RuleCode } from './fds.ts'
+
 // ── 상태값 (설계 3.3) ──
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
 export type PaymentStatus =
@@ -45,6 +47,9 @@ export type SecurityCase = {
   closedAt: string | null
   // 직원 사건의 대상 직원 (security_cases.subject_user_id). 결제 사건은 없음
   subjectUserId?: string | null
+  // 화면용 대상 이름 (예: 김민수 고객) · "묶은 기준" 문장. 1-5 보강
+  subjectLabel: string
+  groupingBasis: string
 }
 
 /**
@@ -61,6 +66,9 @@ export type CasePayment = {
   riskScore: number | null
   fdsResult: FdsResult | null
   ruleHits: string[]
+  // 이 결제의 FDS 평가(경보) 번호 · 적중 Rule. 1-5 보강 — 흐름도 카드에서 경보 상세로 간다
+  evaluationId: number | null
+  hitRuleCodes: RuleCode[]
 }
 
 export type PaymentDecision = {
@@ -153,6 +161,8 @@ export type CaseSummary = SecurityCase & {
   maxRiskScore: number | null
   latestReportStatus: ReportStatus | null
   decidedCount: number
+  // 묶인 결제들의 적중 Rule (중복 없이, 점수 큰 순). 1-5 보강
+  hitRuleCodes: RuleCode[]
 }
 
 export type CaseDetail = {

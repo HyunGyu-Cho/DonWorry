@@ -9,7 +9,6 @@ import { ModeProvider } from '../components/explain/ModeContext'
 import { DemoProvider } from '../demo/DemoContext'
 import { antdTheme } from '../styles/theme'
 import { router } from './router'
-import '../styles/alert.css'
 import '../styles/explain.css'
 import '../styles/global.css'
 

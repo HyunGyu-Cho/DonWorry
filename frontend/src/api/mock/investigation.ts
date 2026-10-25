@@ -6,6 +6,7 @@ import {
   ApprovalDuplicateError,
   CaseActionForbiddenError,
   SelfApprovalError,
+  StaffCaseForbiddenError,
 } from '../investigationErrors.ts'
 import { mockRespond } from './respond.ts'
 import type { AuthUser } from '../../types/auth.ts'
@@ -230,13 +231,20 @@ export function mockGetStaffCases(): Promise<StaffCase[]> {
   return mockRespond(current().cases)
 }
 
-export function mockGetStaffCase(caseId: string): Promise<StaffCase | null> {
-  return mockRespond(current().cases.find((c) => c.caseId === caseId) ?? null)
+export async function mockGetStaffCase(caseId: string): Promise<StaffCase | null> {
+  const found = current().cases.find((c) => c.caseId === caseId) ?? null
+  // 직원 사건은 보안 관리자만 (없는 사건은 권한과 관계없이 null)
+  if (found && actor.role !== 'SECURITY_MANAGER') {
+    await mockRespond(null)
+    throw new StaffCaseForbiddenError()
+  }
+  return mockRespond(found)
 }
 
 export async function mockRequestCaseActions(
   caseId: string,
   actions: NewCaseAction[],
+  reason = '',
 ): Promise<StaffCase> {
   await mockRespond(null)
   const found = current().cases.find((c) => c.caseId === caseId)
@@ -262,6 +270,7 @@ export async function mockRequestCaseActions(
   found.closedAt = now
   audit('CASE_ACTIONS_REQUESTED', ['SECURITY_CASE', Number(caseId)], {
     actions: actions.map((a) => a.actionType),
+    reason,
   })
   return structuredClone(found)
 }
