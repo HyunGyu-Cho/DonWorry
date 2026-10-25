@@ -996,3 +996,75 @@
     opacity: 0.3;
   }
 }
+
+/* 구매자 본인 확인 · 메일 발송 기록 (1-8) */
+.dw-public {
+  min-height: 100vh;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 16px;
+}
+.dw-public-head {
+  width: 100%;
+  max-width: 440px;
+  margin-bottom: 16px;
+  font-size: 15px;
+  color: #475569;
+}
+.dw-public-head b {
+  color: #2563eb;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+}
+.dw-public-card {
+  width: 100%;
+  max-width: 440px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+.dw-public-lead {
+  margin: 0 0 12px;
+  color: #475569;
+}
+.dw-public-order {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #f1f5f9;
+}
+.dw-public-amount {
+  font-size: 24px;
+  font-weight: 800;
+}
+.dw-public-question {
+  font-size: 18px;
+  margin: 20px 0 12px;
+}
+.dw-public-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.dw-public-error {
+  color: #dc2626;
+}
+.dw-public-foot {
+  max-width: 440px;
+  margin-top: 16px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}
+.dw-pa-fail {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: #dc2626;
+}

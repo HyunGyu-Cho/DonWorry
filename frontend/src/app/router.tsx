@@ -14,6 +14,9 @@ import { StaffAccessPage } from '../pages/manager/StaffAccessPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
 import { ReportPage } from '../pages/security/ReportPage'
+import { NotificationsPage } from '../pages/security/NotificationsPage'
+import { OwnerResultsPage } from '../pages/owner/OwnerResultsPage'
+import { BuyerConfirmPage } from '../pages/public/BuyerConfirmPage'
 import { ActionCenterPage } from '../pages/security/ActionCenterPage'
 import { ApprovalsPage } from '../pages/manager/ApprovalsPage'
 import { AuditLogPage } from '../pages/manager/AuditLogPage'
@@ -29,6 +32,8 @@ export const router = createBrowserRouter([
   // 로그인 화면이 로그인된 사용자를 역할별 첫 화면으로 보낸다.
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/login', element: <LoginRoute /> },
+  // 구매자 본인 확인 — 로그인 없이 메일 속 1회용 링크로 연다
+  { path: '/confirm/:token', element: <BuyerConfirmPage /> },
   // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
   { path: '/admin', element: <Navigate to="/admin/fds" replace /> },
   {
@@ -54,7 +59,7 @@ export const router = createBrowserRouter([
           { path: 'cases/:id', element: <CaseDetailPage /> },
           { path: 'cases/:id/report', element: <ReportPage /> },
           { path: 'actions', element: <ActionCenterPage /> },
-          { path: 'notifications', element: <EmptyPage title="메일 발송 기록" slice="1-8" /> },
+          { path: 'notifications', element: <NotificationsPage /> },
           // 예전 첫 화면 주소로 들어와도 홈으로 보낸다
           { path: 'transactions', element: <Navigate to="/security/home" replace /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/security" /> },
@@ -78,7 +83,7 @@ export const router = createBrowserRouter([
         path: '/owner',
         children: [
           { path: 'home', element: <EmptyPage title="홈" slice="1-11" /> },
-          { path: 'results', element: <EmptyPage title="보안 확인 결과" slice="1-8" /> },
+          { path: 'results', element: <OwnerResultsPage /> },
           { path: 'settlements', element: <EmptyPage title="정산 캘린더" slice="1-10" /> },
           { path: 'funds', element: <EmptyPage title="자금 현황" slice="1-10" /> },
           { path: 'loans', element: <EmptyPage title="연계 대출 상품" slice="1-10" /> },
