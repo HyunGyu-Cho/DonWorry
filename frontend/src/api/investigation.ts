@@ -7,6 +7,7 @@ import {
   ApprovalDuplicateError,
   CaseActionForbiddenError,
   SelfApprovalError,
+  StaffCaseForbiddenError,
 } from './investigationErrors.ts'
 import { isMock } from './mockMode.ts'
 import {
@@ -29,13 +30,14 @@ import type {
   StaffCase,
 } from '../types/investigation.ts'
 
-// 백엔드 오류 코드 → 화면용 오류 (INV_010 ~ INV_012는 2-9, INV_013은 2-10에서 백엔드에 추가)
+// 백엔드 오류 코드 → 화면용 오류 (INV_010 ~ INV_012 · INV_014는 2-9, INV_013은 2-10에서 백엔드에 추가)
 function mapInvestigationError(error: unknown): never {
   if (error instanceof ApiError) {
     if (error.code === 'INV_010') throw new SelfApprovalError()
     if (error.code === 'INV_011') throw new CaseActionForbiddenError()
     if (error.code === 'INV_012') throw new ApprovalClosedError()
     if (error.code === 'INV_013') throw new ApprovalDuplicateError()
+    if (error.code === 'INV_014') throw new StaffCaseForbiddenError()
   }
   throw error
 }
@@ -54,12 +56,13 @@ async function realGetStaffCase(caseId: string) {
     return await api<StaffCase>(`/investigation/staff-cases/${caseId}`)
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null
-    throw error
+    mapInvestigationError(error)
   }
 }
 
-const realRequestCaseActions = (caseId: string, actions: NewCaseAction[]) =>
-  postJson<StaffCase>(`/investigation/staff-cases/${caseId}/actions`, { actions })
+// 판정 사유는 감사 로그에 남는다
+const realRequestCaseActions = (caseId: string, actions: NewCaseAction[], reason: string) =>
+  postJson<StaffCase>(`/investigation/staff-cases/${caseId}/actions`, { actions, reason })
 
 const realGetApprovals = (status?: ApprovalStatus) =>
   api<ApprovalRequest[]>(`/investigation/approvals${status ? `?status=${status}` : ''}`)

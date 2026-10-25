@@ -1,31 +1,304 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { App, Button, Card, Descriptions, Space, Spin, Table, Tag } from 'antd'
-import { useNavigate, useParams } from 'react-router-dom'
-import {
-  CaseVersionConflictError,
-  demoMergePayment,
-  getCase,
-  requestReport,
-  submitDecisions,
-} from '../../api/cases'
-import { ApiError } from '../../api/client'
+import { ArrowLeftOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Input, Radio, Result, Spin, Table, Tag } from 'antd'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { CaseVersionConflictError, getCase, submitDecisions } from '../../api/cases'
+import { getRules, getStaffAlerts } from '../../api/fdsRules'
+import { getLoginEvents, getStaffAccounts, getStaffSessions } from '../../api/identity'
+import { getStaffCase, requestCaseActions } from '../../api/investigation'
+import { CaseActionForbiddenError, StaffCaseForbiddenError } from '../../api/investigationErrors'
+import { getPaymentContext } from '../../api/payment'
+import { getCaseReport, getReportRun } from '../../api/report'
 import { useAuth } from '../../auth/useAuth'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
-import { ScreenResult } from '../../components/common/ScreenResult'
+import { RawDetails } from '../../components/explain/RawDetails'
 import { useDemo } from '../../demo/DemoContext'
-import type { CaseDetail, CasePayment, SubmitDecisionsRequest } from '../../types/case'
-import { decisionMode, latestReport, mergeRemainingMin, slaState } from '../../utils/caseRules'
-import { won } from '../../utils/format'
-import { HandoffCard, HistoryCard } from './case/CaseActivity'
-import { caseStatusLabel, dateTime, fdsResultLabel, paymentStatusLabel } from './case/caseLabels'
-import { CodeTag } from './case/CodeTag'
+import type { CaseDetail } from '../../types/case'
+import type { StaffAccount, StaffLoginEvent, StaffSession } from '../../types/auth'
+import type { FdsRule, RuleCode, StaffAlert } from '../../types/fds'
+import type { StaffCase } from '../../types/investigation'
+import type { PaymentContext } from '../../types/payment'
+import type { ConclusionReport, ReportRun } from '../../types/report'
+import { decisionMode } from '../../utils/caseRules'
+import {
+  ACTION_LABEL,
+  paymentFlowCards,
+  staffFlowCards,
+  staffVerdicts,
+  type StaffVerdict,
+} from '../../utils/caseView'
+import { cardName, koreanWon, relativeTime } from '../../utils/humanize'
+import { distributedAttack, suspiciousSessionIds } from '../../utils/staffAccess'
 import { DecisionPanel } from './case/DecisionPanel'
-import { ReportCard } from './case/ReportCard'
+import {
+  AiSummaryCard,
+  CaseFlow,
+  CaseHistoryCard,
+  CaseStatusStrip,
+  type HistoryRow,
+} from './case/CaseParts'
+import { caseTypeLabel, paymentStatusLabel } from './case/caseLabels'
 
-/** 보고서 생성 중·인계 접수 확인 중이면 이 간격으로 다시 조회한다. */
-const POLL_MS = 3_000
+type Common = { rules: FdsRule[]; report: ConclusionReport | null; run: ReportRun | null }
+type PaymentData = Common & { kind: 'payment'; detail: CaseDetail; contexts: PaymentContext[] }
+type StaffData = Common & {
+  kind: 'staff'
+  staffCase: StaffCase
+  alerts: StaffAlert[]
+  accounts: StaffAccount[]
+  sessions: StaffSession[]
+  events: StaffLoginEvent[]
+}
+type Loaded = PaymentData | StaffData | 'missing' | 'forbidden' | 'error'
+
+const HISTORY_TEXT: Record<string, string> = {
+  CASE_CREATED: '사건 자동 생성',
+  PAYMENT_LINKED: '결제 경보 연결',
+  DECISION_CONFIRMED: '직원 판정 확정',
+  HANDOFF_REQUESTED: '조치 요청',
+  HANDOFF_ACCEPTED: '조치 접수 (매입 · 승인 취소)',
+  HANDOFF_FAILED: '조치 요청 실패',
+  CASE_STATUS_CHANGED: 'AI 조사 완료 · 판정 대기',
+  CASE_CLOSED: '사건 종료',
+}
+
+// 보고서 · 조사 진행 상태 (보고서가 없거나 권한이 없으면 null)
+async function fetchReport(caseId: string) {
+  const [report, run] = await Promise.all([
+    getCaseReport(caseId).catch(() => null),
+    getReportRun(caseId).catch(() => null),
+  ])
+  return { report, run }
+}
+
+// 결제 사건을 먼저 찾고, 없으면 직원 사건 (직원 사건은 보안 관리자만)
+async function fetchCase(id: string, merchant: string): Promise<Loaded> {
+  try {
+    const rules = await getRules()
+    const detail = await getCase(id, merchant)
+    if (detail) {
+      const [contexts, rep] = await Promise.all([
+        Promise.all(detail.payments.map((p) => getPaymentContext(p.paymentId))),
+        fetchReport(id),
+      ])
+      return {
+        kind: 'payment',
+        detail,
+        contexts: contexts.filter((c): c is PaymentContext => c !== null),
+        rules,
+        ...rep,
+      }
+    }
+    const staffCase = await getStaffCase(id)
+    if (!staffCase) return 'missing'
+    const [alerts, accounts, sessions, events, rep] = await Promise.all([
+      getStaffAlerts(),
+      getStaffAccounts(),
+      getStaffSessions(false),
+      getLoginEvents(),
+      fetchReport(id),
+    ])
+    return { kind: 'staff', staffCase, alerts, accounts, sessions, events, rules, ...rep }
+  } catch (e) {
+    return e instanceof StaffCaseForbiddenError ? 'forbidden' : 'error'
+  }
+}
+
+function PaymentTargets(props: { data: PaymentData }) {
+  const { detail, contexts } = props.data
+  const ctxOf = (id: string) => contexts.find((c) => c.paymentId === id)
+  return (
+    <Card title="조사 대상 결제">
+      <Table
+        rowKey="casePaymentId"
+        size="small"
+        pagination={false}
+        dataSource={detail.payments}
+        columns={[
+          {
+            title: '상품',
+            key: 'title',
+            render: (_, p) => <b>{ctxOf(p.paymentId)?.orderTitle ?? '상품 정보 없음'}</b>,
+          },
+          {
+            title: '금액',
+            key: 'amount',
+            align: 'right',
+            render: (_, p) => (p.amount === null ? '—' : koreanWon(p.amount)),
+          },
+          {
+            title: '카드',
+            key: 'card',
+            render: (_, p) => cardName(ctxOf(p.paymentId)?.cardLast4 ?? null),
+          },
+          { title: '점수', dataIndex: 'riskScore', align: 'right', render: (v) => v ?? '—' },
+          {
+            title: '결제 상태',
+            key: 'status',
+            render: (_, p) =>
+              p.paymentStatus ? (
+                <Tag color={paymentStatusLabel[p.paymentStatus].color}>
+                  {paymentStatusLabel[p.paymentStatus].label}
+                </Tag>
+              ) : (
+                '—'
+              ),
+          },
+        ]}
+      />
+    </Card>
+  )
+}
+
+function StaffTargets({ data, now }: { data: StaffData; now: Date }) {
+  const { staffCase, accounts, sessions, events } = data
+  if (staffCase.caseType === 'STAFF_SPRAY') {
+    const attack = distributedAttack(events, now, 60)
+    const successes = events.filter(
+      (e) =>
+        e.result === 'SUCCESS' && e.ip.ipType !== 'OFFICE' && e.occurredAt >= staffCase.createdAt,
+    ).length
+    return (
+      <Card title="공격 현황">
+        <dl className="dw-rule-rows">
+          <dt>공격 IP</dt>
+          <dd>
+            {attack ? `${attack.ips.length}개 · 해외 대역` : '집계 중'} (IP 하나당 실패 몇 번이라
+            IP별 기준에 안 걸림)
+          </dd>
+          <dt>대상 계정</dt>
+          <dd>{staffCase.subjectLabel}</dd>
+          <dt>로그인 성공</dt>
+          <dd>
+            <b>{successes}건</b> {successes === 0 && '(OTP 단계까지 간 시도 없음)'}
+          </dd>
+        </dl>
+      </Card>
+    )
+  }
+  const suspicious = suspiciousSessionIds(sessions)
+  return (
+    <Card title="대상 계정 현재 상태">
+      {staffCase.subjectUserIds.map((userId) => {
+        const account = accounts.find((a) => a.userId === userId)
+        const mine = sessions.filter((s) => s.userId === userId && s.endedAt === null)
+        return (
+          <dl key={userId} className="dw-rule-rows">
+            <dt>계정</dt>
+            <dd>
+              {account?.displayName ?? '알 수 없는 직원'}{' '}
+              <Tag color={account?.locked ? 'red' : 'green'}>
+                {account?.locked ? '잠김' : '사용 중'}
+              </Tag>
+            </dd>
+            <dt>세션</dt>
+            <dd>
+              진행 중 {mine.length}개
+              {mine.some((s) => suspicious.has(s.staffSessionId)) && (
+                <Tag color="red" style={{ marginLeft: 6 }}>
+                  탈취 의심 세션 있음
+                </Tag>
+              )}
+            </dd>
+          </dl>
+        )
+      })}
+    </Card>
+  )
+}
+
+// 직원 사건 판정 (보안 관리자) — 판정을 고르면 조치 묶음을 요청한다
+function StaffDecision(props: { staffCase: StaffCase; locked: boolean; onDone: () => void }) {
+  const { staffCase, locked, onDone } = props
+  const { toast, confirmDanger } = useFeedback()
+  const [pick, setPick] = useState<StaffVerdict | null>(null)
+  const [reason, setReason] = useState('')
+  const verdicts = staffVerdicts(staffCase.caseType)
+
+  if (staffCase.status === 'CLOSED') {
+    return (
+      <Card title="판정 결과">
+        {staffCase.actions.length === 0 ? (
+          <p className="dw-muted">기록된 조치가 없습니다.</p>
+        ) : (
+          staffCase.actions.map((a) => (
+            <div key={a.caseActionId} className="dw-case-hist">
+              <Tag color={a.status === 'DONE' ? 'green' : a.status === 'FAILED' ? 'red' : 'blue'}>
+                {a.status === 'DONE' ? '완료' : a.status === 'FAILED' ? '실패' : '요청'}
+              </Tag>
+              <span>{ACTION_LABEL[a.actionType]}</span>
+            </div>
+          ))
+        )}
+      </Card>
+    )
+  }
+
+  const submit = () =>
+    pick &&
+    confirmDanger({
+      title: `"${pick.title}"(으)로 판정할까요?`,
+      content: `다음 조치를 바로 요청합니다: ${pick.actions.map((a) => ACTION_LABEL[a]).join(' · ')}`,
+      onConfirm: async () => {
+        try {
+          await requestCaseActions(
+            staffCase.caseId,
+            pick.actions.map((actionType) => ({ actionType })),
+            reason.trim(),
+          )
+          void toast.success('판정했습니다. 조치가 요청됐어요.')
+          onDone()
+        } catch (e) {
+          void toast.error(
+            e instanceof CaseActionForbiddenError ? e.message : '판정하지 못했습니다.',
+          )
+        }
+      },
+    })
+
+  return (
+    <Card title="관리자 판정">
+      <div className="dw-case-decision">
+        {locked && <Alert type="info" showIcon message="AI 보고서가 나오면 판정할 수 있습니다." />}
+        <Radio.Group
+          disabled={locked}
+          value={pick?.key}
+          onChange={(e) => setPick(verdicts.find((v) => v.key === e.target.value) ?? null)}
+          className="dw-case-verdicts"
+        >
+          {verdicts.map((v) => (
+            <Radio key={v.key} value={v.key}>
+              <b>{v.title}</b>
+              <div className="dw-muted dw-small">
+                {v.actions.map((a) => ACTION_LABEL[a]).join(' · ')}
+              </div>
+            </Radio>
+          ))}
+        </Radio.Group>
+        <Input.TextArea
+          disabled={locked}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="판정 사유 (필수) — 감사 로그에 남습니다"
+          autoSize={{ minRows: 2, maxRows: 4 }}
+          maxLength={300}
+        />
+        <div className="dw-case-decision-foot">
+          <span className="dw-muted dw-small">대상 직원 본인은 판정할 수 없습니다 (직무 분리)</span>
+          <Button
+            type="primary"
+            danger={pick?.danger}
+            disabled={locked || !pick || !reason.trim()}
+            onClick={submit}
+          >
+            판정 확정
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
 
 export function CaseDetailPage() {
   const { id = '' } = useParams()
@@ -33,248 +306,220 @@ export function CaseDetailPage() {
   const { merchant } = useDemo()
   const { user } = useAuth()
   const { toast } = useFeedback()
-  // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
-  const { message } = App.useApp()
-  const [refreshKey, setRefreshKey] = useState(0)
-  // 응답을 조회 범위(가맹점·Case)와 함께 저장해, 범위가 바뀌면 이전 Case를 즉시 숨기고
-  // 늦게 도착한 이전 범위의 응답은 버린다.
-  const scope = `${merchant}/${id}`
-  // detail: null은 404(Case 없음), 'error'는 네트워크·5xx 등 일시 장애 — 404 화면으로 단정하지 않는다
-  const [loaded, setLoaded] = useState<{
-    scope: string
-    detail: CaseDetail | null | 'error'
-  } | null>(null)
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
+  const [now, setNow] = useState(() => new Date())
+  const manager = user?.role === 'SECURITY_MANAGER'
+  const base = manager ? '/manager/cases' : '/security/cases'
+
+  const apply = useCallback((result: Loaded) => {
+    setNow(new Date())
+    setLoaded(result)
+  }, [])
+  const load = useCallback(() => fetchCase(id, merchant).then(apply), [id, merchant, apply])
+
   useEffect(() => {
     let alive = true
-    getCase(id, merchant)
-      .then((result) => {
-        if (alive) setLoaded({ scope: `${merchant}/${id}`, detail: result })
-      })
-      .catch(() => {
-        if (!alive) return
-        message.error('Case를 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
-        setLoaded({ scope: `${merchant}/${id}`, detail: 'error' })
-      })
+    void fetchCase(id, merchant).then((result) => {
+      if (alive) apply(result)
+    })
     return () => {
       alive = false
     }
-  }, [id, merchant, refreshKey, message])
-  const result = loaded?.scope === scope ? loaded.detail : undefined
-  const detail = result === 'error' ? null : result
-  const load = useCallback(() => setRefreshKey((k) => k + 1), [])
+  }, [id, merchant, apply])
 
-  const waiting =
-    !!detail &&
-    (detail.reports.some((r) => r.status === 'PENDING' || r.status === 'RUNNING') ||
-      detail.handoffs.some((h) => h.status === 'REQUESTED'))
+  // 조사 중이면 1초마다 진행 상태를 다시 본다. 끝나면 보고서까지 다시 불러온다
+  const running = typeof loaded === 'object' && loaded?.run?.status === 'RUNNING'
   useEffect(() => {
-    if (!waiting) return
-    const timer = setTimeout(load, POLL_MS)
+    if (!running) return
+    const timer = setTimeout(() => {
+      void fetchReport(id).then((rep) => {
+        setLoaded((prev) => (prev && typeof prev === 'object' ? { ...prev, ...rep } : prev))
+      })
+    }, 1000)
     return () => clearTimeout(timer)
-  }, [waiting, detail, load])
+  }, [running, loaded, id])
 
-  if (result === undefined) return <Spin style={{ display: 'block', margin: '120px auto' }} />
-  if (result === 'error')
+  const rules = useMemo(() => (typeof loaded === 'object' && loaded ? loaded.rules : []), [loaded])
+  const ruleName = useCallback(
+    (code: RuleCode) => rules.find((r) => r.ruleCode === code)?.displayName ?? code,
+    [rules],
+  )
+  const cards = useMemo(() => {
+    if (!loaded || typeof loaded !== 'object') return []
+    return loaded.kind === 'payment'
+      ? paymentFlowCards(loaded.detail, ruleName, !manager)
+      : staffFlowCards(loaded.staffCase, loaded.alerts, ruleName)
+  }, [loaded, ruleName, manager])
+
+  const back = (
+    <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(base)}>
+      목록
+    </Button>
+  )
+  if (loaded === null) {
     return (
-      <ScreenResult
-        kind="500"
-        action={
-          <Button type="primary" onClick={load}>
-            다시 시도
-          </Button>
-        }
+      <>
+        <PageHeader title="사건" actions={back} />
+        <div className="dw-error-view" role="status">
+          <Spin size="large" />
+        </div>
+      </>
+    )
+  }
+  if (loaded === 'forbidden') {
+    return (
+      <Result
+        status="403"
+        title="보안 관리자만 볼 수 있어요"
+        subTitle="직원 계정 사건은 대상 직원이 자기 사건을 판정하지 못하도록 보안 관리자만 엽니다 (직무 분리)."
+        extra={back}
       />
     )
-  if (detail === null || detail === undefined) return <ScreenResult kind="404" />
-
-  const { securityCase, payments, reports, decisions, handoffs, history } = detail
-  const mergeRemaining = mergeRemainingMin(securityCase.createdAt, decisions.length)
-  const sla = slaState(securityCase.createdAt, securityCase.status)
-  const mode = decisionMode(securityCase.evidenceVersion, reports)
-
-  const handleSubmit = async (request: SubmitDecisionsRequest) => {
-    // 화면은 로그인 가드 안에 있지만, 세션이 만료돼 사용자가 비면 판정을 보내지 않는다
-    if (!user) {
-      toast.error('로그인 정보를 확인할 수 없습니다. 다시 로그인한 뒤 판정하세요.')
-      return false
-    }
-    try {
-      await submitDecisions(securityCase.caseId, user.userId, request)
-      toast.success('판정을 확정했습니다. 금융 조치 인계 접수를 확인하고 있습니다.')
-      load()
-      return true
-    } catch (error) {
-      toast.error(
-        error instanceof CaseVersionConflictError
-          ? '검토 중 Case에 결제가 추가되었습니다. 변경 내용을 다시 확인한 뒤 판정하세요.'
-          : error instanceof ApiError && error.detail
-            ? error.detail
-            : '판정을 저장하지 못했습니다. 잠시 후 다시 시도하세요.',
-      )
-      load()
-      return false
-    }
+  }
+  if (loaded === 'missing' || loaded === 'error') {
+    return (
+      <>
+        <PageHeader title="사건" actions={back} />
+        <Alert
+          type="warning"
+          showIcon
+          message={loaded === 'missing' ? '찾는 사건이 없습니다.' : '사건을 불러오지 못했습니다.'}
+          action={loaded === 'error' && <Button onClick={() => void load()}>다시 시도</Button>}
+        />
+      </>
+    )
   }
 
-  const handleDemoMerge = async () => {
-    try {
-      // 판정 중 병합 충돌을 시연하려고 화면은 일부러 갱신하지 않는다.
-      const result = await demoMergePayment(securityCase.caseId)
-      if (result.merged) {
-        toast.info('시연: 같은 고객의 결제가 병합되었습니다. 화면은 아직 이전 상태입니다.')
-      } else {
-        // 병합되지 않은 결제는 새 Case가 된다. 숨기지 않고 새 Case로 안내한다
-        toast.info(
-          `병합 기한(30분)이 지났거나 판정이 시작되어 새 Case ${result.caseId}가 생성되었습니다.`,
-        )
-        navigate(`/security/cases/${result.caseId}`)
-      }
-    } catch {
-      toast.error('시연 결제를 병합하지 못했습니다. 잠시 후 다시 시도하세요.')
-      load()
-    }
-  }
+  const { report, run } = loaded
+  const sc =
+    loaded.kind === 'payment'
+      ? {
+          caseId: loaded.detail.securityCase.caseId,
+          caseType: loaded.detail.securityCase.caseType,
+          status: loaded.detail.securityCase.status,
+          subjectLabel: loaded.detail.securityCase.subjectLabel,
+          groupingBasis: loaded.detail.securityCase.groupingBasis,
+          createdAt: loaded.detail.securityCase.createdAt,
+        }
+      : loaded.staffCase
+  const aiRunning = run?.status === 'RUNNING'
 
-  const handleRequestReport = async () => {
-    try {
-      await requestReport(securityCase.caseId)
-      toast.info('AI 보고서를 다시 요청했습니다.')
-    } catch {
-      toast.error('AI 보고서를 요청하지 못했습니다. 잠시 후 다시 시도하세요.')
+  let right: ReactNode
+  let history: HistoryRow[]
+  if (loaded.kind === 'payment') {
+    const { detail, contexts } = loaded
+    const titleOf = (paymentId: string) =>
+      contexts.find((c) => c.paymentId === paymentId)?.orderTitle ?? '상품 정보 없음'
+    const mode = aiRunning
+      ? ({ kind: 'blocked', message: 'AI 조사가 끝나면 판정할 수 있습니다.' } as const)
+      : decisionMode(detail.securityCase.evidenceVersion, detail.reports)
+    right = manager ? (
+      <Card>
+        <b>보안 직원이 판정합니다</b>
+        <p className="dw-muted dw-small">
+          관리자는 AI 권고와 반대되는 판정이 올라오면 2인 승인함에서 승인합니다.
+        </p>
+      </Card>
+    ) : (
+      <DecisionPanel
+        payments={detail.payments}
+        titleOf={titleOf}
+        decisions={detail.decisions}
+        recommendations={report?.paymentRecommendations ?? []}
+        mode={mode}
+        evidenceVersion={detail.securityCase.evidenceVersion}
+        onSubmit={async (request) => {
+          try {
+            await submitDecisions(detail.securityCase.caseId, user?.userId ?? 0, request)
+            void toast.success('판정을 확정했습니다. 조치가 요청됐어요.')
+            await load()
+            return true
+          } catch (e) {
+            void toast.error(
+              e instanceof CaseVersionConflictError ? e.message : '판정을 저장하지 못했습니다.',
+            )
+            if (e instanceof CaseVersionConflictError) await load()
+            return false
+          }
+        }}
+      />
+    )
+    history = detail.history.map((h) => ({
+      key: h.historyId,
+      at: h.createdAt,
+      title: HISTORY_TEXT[h.eventType] ?? h.eventType,
+    }))
+  } else {
+    const { staffCase } = loaded
+    right = (
+      <StaffDecision
+        staffCase={staffCase}
+        locked={aiRunning || !report}
+        onDone={() => void load()}
+      />
+    )
+    history = [
+      {
+        key: 'created',
+        at: staffCase.createdAt,
+        title: '사건 자동 생성',
+        sub: staffCase.groupingBasis,
+      },
+      ...cards.map((c) => ({ key: `alert-${c.key}`, at: c.at, title: `직원 경보 · ${c.title}` })),
+      ...staffCase.actions.map((a) => ({
+        key: `act-${a.caseActionId}`,
+        at: a.requestedAt,
+        title: `조치 · ${ACTION_LABEL[a.actionType]}`,
+      })),
+    ]
+    if (staffCase.closedAt) {
+      history.push({ key: 'closed', at: staffCase.closedAt, title: '사건 종료' })
     }
-    load()
   }
-  // 현재 증거 버전 보고서가 없을 때만 다시 요청할 수 있다 — 백엔드 requestMissing과 같은 조건
-  // (목 보고서가 서버 재시작으로 비었거나 커밋 뒤 보고서 요청이 실패한 경우)
-  // 이전 버전 보고서가 생성 중이어도 현재 버전 요청이 없으면 복구할 수 있어야 한다
-  const latest = latestReport(reports)
-  const reportMissing =
-    securityCase.status !== 'CLOSED' &&
-    (!latest || latest.evidenceVersion < securityCase.evidenceVersion)
 
   return (
     <>
       <PageHeader
-        title="Case 상세"
-        description={`${securityCase.caseId} · ${securityCase.merchantId} · ${securityCase.customerRef}`}
+        title={`${caseTypeLabel[sc.caseType].label} · ${sc.subjectLabel}`}
+        description={`${relativeTime(sc.createdAt, now)} 생성`}
         actions={
-          <Space>
-            <span className="dw-demo-label">DEMO DATA</span>
-            {reportMissing && <Button onClick={handleRequestReport}>AI 보고서 다시 요청</Button>}
-            {mergeRemaining !== null && <Button onClick={handleDemoMerge}>시연: 결제 병합</Button>}
-            <Button icon={<ReloadOutlined />} onClick={load}>
-              새로고침
-            </Button>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/security/cases')}>
-              목록으로
-            </Button>
-          </Space>
+          <>
+            {report && (
+              <Link to={`${base}/${sc.caseId}/report`}>
+                <Button>AI 보고서</Button>
+              </Link>
+            )}
+            {back}
+          </>
         }
       />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <Card style={{ borderColor: '#E2E8F0' }}>
-          <Descriptions column={4} colon={false} size="small" labelStyle={{ color: '#64748b' }}>
-            <Descriptions.Item label="상태">
-              <CodeTag value={caseStatusLabel[securityCase.status]} />
-            </Descriptions.Item>
-            <Descriptions.Item label="조사 유형">{securityCase.caseType}</Descriptions.Item>
-            <Descriptions.Item label="증거 버전">v{securityCase.evidenceVersion}</Descriptions.Item>
-            <Descriptions.Item label="AI 보고서">
-              {latestReport(reports) ? `v${latestReport(reports)?.reportVersion}` : '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="생성 시각">
-              {dateTime(securityCase.createdAt)}
-            </Descriptions.Item>
-            <Descriptions.Item label="병합 마감">
-              {mergeRemaining === null ? '마감' : `${mergeRemaining}분 남음`}
-            </Descriptions.Item>
-            <Descriptions.Item label="SLA (권장 24h)">
-              {!sla ? (
-                '-'
-              ) : sla.exceeded ? (
-                <span style={{ color: '#dc2626', fontWeight: 700 }}>{sla.hours}시간 초과</span>
-              ) : (
-                `${sla.hours}시간 남음`
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="종료 시각">
-              {securityCase.closedAt ? dateTime(securityCase.closedAt) : '-'}
-            </Descriptions.Item>
-          </Descriptions>
-        </Card>
-
-        <Card
-          title={<span className="dw-section-title">조사 대상 결제 ({payments.length}건)</span>}
-          style={{ borderColor: '#E2E8F0' }}
-        >
-          <Table<CasePayment>
-            size="small"
-            rowKey="casePaymentId"
-            pagination={false}
-            dataSource={payments}
-            columns={[
-              { title: '결제 ID', dataIndex: 'paymentId', render: (v) => <strong>{v}</strong> },
-              {
-                title: '금액',
-                dataIndex: 'amount',
-                align: 'right',
-                render: (v: CasePayment['amount']) => (v === null ? '-' : won(v)),
-              },
-              {
-                title: '결제 시각',
-                dataIndex: 'requestedAt',
-                render: (v: CasePayment['requestedAt']) => (v === null ? '-' : dateTime(v)),
-              },
-              {
-                title: '결제 상태 (P5)',
-                dataIndex: 'paymentStatus',
-                render: (v: CasePayment['paymentStatus']) => (
-                  <CodeTag value={v ? paymentStatusLabel[v] : undefined} />
-                ),
-              },
-              {
-                title: 'FDS 점수',
-                dataIndex: 'riskScore',
-                align: 'right',
-                render: (v: number | null) => <strong>{v ?? '-'}</strong>,
-              },
-              {
-                title: 'FDS 판정',
-                dataIndex: 'fdsResult',
-                render: (v: CasePayment['fdsResult']) => (
-                  <CodeTag value={v ? fdsResultLabel[v] : undefined} />
-                ),
-              },
-              {
-                title: '적중 규칙',
-                dataIndex: 'ruleHits',
-                render: (rules: string[]) => rules.map((r) => <Tag key={r}>{r}</Tag>),
-              },
-            ]}
-          />
-        </Card>
-
-        <div className="dw-section-grid">
-          {/* 보고서 버전이 늘면 최신 버전을 다시 기본 선택한다. */}
-          <ReportCard
-            key={latestReport(reports)?.reportVersion}
-            reports={reports}
-            evidenceVersion={securityCase.evidenceVersion}
-          />
-          {/* 증거 버전이 바뀌면 이전 판정 초안을 버리고 새 내용으로 다시 판정하게 한다 (설계 3.5). */}
-          <DecisionPanel
-            key={securityCase.evidenceVersion}
-            payments={payments}
-            decisions={decisions}
-            mode={mode}
-            evidenceVersion={securityCase.evidenceVersion}
-            onSubmit={handleSubmit}
-          />
+      <CaseStatusStrip
+        caseType={sc.caseType}
+        status={sc.status}
+        aiRunning={aiRunning}
+        report={report}
+      />
+      <CaseFlow
+        cards={cards}
+        caseType={sc.caseType}
+        subjectLabel={sc.subjectLabel}
+        groupingBasis={sc.groupingBasis}
+        report={report}
+        now={now}
+      />
+      <div className="dw-pa-grid">
+        <div className="dw-pa-col">
+          <AiSummaryCard report={report} run={run} reportPath={`${base}/${sc.caseId}/report`} />
+          {loaded.kind === 'payment' ? (
+            <PaymentTargets data={loaded} />
+          ) : (
+            <StaffTargets data={loaded} now={now} />
+          )}
+          <RawDetails title="원본 값 보기 (사건 번호)" rows={[['사건 번호', sc.caseId]]} />
         </div>
-
-        <div className="dw-section-grid">
-          <HandoffCard payments={payments} decisions={decisions} handoffs={handoffs} />
-          <HistoryCard history={history} />
+        <div className="dw-pa-col">
+          {right}
+          <CaseHistoryCard rows={history} now={now} />
         </div>
       </div>
     </>

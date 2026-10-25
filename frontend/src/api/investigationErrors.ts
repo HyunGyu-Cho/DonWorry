@@ -31,3 +31,11 @@ export class ApprovalDuplicateError extends Error {
     this.name = 'ApprovalDuplicateError'
   }
 }
+
+// 직원 계정 사건은 보안 관리자만 볼 수 있다 (INV_014, 직무 분리)
+export class StaffCaseForbiddenError extends Error {
+  constructor() {
+    super('직원 계정 사건은 보안 관리자만 볼 수 있습니다.')
+    this.name = 'StaffCaseForbiddenError'
+  }
+}

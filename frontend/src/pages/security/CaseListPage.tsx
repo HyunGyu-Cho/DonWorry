@@ -1,300 +1,249 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Input, Select, Space, Table, Typography } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Table, Tabs, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { demoCreateHeldPayment, getCases } from '../../api/cases'
+import { getRules, getStaffAlerts } from '../../api/fdsRules'
+import { getStaffCases } from '../../api/investigation'
+import { isMock } from '../../api/mockMode'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
+import { TermTip } from '../../components/explain/TermTip'
 import { useDemo } from '../../demo/DemoContext'
-import type { CaseStatus, CaseSummary } from '../../types/case'
-import { mergeRemainingMin, slaState } from '../../utils/caseRules'
-import { won } from '../../utils/format'
-import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
-import { CodeTag } from './case/CodeTag'
+import type { CaseStatus, CaseType, ReportStatus } from '../../types/case'
+import type { FdsRule, RuleCode, StaffAlert } from '../../types/fds'
+import { koreanWon, relativeTime } from '../../utils/humanize'
+import { caseStatusLabel, caseTypeLabel, reportStatusLabel } from './case/caseLabels'
 
-type StatusFilter = 'OPEN_ONLY' | 'ALL' | CaseStatus
+// 결제 사건(보안 직원) · 직원 사건(보안 관리자)을 같은 모양의 행으로
+type Row = {
+  caseId: string
+  caseType: CaseType
+  status: CaseStatus
+  subjectLabel: string
+  sub: string
+  rules: string[]
+  reportStatus: ReportStatus | null
+  createdAt: string
+}
+type Scope = 'payment' | 'staff'
+type TabKey = 'ALL' | 'DECISION' | 'APPROVAL' | 'AI' | 'CLOSED'
 
-const statusOptions: Array<{ value: StatusFilter; label: string }> = [
-  { value: 'OPEN_ONLY', label: '열린 Case' },
-  { value: 'ALL', label: '전체' },
-  ...(Object.keys(caseStatusLabel) as CaseStatus[]).map((s) => ({
-    value: s,
-    label: caseStatusLabel[s].label,
-  })),
-]
+const TAB_STATUS: Record<Exclude<TabKey, 'ALL'>, CaseStatus[]> = {
+  DECISION: ['DECISION_PENDING'],
+  APPROVAL: ['APPROVAL_PENDING'],
+  AI: ['OPEN', 'INVESTIGATING'],
+  CLOSED: ['CLOSED'],
+}
 
-export function CaseListPage() {
+async function fetchRows(scope: Scope, merchant: string): Promise<Row[] | null> {
+  try {
+    const rules = await getRules()
+    const name = (code: RuleCode) =>
+      rules.find((r: FdsRule) => r.ruleCode === code)?.displayName ?? code
+    if (scope === 'payment') {
+      const cases = await getCases(merchant)
+      return cases.map((c) => ({
+        caseId: c.caseId,
+        caseType: c.caseType,
+        status: c.status,
+        subjectLabel: c.subjectLabel,
+        sub: `결제 ${c.paymentCount}건 · ${c.totalAmount === null ? '금액 확인 불가' : koreanWon(c.totalAmount)}${c.maxRiskScore === null ? '' : ` · 최고 ${c.maxRiskScore}점`}`,
+        rules: (c.hitRuleCodes ?? []).map(name),
+        reportStatus: c.latestReportStatus,
+        createdAt: c.createdAt,
+      }))
+    }
+    const [cases, alerts] = await Promise.all([getStaffCases(), getStaffAlerts()])
+    return cases.map((c) => ({
+      caseId: c.caseId,
+      caseType: c.caseType,
+      status: c.status,
+      subjectLabel: c.subjectLabel,
+      sub: `직원 경보 ${c.staffHitIds.length}건 · ${c.groupingBasis}`,
+      rules: [
+        ...new Set(
+          alerts
+            .filter((a: StaffAlert) => c.staffHitIds.includes(a.staffHitId))
+            .map((a) => name(a.ruleCode)),
+        ),
+      ],
+      reportStatus: null,
+      createdAt: c.createdAt,
+    }))
+  } catch {
+    return null
+  }
+}
+
+export function CaseListPage({ scope = 'payment' }: { scope?: Scope }) {
   const navigate = useNavigate()
   const { merchant } = useDemo()
   const { toast } = useFeedback()
-  // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
-  const { message } = App.useApp()
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<StatusFilter>('OPEN_ONLY')
-  const [refreshKey, setRefreshKey] = useState(0)
-  // 어떤 요청(가맹점·새로고침)에 대한 응답인지 함께 저장해 늦게 온 응답이 덮어쓰지 않게 한다.
-  // failed: 조회 실패. 빈 목록과 구분해 "처리할 Case 없음"으로 오인하지 않게 하고, 직전 목록은 유지한다.
-  const [result, setResult] = useState<{
-    merchant: string
-    refreshKey: number
-    cases: CaseSummary[]
-    failed: boolean
-  } | null>(null)
+  const [rows, setRows] = useState<Row[] | null>(null)
+  const [error, setError] = useState(false)
+  const [tab, setTab] = useState<TabKey>('ALL')
+  const [now, setNow] = useState(() => new Date())
+  const [creating, setCreating] = useState(false)
+  const base = scope === 'payment' ? '/security/cases' : '/manager/cases'
+
+  const apply = useCallback((result: Row[] | null) => {
+    if (!result) {
+      setError(true)
+      return
+    }
+    setNow(new Date())
+    setRows(result.sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
+    setError(false)
+  }, [])
+  const load = useCallback(() => fetchRows(scope, merchant).then(apply), [scope, merchant, apply])
 
   useEffect(() => {
     let alive = true
-    getCases(merchant)
-      .then((cases) => {
-        if (alive) setResult({ merchant, refreshKey, cases, failed: false })
-      })
-      .catch(() => {
-        if (!alive) return
-        message.error('Case 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
-        setResult((prev) => ({
-          merchant,
-          refreshKey,
-          cases: prev?.merchant === merchant ? prev.cases : [],
-          failed: true,
-        }))
-      })
+    void fetchRows(scope, merchant).then((result) => {
+      if (alive) apply(result)
+    })
     return () => {
       alive = false
     }
-  }, [merchant, refreshKey, message])
+  }, [scope, merchant, apply])
 
-  const handleDemoHeld = async () => {
+  // 실제 백엔드에서만: 매입 보류 결제를 만들어 사건이 생기는 장면을 본다
+  const createHeld = async () => {
+    setCreating(true)
     try {
       const caseId = await demoCreateHeldPayment()
-      toast.info('시연: 65점 REVIEW 결제가 HELD되어 Case가 생성되었습니다.')
-      navigate(`/security/cases/${caseId}`)
+      void toast.success('매입 보류 결제를 만들었습니다. 사건이 자동으로 생겼어요.')
+      navigate(`${base}/${caseId}`)
     } catch {
-      toast.error('시연 결제를 만들지 못했습니다.')
+      void toast.error('시연 결제를 만들지 못했습니다.')
+    } finally {
+      setCreating(false)
     }
   }
-  const loading = result?.merchant !== merchant || result.refreshKey !== refreshKey
-  // 다른 가맹점의 응답은 표시하지 않는다. 같은 가맹점 새로고침 중에는 기존 목록을 유지한다.
-  const cases = useMemo(
-    () => (result?.merchant === merchant ? result.cases : []),
-    [result, merchant],
-  )
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return cases.filter((c) => {
-      const matchStatus =
-        status === 'ALL' || (status === 'OPEN_ONLY' ? c.status !== 'CLOSED' : c.status === status)
-      const matchQuery = !q || [c.caseId, c.customerRef].some((v) => v.toLowerCase().includes(q))
-      return matchStatus && matchQuery
-    })
-  }, [cases, search, status])
+  const all = rows ?? []
+  const count = (key: TabKey) =>
+    key === 'ALL' ? all.length : all.filter((r) => TAB_STATUS[key].includes(r.status)).length
+  const shown = tab === 'ALL' ? all : all.filter((r) => TAB_STATUS[tab].includes(r.status))
 
-  const open = cases.filter((c) => c.status !== 'CLOSED')
-  const columns: ColumnsType<CaseSummary> = [
+  const columns: ColumnsType<Row> = [
     {
-      title: 'Case ID',
-      dataIndex: 'caseId',
-      width: 120,
-      render: (id: string) => (
-        <Button
-          type="link"
-          style={{ padding: 0, fontWeight: 700 }}
-          onClick={() => navigate(`/security/cases/${id}`)}
-        >
-          {id}
-        </Button>
+      title: '누구 · 무슨 사건',
+      key: 'who',
+      render: (_, r) => (
+        <div>
+          <b>{r.subjectLabel}</b>
+          <div>
+            <Tag color={caseTypeLabel[r.caseType].color}>{caseTypeLabel[r.caseType].label}</Tag>
+            <span className="dw-muted dw-small">{r.sub}</span>
+          </div>
+        </div>
       ),
     },
     {
       title: '상태',
       dataIndex: 'status',
-      width: 110,
-      render: (s: CaseStatus) => <CodeTag value={caseStatusLabel[s]} />,
+      width: 130,
+      render: (s: CaseStatus) => (
+        <Tag color={caseStatusLabel[s].color}>{caseStatusLabel[s].label}</Tag>
+      ),
     },
-    { title: '고객', dataIndex: 'customerRef', width: 120 },
     {
-      title: '위험도',
-      key: 'risk',
-      width: 120,
-      sorter: (a, b) => (a.maxRiskScore ?? -1) - (b.maxRiskScore ?? -1),
-      defaultSortOrder: 'descend',
-      render: (_, c) => (
-        <span>
-          <strong>{c.maxRiskScore ?? '-'}점</strong>
-          <span style={{ color: '#64748b' }}> · {c.paymentCount}건</span>
+      title: '묶인 경보',
+      key: 'rules',
+      render: (_, r) => (
+        <span className="dw-pa-chips">
+          {r.rules.map((name) => (
+            <Tag key={name} color={scope === 'staff' ? 'magenta' : 'blue'}>
+              {name}
+            </Tag>
+          ))}
         </span>
       ),
     },
     {
-      title: '총액',
-      dataIndex: 'totalAmount',
-      align: 'right',
-      width: 120,
-      render: (v: CaseSummary['totalAmount']) => (v === null ? '-' : won(v)),
-    },
-    {
-      title: '생성 시각',
-      dataIndex: 'createdAt',
-      width: 150,
-      sorter: (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt),
-      render: dateTime,
-    },
-    {
-      title: '병합 마감',
-      key: 'merge',
-      width: 100,
-      render: (_, c) => {
-        const remaining = mergeRemainingMin(c.createdAt, c.decidedCount)
-        return remaining === null ? (
-          <span style={{ color: '#94a3b8' }}>마감</span>
-        ) : (
-          <span style={{ color: '#2563eb', fontWeight: 600 }}>{remaining}분 남음</span>
-        )
-      },
-    },
-    {
-      title: 'SLA',
-      key: 'sla',
-      width: 110,
-      render: (_, c) => {
-        const sla = slaState(c.createdAt, c.status)
-        if (!sla) return <span style={{ color: '#94a3b8' }}>-</span>
-        return sla.exceeded ? (
-          <span style={{ color: '#dc2626', fontWeight: 700 }}>{sla.hours}시간 초과</span>
-        ) : (
-          <span>{sla.hours}시간 남음</span>
-        )
-      },
-    },
-    {
       title: 'AI 보고서',
-      dataIndex: 'latestReportStatus',
+      key: 'report',
       width: 110,
-      render: (s: CaseSummary['latestReportStatus']) =>
-        s ? <CodeTag value={reportStatusLabel[s]} /> : '-',
+      render: (_, r) =>
+        r.reportStatus ? (
+          <Tag color={reportStatusLabel[r.reportStatus].color}>
+            {reportStatusLabel[r.reportStatus].label}
+          </Tag>
+        ) : (
+          <span className="dw-muted">상세에서 확인</span>
+        ),
+    },
+    {
+      title: '생성',
+      dataIndex: 'createdAt',
+      width: 110,
+      render: (v: string) => relativeTime(v, now),
     },
   ]
 
   return (
     <>
       <PageHeader
-        title="Case 목록"
-        description="HELD 결제로 생성된 조사 Case를 확인하고 판정할 Case를 고릅니다."
+        title={scope === 'payment' ? '사건 목록' : '직원 계정 사건'}
+        description={
+          scope === 'payment'
+            ? '결제 경보를 묶어 만든 사건입니다. 사건마다 AI가 조사하고, 보안 직원이 판정합니다.'
+            : '돈워리 직원 계정을 노린 공격 사건입니다. 직원 본인이 아닌 보안 관리자가 판정합니다 (직무 분리).'
+        }
         actions={
           <>
-            <span className="dw-demo-label">DEMO DATA</span>
-            <Button onClick={handleDemoHeld}>시연: HELD 결제 발생</Button>
-            <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((k) => k + 1)}>
-              새로고침
+            {scope === 'payment' && !isMock('investigation') && (
+              <Button loading={creating} onClick={() => void createHeld()}>
+                시연: 매입 보류 결제 만들기
+              </Button>
+            )}
+            <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+              새로 고침
             </Button>
           </>
         }
       />
-      {result?.merchant === merchant && result.failed && (
-        <Alert
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="Case 목록을 불러오지 못했습니다. 아래 건수와 목록은 실제와 다를 수 있습니다."
-          action={
-            <Button size="small" onClick={() => setRefreshKey((k) => k + 1)}>
-              다시 시도
-            </Button>
-          }
+      <Card>
+        <Tabs
+          activeKey={tab}
+          onChange={(key) => setTab(key as TabKey)}
+          items={[
+            { key: 'ALL', label: `전체 ${count('ALL')}` },
+            { key: 'DECISION', label: `판정 대기 ${count('DECISION')}` },
+            { key: 'APPROVAL', label: `2인 승인 대기 ${count('APPROVAL')}` },
+            { key: 'AI', label: `AI 조사 중 ${count('AI')}` },
+            { key: 'CLOSED', label: `종료 ${count('CLOSED')}` },
+          ]}
         />
-      )}
-      <div className="dw-stat-grid">
-        <StatCard title="열린 Case" value={open.length} foot="종료 전 Case" />
-        <StatCard
-          title="판정 대기"
-          value={open.filter((c) => c.status === 'DECISION_PENDING').length}
-          foot="직원 판정 필요"
-          color="#B45309"
-        />
-        <StatCard
-          title="인계 실패"
-          value={open.filter((c) => c.status === 'ACTION_FAILED').length}
-          foot="금융 조치 인계 확인 필요"
-          color="#B91C1C"
-        />
-        <StatCard
-          title="AI 보고서 실패"
-          value={open.filter((c) => c.latestReportStatus === 'FAILED').length}
-          foot="수동 조사·판정 필요"
-          color="#B91C1C"
-        />
-      </div>
-      <Card className="dw-table-card" style={{ borderColor: '#E2E8F0' }}>
-        <div className="dw-table-toolbar">
-          <div>
-            <h3>Case 현황</h3>
-            <p>위험도는 소속 결제의 FDS 최고 점수와 결제 건수입니다.</p>
-          </div>
-          <Space size={8}>
-            <Input
-              aria-label="Case 검색"
-              placeholder="Case ID, 고객"
-              prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-              style={{ width: 220 }}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              allowClear
-            />
-            <Select
-              aria-label="Case 상태 필터"
-              style={{ width: 130 }}
-              value={status}
-              onChange={setStatus}
-              options={statusOptions}
-            />
-          </Space>
-        </div>
-        <Table
-          rowKey="caseId"
-          columns={columns}
-          dataSource={filtered}
-          loading={loading}
-          size="middle"
-          scroll={{ x: 1060 }}
-          locale={{
-            emptyText: (
-              <Typography.Text type="secondary" style={{ display: 'block', padding: 36 }}>
-                {search || status !== 'OPEN_ONLY'
-                  ? '조건에 맞는 Case가 없습니다.'
-                  : '열린 Case가 없습니다.'}
-              </Typography.Text>
-            ),
-          }}
-          pagination={{
-            pageSize: 20,
-            showSizeChanger: false,
-            showTotal: (total) => `총 ${total}건`,
-          }}
-        />
+        {error ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="사건 목록을 불러오지 못했습니다."
+            action={<Button onClick={() => void load()}>다시 시도</Button>}
+          />
+        ) : (
+          <Table
+            rowKey="caseId"
+            columns={columns}
+            dataSource={shown}
+            loading={rows === null}
+            pagination={false}
+            locale={{ emptyText: '조건에 맞는 사건이 없습니다.' }}
+            onRow={(r) => ({
+              onClick: () => navigate(`${base}/${r.caseId}`),
+              className: 'dw-pa-row',
+            })}
+          />
+        )}
       </Card>
+      <p className="dw-muted dw-small dw-rule-note">
+        <TermTip term="CASE" />은 같은 고객 · 같은 직원 계정의 경보를 시간 창으로 묶어 자동으로
+        생깁니다. AI는 권고만 하고 판정은 사람이 합니다.
+      </p>
     </>
-  )
-}
-
-function StatCard({
-  title,
-  value,
-  foot,
-  color = '#0F172A',
-}: {
-  title: string
-  value: number
-  foot: string
-  color?: string
-}) {
-  return (
-    <div className="dw-panel dw-stat-card">
-      <div className="dw-stat-label">{title}</div>
-      <div className="dw-stat-value" style={{ color }}>
-        {value}
-        <span style={{ fontSize: 13, fontWeight: 500, marginLeft: 3 }}>건</span>
-      </div>
-      <div className="dw-stat-foot">{foot}</div>
-    </div>
   )
 }

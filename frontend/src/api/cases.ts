@@ -10,7 +10,10 @@ import type {
   SecurityCase,
   SubmitDecisionsRequest,
 } from '../types/case'
+import { CaseVersionConflictError } from './caseErrors'
 import { api, ApiError } from './client'
+import { isMock } from './mockMode'
+import { mockGetCase, mockGetCases, mockSubmitDecisions } from './mock/cases'
 
 /**
  * P3 Case 조회·판정 API (`/api/security-cases`, #98).
@@ -18,13 +21,8 @@ import { api, ApiError } from './client'
  * 결제 금액·FDS 점수·AI 보고서는 백엔드가 아직 목 데이터로 채운다 (Notion "목업 데이터 · 연동 현황" P3 표).
  */
 
-/** 판정 저장 시 화면이 본 증거 버전·보고서가 현재와 다를 때 (설계 3.5). */
-export class CaseVersionConflictError extends Error {
-  constructor() {
-    super('Case 증거 버전이 바뀌었습니다.')
-    this.name = 'CaseVersionConflictError'
-  }
-}
+// 판정 저장 시 화면이 본 증거 버전·보고서가 현재와 다를 때 (설계 3.5). Mock도 같이 쓰므로 caseErrors.ts에 둔다
+export { CaseVersionConflictError }
 
 // 백엔드 응답 모양 — ID만 숫자이고 나머지는 화면 타입과 같다
 type Id = number
@@ -79,12 +77,12 @@ const strOrNull = (id: Id | null) => (id === null ? null : String(id))
  * 보안 직원은 가맹점 소속 없이 모든 가맹점 Case를 본다 (platform_users.merchant_id = NULL).
  * 화면의 시연 가맹점 선택은 백엔드 merchantId와 다른 값이라 거르지 않는다. 인가는 백엔드 몫이다.
  */
-export async function getCases(_merchant: string): Promise<CaseSummary[]> {
+async function realGetCases(_merchant: string): Promise<CaseSummary[]> {
   const cases = await api<ServerSummary[]>('/security-cases', { cache: 'no-store' })
   return cases.map((c) => ({ ...c, caseId: str(c.caseId), merchantId: str(c.merchantId) }))
 }
 
-export async function getCase(caseId: string, _merchant: string): Promise<CaseDetail | null> {
+async function realGetCase(caseId: string, _merchant: string): Promise<CaseDetail | null> {
   try {
     return toDetail(await fetchDetail(caseId))
   } catch (error) {
@@ -97,7 +95,7 @@ export async function getCase(caseId: string, _merchant: string): Promise<CaseDe
  * 판정 직원은 세션 사용자다. 백엔드가 세션에서 읽기 전까지 요청에 담는다 (#98).
  * staffId는 AuthProvider가 확인한 사용자를 쓴다 — 여기서 /auth/me를 다시 부르면 그 401이 세션 만료 처리로 전달되지 않는다.
  */
-export async function submitDecisions(
+async function realSubmitDecisions(
   caseId: string,
   staffId: number,
   request: SubmitDecisionsRequest,
@@ -125,6 +123,14 @@ export async function submitDecisions(
     throw error
   }
 }
+
+// VITE_USE_MOCK에 investigation이 있으면 결제 사건 조회 · 판정을 Mock으로 (1-5)
+const mock = isMock('investigation')
+export const getCases = mock ? (_merchant: string) => mockGetCases() : realGetCases
+export const getCase = mock
+  ? (caseId: string, _merchant: string) => mockGetCase(caseId)
+  : realGetCase
+export const submitDecisions = mock ? mockSubmitDecisions : realSubmitDecisions
 
 /** 시연 전용: P5 HELD 이벤트 대신 50~79점 HELD 결제를 만든다. 실제 연동 후 지운다. */
 export async function demoCreateHeldPayment(): Promise<string> {

@@ -200,7 +200,12 @@ function saveSession(user: AuthUser | null) {
 function loadSession(): AuthUser | null {
   try {
     const saved = sessionStorage.getItem(SESSION_KEY)
-    if (saved) return JSON.parse(saved) as AuthUser
+    if (saved) {
+      // 새로 고침 뒤에도 다른 Mock이 같은 사람을 현재 사용자로 본다
+      const user = JSON.parse(saved) as AuthUser
+      setMockActor({ userId: user.userId, role: user.role, displayName: user.displayName })
+      return user
+    }
   } catch {
     // 저장소가 없으면 메모리 값
   }
