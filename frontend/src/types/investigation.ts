@@ -1,4 +1,4 @@
-// P3 investigation 계약 — 직원 사건 · 직원 사건 조치 · 담당자 승인 · 감사 로그
+// P3 investigation 계약 — 직원 사건 · 직원 사건 조치 · 관리자 승인 · 감사 로그
 // 값은 security_cases · case_actions · approval_requests · audit_logs와 같은 문자열 (docs/erd 7절)
 // 결제 사건 타입은 types/case.ts (팀 코드, 실제 API 연결)
 import type { IpInfo } from './auth.ts'
@@ -52,7 +52,7 @@ export type StaffCase = {
   actions: CaseAction[]
 }
 
-// 담당자 승인 요청 (approval_requests)
+// 관리자 승인 요청 (approval_requests)
 export type ApprovalRequestType =
   'DECISION_OVERRIDE' | 'RULE_DISABLE' | 'RULE_THRESHOLD' | 'BLOCKLIST_RELEASE'
 export type ApprovalTargetType = 'PAYMENT_DECISION' | 'FDS_RULE' | 'BLOCKLIST_ENTRY'

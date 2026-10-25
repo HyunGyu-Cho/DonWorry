@@ -19,7 +19,7 @@ export const caseStatusLabel: Record<CaseStatus, Label> = {
   OPEN: { label: '생성됨', color: 'blue' },
   INVESTIGATING: { label: '조사 중', color: 'processing' },
   DECISION_PENDING: { label: '판정 대기', color: 'gold' },
-  APPROVAL_PENDING: { label: '담당자 승인 대기', color: 'purple' },
+  APPROVAL_PENDING: { label: '관리자 승인 대기', color: 'purple' },
   ACTION_PENDING: { label: '인계 대기', color: 'geekblue' },
   ACTION_FAILED: { label: '인계 실패', color: 'red' },
   CLOSED: { label: '종료', color: 'default' },

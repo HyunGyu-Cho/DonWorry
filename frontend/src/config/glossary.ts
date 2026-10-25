@@ -47,7 +47,7 @@ export const GLOSSARY = {
     text: '휴대폰 앱에 뜨는 1회용 6자리 번호입니다. 비밀번호가 새도 OTP가 없으면 로그인할 수 없습니다.',
   },
   TWO_PERSON: {
-    term: '담당자 승인',
+    term: '관리자 승인',
     text: '위험한 변경(AI 권고와 반대인 판정, Rule 끄기)은 요청한 사람이 아닌 다른 관리자가 승인해야 적용됩니다.',
   },
   REAUTH: {

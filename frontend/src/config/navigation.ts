@@ -50,13 +50,13 @@ export const navByRole: Record<Role, NavGroup[]> = {
   ],
 }
 
-// 보안 관리자 — 직원 계정 사건 판정 · 담당자 승인 · 직원 접속 감시
+// 보안 관리자 — 직원 계정 사건 판정 · 관리자 승인 · 직원 접속 감시
 export const managerNavigation: NavGroup[] = [
   { title: '홈', items: [{ label: '홈', path: '/manager/home' }] },
   {
     title: '통제',
     items: [
-      { label: '담당자 승인함', path: '/manager/approvals' },
+      { label: '관리자 승인함', path: '/manager/approvals' },
       { label: 'Rule 카탈로그', path: '/manager/rules' },
     ],
   },

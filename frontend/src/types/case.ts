@@ -9,7 +9,7 @@ import type { RuleCode } from './fds.ts'
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
 export type PaymentStatus =
   'PENDING' | 'DENIED' | 'DECLINED' | 'HELD' | 'CAPTURED' | 'VOIDED' | 'EXPIRED'
-// APPROVAL_PENDING: AI 권고와 반대인 판정이 담당자 승인을 기다리는 중 (새 기획)
+// APPROVAL_PENDING: AI 권고와 반대인 판정이 관리자 승인을 기다리는 중 (새 기획)
 export type CaseStatus =
   | 'OPEN'
   | 'INVESTIGATING'

@@ -213,7 +213,7 @@ export function CaseListPage({ scope = 'payment' }: { scope?: Scope }) {
           items={[
             { key: 'ALL', label: `전체 ${count('ALL')}` },
             { key: 'DECISION', label: `판정 대기 ${count('DECISION')}` },
-            { key: 'APPROVAL', label: `담당자 승인 대기 ${count('APPROVAL')}` },
+            { key: 'APPROVAL', label: `관리자 승인 대기 ${count('APPROVAL')}` },
             { key: 'AI', label: `AI 조사 중 ${count('AI')}` },
             { key: 'CLOSED', label: `종료 ${count('CLOSED')}` },
           ]}

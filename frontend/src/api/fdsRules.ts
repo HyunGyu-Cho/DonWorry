@@ -1,6 +1,6 @@
 // P2 fds API 계약 — Rule 카탈로그(적중 통계 · 다시 켜기) · 차단 목록 · 직원 경보
 // VITE_USE_MOCK에 fds가 있으면 Mock, 없으면 실제 API를 쓴다
-// Rule 끄기 · 기준 완화 · 차단 해제는 담당자 승인 요청으로만 한다 (0-4)
+// Rule 끄기 · 기준 완화 · 차단 해제는 관리자 승인 요청으로만 한다 (0-4)
 import { api, ApiError } from './client.ts'
 import { RuleActionForbiddenError, RuleAlreadyEnabledError } from './fdsErrors.ts'
 import { isMock } from './mockMode.ts'
@@ -58,7 +58,7 @@ const mock = isMock('fds')
 export const getRules = mock ? mockGetRules : realGetRules
 // Rule별 최근 적중 수 (기본 7일, 한국 시간 날짜)
 export const getRuleHitStats = mock ? mockGetRuleHitStats : realGetRuleHitStats
-// Rule 다시 켜기 — 승인 없이 바로 반영. 끄기는 담당자 승인 요청(createApproval)으로만
+// Rule 다시 켜기 — 승인 없이 바로 반영. 끄기는 관리자 승인 요청(createApproval)으로만
 export const enableRule = mock ? mockEnableRule : realEnableRule
 // 차단 목록 (기본: 해제되지 않은 것만)
 export const getBlocklist = mock ? mockGetBlocklist : realGetBlocklist

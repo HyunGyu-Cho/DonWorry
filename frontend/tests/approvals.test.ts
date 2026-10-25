@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { beforeEach, test } from 'node:test'
-import { RejectReasonRequiredError, SelfApprovalError } from '../src/api/investigationErrors.ts'
+import {
+  ApprovalForbiddenError,
+  RejectReasonRequiredError,
+} from '../src/api/investigationErrors.ts'
 import { mockGetHandoffs, mockSubmitDecisions, resetMockCases } from '../src/api/mock/cases.ts'
 import { mockAddBlocklistEntry, mockGetBlocklist, resetMockFds } from '../src/api/mock/fds.ts'
 import {
@@ -66,7 +69,7 @@ test('approveBlocklistRelease_removesEntry_rejectNeedsReason', async () => {
 // 자기 요청은 승인 못 하고, 승인 · 등록 · 판정이 감사 로그에 남는다
 test('auditTrail_recordsApprovalBlocklistAndDecision', async () => {
   setMockActor(STAFF)
-  await assert.rejects(mockDecideApproval(3, 'APPROVE', ''), SelfApprovalError)
+  await assert.rejects(mockDecideApproval(3, 'APPROVE', ''), ApprovalForbiddenError)
   await mockAddBlocklistEntry({
     entryType: 'DEVICE',
     entryValue: 'DEV-7E30',
@@ -108,7 +111,7 @@ test('handoffs_afterDecision_showCompletedVoid', async () => {
 })
 
 test('humanText_forAuditAndExpiry', () => {
-  assert.equal(auditActionText('APPROVAL_REJECTED'), '담당자 승인 · 거절')
+  assert.equal(auditActionText('APPROVAL_REJECTED'), '관리자 승인 · 거절')
   assert.equal(auditActionText('UNKNOWN_CODE'), 'UNKNOWN_CODE')
   assert.equal(auditDetailText({ attempts: 3 }), '3회 시도')
   assert.equal(auditDetailText({ rule: 'HIGH_AMOUNT' }), null)
@@ -116,4 +119,13 @@ test('humanText_forAuditAndExpiry', () => {
   assert.equal(expiresText('2026-10-25T05:30:00Z', now), '23시간 뒤 만료')
   assert.equal(expiresText('2026-10-24T06:20:00Z', now), '곧 만료')
   assert.equal(expiresText('2026-10-24T05:00:00Z', now), '만료됨')
+})
+
+// 승인은 보안 관리자만 — 직원 계정 두 개가 함께 털려도 직원끼리 검사를 풀 수 없다
+test('decideApproval_whenSecurityStaff_forbidden', async () => {
+  setMockActor({ userId: 6, role: 'SECURITY_STAFF', displayName: '이도현' })
+  await assert.rejects(mockDecideApproval(3, 'APPROVE', ''), ApprovalForbiddenError)
+  setMockActor(MANAGER)
+  const approved = await mockDecideApproval(3, 'APPROVE', '')
+  assert.equal(approved.status, 'APPROVED')
 })

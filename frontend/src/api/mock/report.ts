@@ -175,7 +175,7 @@ export function buildMockReports(now: Date): ConclusionReport[] {
       riskScore: 82,
       verdict: '박지원 계정이 탈취되어 공격자가 탐지 설정을 끄려 한 것으로 보입니다',
       summary:
-        '해외 Tor IP에서 박지원 비밀번호는 맞혔지만 OTP를 3회 틀렸고, 이후 같은 세션이 사내 PC와 해외 IP에서 동시에 쓰였습니다. 그 세션에서 "고액 결제" Rule 끄기가 요청되어 담당자 승인 대기에서 멈췄습니다.',
+        '해외 Tor IP에서 박지원 비밀번호는 맞혔지만 OTP를 3회 틀렸고, 이후 같은 세션이 사내 PC와 해외 IP에서 동시에 쓰였습니다. 그 세션에서 "고액 결제" Rule 끄기가 요청되어 관리자 승인 대기에서 멈췄습니다.',
       recommendations: [
         { label: '박지원 세션 강제 종료', kind: 'NEGATIVE' },
         { label: '박지원 계정 잠금', kind: 'NEGATIVE' },
@@ -212,8 +212,8 @@ export function buildMockReports(now: Date): ConclusionReport[] {
         },
         {
           title: 'Rule 끄기는 아직 적용되지 않음',
-          detail: '담당자 승인 대기에서 멈춰 있어 탐지 설정은 그대로',
-          source: '담당자 승인함',
+          detail: '관리자 승인 대기에서 멈춰 있어 탐지 설정은 그대로',
+          source: '관리자 승인함',
         },
       ],
       unknowns: [
@@ -230,7 +230,7 @@ export function buildMockReports(now: Date): ConclusionReport[] {
         { at: at(93), text: '해외 Tor IP · 비밀번호 성공 후 OTP 3회 실패', kind: 'WARNING' },
         { at: at(93), text: '사건 101 생성 · AI 조사 요청', kind: 'KEY' },
         { at: at(40), text: '같은 세션이 사내 PC와 해외 IP에서 동시에 사용', kind: 'WARNING' },
-        { at: at(30), text: '"고액 결제" Rule 끄기 요청 → 담당자 승인 대기', kind: 'WARNING' },
+        { at: at(30), text: '"고액 결제" Rule 끄기 요청 → 관리자 승인 대기', kind: 'WARNING' },
       ],
       paymentRecommendations: null,
       evidence: [
@@ -445,7 +445,7 @@ export function buildMockReports(now: Date): ConclusionReport[] {
       trace: finishedRun('201', now).steps,
       limitations: [
         '구매자 응답은 메일을 받은 사람의 응답이라, 계정 탈취 시 공격자가 답할 수도 있습니다.',
-        'AI 권고는 최종 결정이 아니며, AI 권고와 반대로 매입을 허용하면 재인증과 담당자 승인이 필요합니다.',
+        'AI 권고는 최종 결정이 아니며, AI 권고와 반대로 매입을 허용하면 재인증과 관리자 승인이 필요합니다.',
       ],
       model: MODEL,
     },

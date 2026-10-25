@@ -1,10 +1,11 @@
-// P3 investigation API 계약 — 직원 사건 · 담당자 승인 · 감사 로그
+// P3 investigation API 계약 — 직원 사건 · 관리자 승인 · 감사 로그
 // VITE_USE_MOCK에 investigation이 있으면 Mock, 없으면 실제 API를 쓴다
 // 결제 사건 API는 api/cases.ts (팀 코드, 실제 API 연결)
 import { api, ApiError } from './client.ts'
 import {
   ApprovalClosedError,
   ApprovalDuplicateError,
+  ApprovalForbiddenError,
   CaseActionForbiddenError,
   RejectReasonRequiredError,
   SelfApprovalError,
@@ -31,7 +32,7 @@ import type {
   StaffCase,
 } from '../types/investigation.ts'
 
-// 백엔드 오류 코드 → 화면용 오류 (INV_010 ~ INV_012 · INV_014는 2-9, INV_013 · INV_015는 2-10에서 백엔드에 추가)
+// 백엔드 오류 코드 → 화면용 오류 (INV_010 ~ INV_012 · INV_014는 2-9, INV_013 · INV_015 · INV_016은 2-10에서 백엔드에 추가)
 function mapInvestigationError(error: unknown): never {
   if (error instanceof ApiError) {
     if (error.code === 'INV_010') throw new SelfApprovalError()
@@ -40,6 +41,7 @@ function mapInvestigationError(error: unknown): never {
     if (error.code === 'INV_013') throw new ApprovalDuplicateError()
     if (error.code === 'INV_014') throw new StaffCaseForbiddenError()
     if (error.code === 'INV_015') throw new RejectReasonRequiredError()
+    if (error.code === 'INV_016') throw new ApprovalForbiddenError()
   }
   throw error
 }
@@ -95,7 +97,7 @@ export const getStaffCases = mock ? mockGetStaffCases : realGetStaffCases
 export const getStaffCase = mock ? mockGetStaffCase : realGetStaffCase
 // 직원 사건 조치 (보안 관리자만, 대상 직원 본인 불가)
 export const requestCaseActions = mock ? mockRequestCaseActions : realRequestCaseActions
-// 담당자 승인함
+// 관리자 승인함
 export const getApprovals = mock ? mockGetApprovals : realGetApprovals
 // AI 권고 반대 판정 · Rule 끄기 · 기준 완화 · 차단 해제 요청
 export const createApproval = mock ? mockCreateApproval : realCreateApproval
