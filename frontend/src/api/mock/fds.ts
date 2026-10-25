@@ -3,15 +3,13 @@
 import { RuleActionForbiddenError, RuleAlreadyEnabledError } from '../fdsErrors.ts'
 import { mockRespond } from './respond.ts'
 import { getMockActor, mockApprovedRuleDisables } from './investigation.ts'
-import { canToggle, hitStats, HIT_DAYS } from '../../utils/ruleCatalog.ts'
-import { PAYMENT_RULE_CODES, STAFF_RULE_CODES } from '../../types/fds.ts'
+import { canToggle } from '../../utils/ruleCatalog.ts'
 import type {
   BlocklistEntry,
   FdsRule,
   NewBlocklistEntry,
   RuleAction,
   RuleCode,
-  RuleHitStat,
   Severity,
   StaffAlert,
   StaffAlertQuery,
@@ -222,6 +220,8 @@ export function buildMockBlocklist(now: Date): BlocklistEntry[] {
     reason: string,
     source: BlocklistEntry['source'],
     days: number,
+    // 최근 7일 이 값으로 막은 결제 [횟수, 마지막 차단 분 전] — 결제 경보 · Rule 카탈로그 적중과 같다
+    hits: [number, number] | null = null,
   ): BlocklistEntry => ({
     entryId,
     entryType,
@@ -234,11 +234,16 @@ export function buildMockBlocklist(now: Date): BlocklistEntry[] {
     expiresAt: null,
     releasedAt: null,
     releasedBy: null,
+    hits7d: hits?.[0] ?? 0,
+    lastHitAt: hits ? minutesAgo(now, hits[1]) : null,
   })
   return [
     entry(1, 'CARD', '**** 7760', '10/12 사기 판정 사건 · 도용 카드', 'CASE', 11),
-    entry(2, 'DEVICE', 'DEV-0C91', '카드 테스팅 기기 · 결제 7회 시도', 'CASE', 5),
-    entry(3, 'IP', '45.83.64.12', 'VPN 대역 · 카드 테스팅 시도', 'STAFF', 2),
+    entry(2, 'DEVICE', 'DEV-0C91', '카드 테스팅 기기 · 결제 7회 시도', 'CASE', 5, [
+      1,
+      4 * 1440 + 60,
+    ]),
+    entry(3, 'IP', '45.83.64.12', 'VPN 대역 · 카드 테스팅 시도', 'STAFF', 3, [2, 15]),
     entry(4, 'EMAIL', 'qx7k2@tempmail.example', '일회용 메일 · 신규 계정 사기 시도', 'STAFF', 1),
   ]
 }
@@ -340,55 +345,6 @@ export async function mockEnableRule(ruleId: number): Promise<FdsRule> {
   return structuredClone(currentRules().find((r) => r.ruleId === ruleId) as FdsRule)
 }
 
-// 결제 Rule 적중 (분 전). 오늘은 시연 시나리오, 지난 6일은 평소 수준
-// 결제 사기 15분 전 (고액 · 평소 5배 · 처음 쓰는 카드), 카드 테스팅 3분 전, 차단 목록 재시도 2분 전, 거절 후 재시도 50분 전
-const TODAY_PAYMENT_HITS: [RuleCode, number][] = [
-  ['BLOCKLIST', 2],
-  ['CARD_TESTING', 3],
-  ['NEW_ACCOUNT', 3],
-  ['GEO_MISMATCH', 3],
-  ['DECLINE_RETRY', 50],
-  ['HIGH_AMOUNT', 15],
-  ['AMOUNT_SPIKE', 15],
-  ['NEW_CARD', 15],
-]
-// 6일 전 → 1일 전 하루 적중 수
-const PAST_PAYMENT_HITS: Partial<Record<RuleCode, number[]>> = {
-  BLOCKLIST: [0, 1, 0, 0, 1, 0],
-  HIGH_AMOUNT: [2, 1, 3, 0, 2, 1],
-  AMOUNT_SPIKE: [1, 0, 2, 0, 1, 1],
-  NEW_CARD: [3, 2, 4, 1, 3, 2],
-  NEW_ACCOUNT: [1, 2, 1, 1, 0, 2],
-  CARD_TESTING: [0, 0, 1, 0, 0, 0],
-  DECLINE_RETRY: [1, 0, 0, 2, 1, 0],
-  GEO_MISMATCH: [0, 1, 0, 1, 0, 0],
-}
-
-export function buildMockRuleHits(now: Date): { ruleCode: RuleCode; at: string }[] {
-  const hits = TODAY_PAYMENT_HITS.map(([ruleCode, minutes]) => ({
-    ruleCode,
-    at: minutesAgo(now, minutes),
-  }))
-  for (const [code, counts] of Object.entries(PAST_PAYMENT_HITS)) {
-    counts?.forEach((count, i) => {
-      const day = 6 - i
-      for (let n = 0; n < count; n++) {
-        hits.push({ ruleCode: code as RuleCode, at: minutesAgo(now, day * 1440 + 60 + n * 47) })
-      }
-    })
-  }
-  for (const alert of buildMockStaffAlerts(now)) {
-    hits.push({ ruleCode: alert.ruleCode, at: alert.detectedAt })
-  }
-  return hits
-}
-
-export function mockGetRuleHitStats(days = HIT_DAYS): Promise<RuleHitStat[]> {
-  const now = new Date()
-  const codes = [...PAYMENT_RULE_CODES, ...STAFF_RULE_CODES]
-  return mockRespond(hitStats(buildMockRuleHits(now), codes, now, days))
-}
-
 export function mockGetBlocklist(activeOnly = true): Promise<BlocklistEntry[]> {
   const rows = [...addedEntries, ...buildMockBlocklist(new Date())]
   return mockRespond(activeOnly ? rows.filter((row) => row.releasedAt === null) : rows)
@@ -407,6 +363,8 @@ export function mockAddBlocklistEntry(input: NewBlocklistEntry): Promise<Blockli
     expiresAt: input.expiresAt ?? null,
     releasedAt: null,
     releasedBy: null,
+    hits7d: 0,
+    lastHitAt: null,
   }
   addedEntries.unshift(created)
   return mockRespond(created)

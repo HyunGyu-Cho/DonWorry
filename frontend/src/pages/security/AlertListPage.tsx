@@ -1,8 +1,8 @@
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Input, Space, Spin, Table } from 'antd'
+import { Alert, Button, Card, Input, Table, Tabs, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { type MouseEvent, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   createMockFdsEvaluations,
   getFdsEvaluations,
@@ -10,298 +10,274 @@ import {
   type FdsEvaluationSummary,
   type FdsResult,
 } from '../../api/fds'
+import { getRules } from '../../api/fdsRules'
+import { isMock } from '../../api/mockMode'
+import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
-import { ResultTag } from './alert/AlertTags'
+import { TermTip } from '../../components/explain/TermTip'
+import type { FdsRule } from '../../types/fds'
+import { koreanWon, relativeTime } from '../../utils/humanize'
+import { TONE_COLOR, verdict } from '../../utils/paymentAlert'
 
 type Filter = 'NEEDS_ATTENTION' | FdsResult | 'ALL'
+type Query = { filter: Filter; search: string; page: number }
 
-const filterOptions: Array<{ value: Filter; label: string }> = [
-  { value: 'NEEDS_ATTENTION', label: '확인 필요' },
-  { value: 'REVIEW', label: 'REVIEW' },
-  { value: 'DENY', label: 'DENY' },
-  { value: 'ERROR', label: 'ERROR' },
-  { value: 'ALL', label: '전체 (ALLOW 포함)' },
-]
+const PAGE_SIZE = 10
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'medium' }).format(
-    new Date(value),
+// 목록 한 쪽 + Rule 이름. 실패하면 null
+async function fetchAlerts(
+  q: Query,
+): Promise<{ page: FdsEvaluationPage; rules: FdsRule[] } | null> {
+  try {
+    const [page, rules] = await Promise.all([
+      getFdsEvaluations({
+        result: q.filter === 'NEEDS_ATTENTION' || q.filter === 'ALL' ? undefined : q.filter,
+        attentionOnly: q.filter === 'NEEDS_ATTENTION',
+        search: q.search,
+        page: q.page,
+        size: PAGE_SIZE,
+      }),
+      getRules(),
+    ])
+    return { page, rules }
+  } catch {
+    return null
+  }
+}
+
+function Stat(props: { label: string; value: number; color: string; note: string }) {
+  return (
+    <Card className="dw-pa-stat">
+      <div className="dw-muted dw-small">{props.label}</div>
+      <div className="dw-pa-stat-value" style={{ color: props.color }}>
+        {props.value}
+        <small>건</small>
+      </div>
+      <div className="dw-muted dw-small">{props.note}</div>
+    </Card>
   )
 }
 
 export function AlertListPage() {
   const navigate = useNavigate()
-  const [filter, setFilter] = useState<Filter>('NEEDS_ATTENTION')
-  const [query, setQuery] = useState('')
-  const [evaluations, setEvaluations] = useState<FdsEvaluationSummary[]>([])
-  const [evaluationPage, setEvaluationPage] = useState<FdsEvaluationPage | null>(null)
+  const { toast } = useFeedback()
+  const [query, setQuery] = useState<Query>({ filter: 'NEEDS_ATTENTION', search: '', page: 0 })
+  const [searchText, setSearchText] = useState('')
+  const [page, setPage] = useState<FdsEvaluationPage | null>(null)
+  const [rules, setRules] = useState<FdsRule[]>([])
+  const [error, setError] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [mockCreating, setMockCreating] = useState(false)
-  const requestSequence = useRef(0)
-  const conditions = useRef({ filter: 'NEEDS_ATTENTION' as Filter, query: '' })
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [now, setNow] = useState(() => new Date())
+  const [creating, setCreating] = useState(false)
 
-  const cancelScheduledSearch = () => {
-    if (searchTimer.current === null) return
-    clearTimeout(searchTimer.current)
-    searchTimer.current = null
-  }
-
-  const load = (page = 0, nextFilter = filter, nextQuery = query) => {
-    const sequence = ++requestSequence.current
-    setLoading(true)
-    setError(null)
-    setEvaluations([])
-    setEvaluationPage(null)
-    setCurrentPage(page + 1)
-    getFdsEvaluations({
-      result:
-        nextFilter === 'REVIEW' || nextFilter === 'DENY' || nextFilter === 'ERROR'
-          ? nextFilter
-          : undefined,
-      attentionOnly: nextFilter === 'NEEDS_ATTENTION',
-      search: nextQuery,
-      page,
-      size: 10,
-    })
-      .then((response) => {
-        if (sequence !== requestSequence.current) return
-        setEvaluations(response.content)
-        setEvaluationPage(response)
-        setCurrentPage(response.page + 1)
-      })
-      .catch(() => {
-        if (sequence === requestSequence.current) setError('경보 목록을 불러오지 못했습니다.')
-      })
-      .finally(() => {
-        if (sequence === requestSequence.current) setLoading(false)
-      })
-  }
-
-  const createMock = () => {
-    setMockCreating(true)
-    setError(null)
-    createMockFdsEvaluations()
-      .then(() => {
-        const current = conditions.current
-        load(0, current.filter, current.query)
-      })
-      .catch(() => setError('Mock 평가를 생성하지 못했습니다.'))
-      .finally(() => setMockCreating(false))
-  }
-
-  const selectFilter = (nextFilter: Filter) => {
-    cancelScheduledSearch()
-    setFilter(nextFilter)
-    conditions.current = { filter: nextFilter, query }
-    load(0, nextFilter, query)
-  }
-
-  useEffect(() => {
-    load(0, 'NEEDS_ATTENTION')
-    return () => {
-      cancelScheduledSearch()
-      requestSequence.current += 1
+  const apply = useCallback((result: { page: FdsEvaluationPage; rules: FdsRule[] } | null) => {
+    setLoading(false)
+    if (!result) {
+      setError(true)
+      return
     }
+    setNow(new Date())
+    setPage(result.page)
+    setRules(result.rules)
+    setError(false)
   }, [])
 
-  const count = (result: FdsResult) => evaluationPage?.resultCounts[result] ?? 0
-  const totalCount = Object.values(evaluationPage?.resultCounts ?? {}).reduce(
-    (total, resultCount) => total + resultCount,
-    0,
-  )
-  const attentionCount = totalCount - count('ALLOW')
+  useEffect(() => {
+    let alive = true
+    void fetchAlerts(query).then((result) => {
+      if (alive) apply(result)
+    })
+    return () => {
+      alive = false
+    }
+  }, [query, apply])
+
+  // 조건이 바뀌면 다시 불러온다 (결과는 위 effect가 반영)
+  const change = (next: Partial<Query>) => {
+    setLoading(true)
+    setQuery((q) => ({ ...q, page: 0, ...next }))
+  }
+
+  // 실제 백엔드에서만: 시험용 결제 평가를 만든다
+  const createSamples = async () => {
+    setCreating(true)
+    try {
+      const created = await createMockFdsEvaluations()
+      void toast.success(`시험용 결제 평가 ${created.length}건을 만들었습니다.`)
+      change({})
+    } catch {
+      void toast.error('시험용 평가를 만들지 못했습니다.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const nameOf = (code: string) => rules.find((r) => r.ruleCode === code)?.displayName ?? code
+  const counts = page?.resultCounts ?? { ALLOW: 0, REVIEW: 0, DENY: 0, ERROR: 0 }
+  const attention = counts.REVIEW + counts.DENY + counts.ERROR
+
   const columns: ColumnsType<FdsEvaluationSummary> = [
-    { title: '평가 시각', dataIndex: 'evaluatedAt', width: 190, render: formatDate },
     {
-      title: '평가 ID',
-      dataIndex: 'evaluationId',
-      width: 120,
-      render: (value: number) => (
-        <Button
-          type="link"
-          className="dw-alert-payment-link"
-          onClick={(event: MouseEvent<HTMLElement>) => {
-            event.stopPropagation()
-            navigate(`/security/alerts/${value}`)
-          }}
-        >
-          {value}
-        </Button>
+      title: '시각',
+      dataIndex: 'evaluatedAt',
+      width: 110,
+      render: (v: string) => relativeTime(v, now),
+    },
+    {
+      title: '무슨 결제인가',
+      key: 'payment',
+      render: (_, e) => (
+        <div>
+          <b>
+            {e.customerLabel} · {koreanWon(e.amount)}
+          </b>
+          <div className="dw-muted dw-small">{e.orderTitle ?? '상품 정보 없음'}</div>
+        </div>
       ),
     },
-    { title: '결제 ID', dataIndex: 'paymentId', width: 130 },
-    { title: '고객 식별자', dataIndex: 'customerRef', width: 180 },
     {
-      title: '위험 점수',
-      dataIndex: 'riskScore',
-      align: 'right',
-      width: 110,
-      render: (value: number | null) => <strong>{value ?? '—'}</strong>,
+      title: '걸린 Rule',
+      key: 'rules',
+      render: (_, e) =>
+        e.hitRuleCodes.length === 0 ? (
+          <span className="dw-muted">{e.result === 'ERROR' ? '평가하지 못함' : '없음'}</span>
+        ) : (
+          <span className="dw-pa-chips">
+            {e.hitRuleCodes.map((code) => (
+              <Tag key={code} color={code === 'BLOCKLIST' ? 'red' : 'blue'}>
+                {nameOf(code)}
+              </Tag>
+            ))}
+          </span>
+        ),
     },
     {
       title: '판정',
-      dataIndex: 'result',
-      width: 110,
-      render: (value: FdsResult) => <ResultTag result={value} />,
+      key: 'verdict',
+      width: 150,
+      render: (_, e) => {
+        const v = verdict(e)
+        return (
+          <span>
+            <Tag color={TONE_COLOR[v.tone]}>{v.label}</Tag>
+            {e.riskScore !== null && <span className="dw-muted dw-small">{e.riskScore}점</span>}
+          </span>
+        )
+      },
     },
     {
-      title: '오류 코드',
-      dataIndex: 'errorCode',
-      width: 160,
-      render: (value: string | null) => (value ? <code>{value}</code> : '—'),
+      title: '사건',
+      key: 'case',
+      width: 100,
+      render: (_, e) =>
+        e.caseId ? (
+          <Link to={`/security/cases/${e.caseId}`} onClick={(ev) => ev.stopPropagation()}>
+            사건 보기
+          </Link>
+        ) : (
+          <span className="dw-muted">—</span>
+        ),
     },
   ]
 
   return (
-    <div className="dw-alert-list-page">
+    <>
       <PageHeader
-        title="경보"
-        description="FDS가 결제마다 평가한 위험 점수와 판정입니다. 기본으로 REVIEW · DENY · ERROR만 보여 줍니다."
+        title="결제 경보"
+        description="직원 확인(매입 보류) · 거절 · 평가 실패 결제입니다. 행을 누르면 어떤 Rule에 몇 점씩 걸렸는지 봅니다."
+        actions={
+          <>
+            {!isMock('fds') && (
+              <Button loading={creating} onClick={() => void createSamples()}>
+                시험용 평가 만들기
+              </Button>
+            )}
+            <Button icon={<ReloadOutlined />} onClick={() => change({ page: query.page })}>
+              새로 고침
+            </Button>
+          </>
+        }
       />
-      <div className="dw-stat-grid" aria-label="경보 판정 요약">
-        <button
-          type="button"
-          className="dw-panel dw-stat-card dw-stat-card-button"
-          onClick={() => selectFilter('REVIEW')}
-        >
-          <div className="dw-stat-label">REVIEW · 추가 조사</div>
-          <div className="dw-stat-value dw-alert-stat-value--review">
-            {count('REVIEW')}
-            <small>건</small>
-          </div>
-          <div className="dw-stat-foot">50~79점 · 승인 성공 시 HELD → 사건</div>
-        </button>
-        <button
-          type="button"
-          className="dw-panel dw-stat-card dw-stat-card-button"
-          onClick={() => selectFilter('DENY')}
-        >
-          <div className="dw-stat-label">DENY · 결제 차단</div>
-          <div className="dw-stat-value dw-alert-stat-value--deny">
-            {count('DENY')}
-            <small>건</small>
-          </div>
-          <div className="dw-stat-foot">80점 이상 · 카드 승인 요청 안 함</div>
-        </button>
-        <button
-          type="button"
-          className="dw-panel dw-stat-card dw-stat-card-button"
-          onClick={() => selectFilter('ERROR')}
-        >
-          <div className="dw-stat-label">ERROR · 평가 실패</div>
-          <div className="dw-stat-value dw-alert-stat-value--error">
-            {count('ERROR')}
-            <small>건</small>
-          </div>
-          <div className="dw-stat-foot">위험 판정 아님 · 자동 ALLOW 하지 않음</div>
-        </button>
-        <button
-          type="button"
-          className="dw-panel dw-stat-card dw-stat-card-button"
-          onClick={() => selectFilter('ALL')}
-        >
-          <div className="dw-stat-label">전체 평가</div>
-          <div className="dw-stat-value">
-            {totalCount}
-            <small>건</small>
-          </div>
-          <div className="dw-stat-foot">ALLOW 포함</div>
-        </button>
+      <div className="dw-pa-stats">
+        <Stat
+          label="확인 필요"
+          value={attention}
+          color="#0f172a"
+          note="직원 확인 + 거절 + 평가 실패"
+        />
+        <Stat
+          label="직원 확인"
+          value={counts.REVIEW}
+          color="#b45309"
+          note="매입 보류 → 사건 → AI 조사"
+        />
+        <Stat label="거절" value={counts.DENY} color="#dc2626" note="카드 승인 요청 없이 막음" />
+        <Stat
+          label="평가 실패"
+          value={counts.ERROR}
+          color="#475569"
+          note="점수를 못 매겨 직원이 직접 확인"
+        />
       </div>
-      <Card className="dw-table-card dw-alert-card">
-        <div className="dw-table-toolbar">
-          <div>
-            <h3>평가 결과</h3>
-            <p>
-              행을 누르면 평가 근거를 봅니다. 같은 결제에 평가가 여러 건이면 ERROR를 뺀 최신 평가가
-              유효 판정입니다.
-            </p>
-          </div>
-          <Space>
-            <Input
-              aria-label="경보 검색"
-              placeholder="평가 ID, 결제 ID, 고객 식별자"
-              prefix={<SearchOutlined />}
-              value={query}
-              onChange={(event) => {
-                const nextQuery = event.target.value
-                setQuery(nextQuery)
-                conditions.current = { filter, query: nextQuery }
-                cancelScheduledSearch()
-                searchTimer.current = setTimeout(() => {
-                  searchTimer.current = null
-                  const current = conditions.current
-                  load(0, current.filter, current.query)
-                }, 300)
-              }}
-              allowClear
-              className="dw-alert-search"
-            />
-            <Button icon={<ReloadOutlined />} onClick={() => load(currentPage - 1, filter)}>
-              새로고침
-            </Button>
-            <Button onClick={createMock} loading={mockCreating}>
-              Mock 평가 생성
-            </Button>
-          </Space>
+      <Card>
+        <div className="dw-pa-toolbar">
+          <Tabs
+            activeKey={query.filter}
+            onChange={(key) => change({ filter: key as Filter })}
+            items={[
+              { key: 'NEEDS_ATTENTION', label: `확인 필요 ${attention}` },
+              { key: 'REVIEW', label: `직원 확인 ${counts.REVIEW}` },
+              { key: 'DENY', label: `거절 ${counts.DENY}` },
+              { key: 'ERROR', label: `평가 실패 ${counts.ERROR}` },
+              {
+                key: 'ALL',
+                label: `전체 ${attention + counts.ALLOW}`,
+              },
+            ]}
+          />
+          <Input
+            allowClear
+            prefix={<SearchOutlined />}
+            placeholder="고객 이름 · 상품 · 결제 번호"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onPressEnter={() => change({ search: searchText })}
+            onClear={() => change({ search: '' })}
+            style={{ width: 260 }}
+          />
         </div>
-        <div className="dw-alert-tabs">
-          {filterOptions.map((option) => {
-            const optionCount =
-              option.value === 'NEEDS_ATTENTION'
-                ? attentionCount
-                : option.value === 'ALL'
-                  ? totalCount
-                  : count(option.value)
-            return (
-              <button
-                key={option.value}
-                type="button"
-                className={`dw-alert-tab ${filter === option.value ? 'dw-alert-tab--active' : ''}`}
-                onClick={() => selectFilter(option.value)}
-              >
-                {option.label}
-                <span>{optionCount}</span>
-              </button>
-            )
-          })}
-        </div>
-        {error && <Alert type="error" showIcon message={error} className="dw-alert-load-error" />}
-        {loading ? (
-          <div className="dw-alert-loading">
-            <Spin />
-          </div>
+        {error ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="결제 경보를 불러오지 못했습니다."
+            action={<Button onClick={() => change({ page: query.page })}>다시 시도</Button>}
+          />
         ) : (
           <Table
             rowKey="evaluationId"
             columns={columns}
-            dataSource={evaluations}
-            size="middle"
-            scroll={{ x: 1000 }}
-            onRow={(record) => ({
-              onClick: () => navigate(`/security/alerts/${record.evaluationId}`),
-              style: { cursor: 'pointer' },
+            dataSource={page?.content ?? []}
+            loading={loading}
+            locale={{ emptyText: '조건에 맞는 경보가 없습니다.' }}
+            onRow={(e) => ({
+              onClick: () => navigate(`/security/alerts/${e.evaluationId}`),
+              className: 'dw-pa-row',
             })}
             pagination={{
-              current: currentPage,
-              pageSize: 10,
+              current: (page?.page ?? 0) + 1,
+              pageSize: PAGE_SIZE,
+              total: page?.totalElements ?? 0,
               showSizeChanger: false,
-              showLessItems: false,
-              showTotal: () => `총 ${evaluationPage?.totalElements ?? 0}건`,
-              total: evaluationPage?.totalElements ?? 0,
-              onChange: (page) => load(page - 1, filter),
+              onChange: (p) => change({ page: p - 1 }),
             }}
-            locale={{ emptyText: '표시할 경보가 없습니다.' }}
           />
         )}
       </Card>
-      <div className="dw-api-note">
-        점수 기준: 0~49점 ALLOW · 50~79점 REVIEW · 80점 이상 DENY. 1차 MVP 규칙: 고액 결제(15만 원
-        이상 +35) · 단시간 반복 결제(동일 구매자 10분 내 3회 이상 +25).
-      </div>
-    </div>
+      <p className="dw-muted dw-small dw-rule-note">
+        <TermTip term="SCORE_BAND" />: 40점 이상이면 직원 확인, 70점 이상이면 거절. 통과한 결제는
+        전체 탭에서만 보여요.
+      </p>
+    </>
   )
 }

@@ -12,6 +12,7 @@ import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { StaffAccessPage } from '../pages/manager/StaffAccessPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
+import { BlocklistPage } from '../pages/security/BlocklistPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
@@ -44,7 +45,7 @@ export const router = createBrowserRouter([
           { path: 'rules', element: <RuleCatalogPage /> },
           { path: 'alerts', element: <AlertListPage /> },
           { path: 'alerts/:id', element: <AlertDetailPage /> },
-          { path: 'blocklist', element: <EmptyPage title="차단 목록" slice="1-4" /> },
+          { path: 'blocklist', element: <BlocklistPage /> },
           { path: 'cases', element: <CaseListPage /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
           { path: 'actions', element: <EmptyPage title="조치 센터" slice="1-6" /> },

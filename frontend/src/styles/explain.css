@@ -438,3 +438,138 @@
 .dw-rule-note {
   margin-top: 16px;
 }
+
+/* 결제 경보 · 차단 목록 (1-4) */
+.dw-pa-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.dw-pa-stat-value {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.dw-pa-stat-value small {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+  margin-left: 2px;
+}
+.dw-pa-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dw-pa-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.dw-pa-row {
+  cursor: pointer;
+}
+.dw-pa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+}
+.dw-pa-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dw-pa-score {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.dw-pa-score-num {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  padding-top: 26px;
+  flex-shrink: 0;
+  background: #f1f5f9;
+}
+.dw-pa-score-num b {
+  font-size: 34px;
+  line-height: 1;
+}
+.dw-pa-score-num--warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+.dw-pa-score-num--bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.dw-pa-score-num--ok {
+  background: #dcfce7;
+  color: #166534;
+}
+.dw-pa-score-side {
+  flex: 1;
+  position: relative;
+}
+.dw-pa-marker {
+  position: relative;
+  transform: translateX(-50%);
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  margin-top: -6px;
+}
+.dw-pa-meaning {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #334155;
+}
+.dw-pa-hit td {
+  background: #fff7ed;
+}
+.dw-pa-head {
+  margin: 0 0 10px;
+}
+.dw-pa-fact {
+  display: grid;
+  grid-template-columns: 22px 44px 1fr;
+  gap: 6px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  background: #f8fafc;
+}
+.dw-pa-fact--warn {
+  background: #fffbeb;
+}
+.dw-pa-fact--bad {
+  background: #fef2f2;
+}
+.dw-pa-fact-label {
+  color: #64748b;
+  font-size: 12.5px;
+}
+.dw-pa-other {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #f1f5f9;
+  color: #0f172a;
+}
+.dw-pa-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dw-pa-fresh td {
+  background: #fffbeb;
+}

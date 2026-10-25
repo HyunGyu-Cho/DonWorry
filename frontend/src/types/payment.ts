@@ -1,5 +1,6 @@
 // P5 결제 · 메일 · 본인 확인 타입 (payments 연동 필드 · notifications · buyer_confirmations)
 // 메일함은 만들지 않는다 — 시연에서 메일은 Mailpit(개발용 가짜 메일 서버) 화면에서 연다
+import type { IpInfo } from './auth.ts'
 import type { PaymentStatus } from './case.ts'
 
 // 결제 + CakeShop이 넘긴 구매자 연동 필드 (보안 직원 · 관리자만). 값이 없으면 null
@@ -14,7 +15,11 @@ export type PaymentContext = {
   customerRef: string
   buyerEmail: string | null
   clientIp: string | null
+  // 접속 위치 설명 (서버가 붙인 label · 나라 · 종류). 1-4 보강
+  ip: IpInfo | null
   deviceId: string | null
+  // 기기 설명 (예: 아이폰 · CakeShop 앱). 1-4 보강
+  deviceLabel: string | null
   cardLast4: string | null
   // ISO 국가 코드 (KR · US 등)
   cardCountry: string | null

@@ -1,5 +1,5 @@
 // P2 fds 계약 — 값은 fds_rules · blocklist_entries · staff_rule_hits와 같은 문자열 (docs/erd 7절)
-// 결제 평가 결과 타입(FdsResult 등)은 기존 화면이 쓰는 api/fds.ts에 있다
+// 결제 평가(경보) 타입도 여기 둔다 — api/fds.ts는 기존 화면을 위해 다시 내보낸다
 
 export const PAYMENT_RULE_CODES = [
   'BLOCKLIST',
@@ -63,6 +63,9 @@ export type BlocklistEntry = {
   expiresAt: string | null
   releasedAt: string | null
   releasedBy: number | null
+  // 최근 7일 이 값으로 차단한 결제 수 · 마지막 차단 시각
+  hits7d: number
+  lastHitAt: string | null
 }
 
 export type NewBlocklistEntry = {
@@ -100,4 +103,62 @@ export type RuleHitStat = {
   total: number
   // 기간과 관계없이 마지막 적중 시각, 없으면 null
   lastHitAt: string | null
+}
+
+// 결제 평가 (fds_evaluations). ERROR = 평가 실패
+export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
+export type FdsRuleHitOutcome = 'MATCH' | 'NO_MATCH' | 'UNAVAILABLE'
+
+// 경보 목록 1행. amount ~ caseId는 1-4 보강 — 목록이 결제 · 사건을 따로 부르지 않게
+export type FdsEvaluationSummary = {
+  evaluationId: number
+  paymentId: number
+  customerRef: string
+  riskScore: number | null
+  result: FdsResult
+  evaluatedAt: string
+  errorCode: string | null
+  paymentRequestedAt: string
+  amount: number
+  orderTitle: string | null
+  // 화면용 고객 이름 (예: 김민수)
+  customerLabel: string
+  // 적중(MATCH)한 Rule만, 점수 큰 순
+  hitRuleCodes: RuleCode[]
+  // REVIEW로 사건에 묶였으면 그 사건
+  caseId: string | null
+}
+
+export type FdsRuleHit = {
+  hitId: number
+  ruleCode: string
+  ruleName: string
+  outcome: FdsRuleHitOutcome
+  appliedScore: number
+  // 평가 당시 값 · 기준값 (서버가 사람 말로 준다)
+  observedValue: string | null
+  thresholdSnapshot: string | null
+}
+
+export type FdsEvaluationDetail = {
+  evaluation: FdsEvaluationSummary
+  ruleHits: FdsRuleHit[]
+  history: FdsEvaluationSummary[]
+}
+
+export type FdsEvaluationPage = {
+  content: FdsEvaluationSummary[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  resultCounts: Record<FdsResult, number>
+}
+
+export type FdsEvaluationQuery = {
+  result?: FdsResult
+  attentionOnly?: boolean
+  search?: string
+  page?: number
+  size?: number
 }

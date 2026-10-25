@@ -128,7 +128,7 @@ export function buildMockApprovals(now: Date): ApprovalRequest[] {
       requestType: 'BLOCKLIST_RELEASE',
       targetType: 'BLOCKLIST_ENTRY',
       targetId: 3,
-      targetLabel: '차단 목록 IP 45.83.64.12',
+      targetLabel: '차단 목록 IP · VPN 대역 · 카드 테스팅 시도',
       reason: '가맹점 사무실 VPN으로 확인되어 해제 요청',
       requestedBy: 6,
       requestedByName: '이도현',
