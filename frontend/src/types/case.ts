@@ -9,7 +9,7 @@ import type { RuleCode } from './fds.ts'
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
 export type PaymentStatus =
   'PENDING' | 'DENIED' | 'DECLINED' | 'HELD' | 'CAPTURED' | 'VOIDED' | 'EXPIRED'
-// APPROVAL_PENDING: AI 권고와 반대인 판정이 2인 승인을 기다리는 중 (새 기획)
+// APPROVAL_PENDING: AI 권고와 반대인 판정이 관리자 승인을 기다리는 중 (새 기획)
 export type CaseStatus =
   | 'OPEN'
   | 'INVESTIGATING'
@@ -179,4 +179,16 @@ export type SubmitDecisionsRequest = {
   evidenceVersion: number
   reportId: string | null
   decisions: Array<{ casePaymentId: string; decision: Decision; reason: string }>
+}
+
+// 조치 센터 1행 (GET /security-cases/handoffs, 1-6 보강) — 사건 · 결제를 따로 부르지 않게 이름까지 담는다
+export type HandoffRow = ActionHandoff & {
+  caseId: string
+  subjectLabel: string
+  paymentId: string
+  // 상품 이름 · 금액 (조회하지 못하면 null)
+  paymentTitle: string | null
+  amount: number | null
+  // 실제 결제 상태 — 매입 · 취소가 끝났는지 (조치 "완료" 판단)
+  paymentStatus: PaymentStatus | null
 }

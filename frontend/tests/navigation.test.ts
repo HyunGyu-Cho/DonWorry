@@ -55,7 +55,7 @@ test('다른 역할 화면과 권한 없는 메뉴는 열 수 없다', () => {
   assert.equal(canOpenPath(owner(['FINANCE_VIEW']), '/owner/unknown'), true)
 })
 
-// 보안 직원이 관리자 화면(2인 승인 · 직원 감시 · 감사 로그)을 열면 안 된다
+// 보안 직원이 관리자 화면(관리자 승인 · 직원 감시 · 감사 로그)을 열면 안 된다
 test('managerMenus_areOnlyForSecurityManager', () => {
   const nav = sessionNavigation(manager)
   assert.equal(nav.label, '보안 관리자')

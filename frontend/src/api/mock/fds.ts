@@ -2,7 +2,12 @@
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
 import { RuleActionForbiddenError, RuleAlreadyEnabledError } from '../fdsErrors.ts'
 import { mockRespond } from './respond.ts'
-import { getMockActor, mockApprovedRuleDisables } from './investigation.ts'
+import {
+  getMockActor,
+  mockApprovedReleases,
+  mockApprovedRuleDisables,
+  mockAudit,
+} from './investigation.ts'
 import { canToggle } from '../../utils/ruleCatalog.ts'
 import type {
   BlocklistEntry,
@@ -342,11 +347,21 @@ export async function mockEnableRule(ruleId: number): Promise<FdsRule> {
   if (!security || !canToggle(rule)) throw new RuleActionForbiddenError()
   if (rule.enabled) throw new RuleAlreadyEnabledError()
   enabledAt.set(ruleId, { at: new Date().toISOString(), by: actor.userId })
+  mockAudit('RULE_ENABLED', ['FDS_RULE', ruleId], { rule: rule.ruleCode })
   return structuredClone(currentRules().find((r) => r.ruleId === ruleId) as FdsRule)
 }
 
+// 관리자 승인으로 풀린 값은 releasedAt이 찍힌다
+function currentBlocklist(): BlocklistEntry[] {
+  const releases = mockApprovedReleases()
+  return [...addedEntries, ...buildMockBlocklist(new Date())].map((entry) => {
+    const r = releases.find((x) => x.entryId === entry.entryId)
+    return r ? { ...entry, releasedAt: r.decidedAt, releasedBy: r.decidedBy } : entry
+  })
+}
+
 export function mockGetBlocklist(activeOnly = true): Promise<BlocklistEntry[]> {
-  const rows = [...addedEntries, ...buildMockBlocklist(new Date())]
+  const rows = currentBlocklist()
   return mockRespond(activeOnly ? rows.filter((row) => row.releasedAt === null) : rows)
 }
 
@@ -358,7 +373,7 @@ export function mockAddBlocklistEntry(input: NewBlocklistEntry): Promise<Blockli
     reason: input.reason,
     source: 'STAFF',
     sourceRef: null,
-    createdBy: 4,
+    createdBy: getMockActor().userId,
     createdAt: new Date().toISOString(),
     expiresAt: input.expiresAt ?? null,
     releasedAt: null,
@@ -367,6 +382,10 @@ export function mockAddBlocklistEntry(input: NewBlocklistEntry): Promise<Blockli
     lastHitAt: null,
   }
   addedEntries.unshift(created)
+  mockAudit('BLOCKLIST_ADDED', ['BLOCKLIST_ENTRY', created.entryId], {
+    type: input.entryType,
+    reason: input.reason,
+  })
   return mockRespond(created)
 }
 

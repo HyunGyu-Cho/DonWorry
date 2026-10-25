@@ -1,15 +1,17 @@
-// P3 investigation Mock — 직원 사건 · 2인 승인 · 감사 로그 (프로토타입 v3.1 시나리오)
+// P3 investigation Mock — 직원 사건 · 관리자 승인 · 감사 로그 (프로토타입 v3.1 시나리오)
 // 0-2 로그인 기록 · 0-3 직원 경보 Mock과 같은 장면이다
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
 import {
   ApprovalClosedError,
   ApprovalDuplicateError,
+  ApprovalForbiddenError,
   CaseActionForbiddenError,
+  RejectReasonRequiredError,
   SelfApprovalError,
   StaffCaseForbiddenError,
 } from '../investigationErrors.ts'
 import { mockRespond } from './respond.ts'
-import type { AuthUser } from '../../types/auth.ts'
+import type { AuthUser, IpInfo } from '../../types/auth.ts'
 import type {
   ApprovalDecision,
   ApprovalRequest,
@@ -114,7 +116,7 @@ export function buildMockApprovals(now: Date): ApprovalRequest[] {
       requestType: 'DECISION_OVERRIDE',
       targetType: 'PAYMENT_DECISION',
       targetId: 7,
-      targetLabel: '결제 #7 · AI 권고 "취소 검토"와 반대로 매입 허용',
+      targetLabel: '결제 매입 허용 · AI 권고 "취소 검토"와 반대',
       payload: { decision: 'ACCEPT' },
       reason: '고객과 통화해 본인 결제임을 확인',
       requestedBy: 6,
@@ -143,6 +145,34 @@ export function buildMockApprovals(now: Date): ApprovalRequest[] {
   ]
 }
 
+// 감사 로그의 접속 위치 설명 — api/mock/identity.ts의 IP 설명과 같다 (그 파일이 이 파일을 불러와서 여기 따로 둔다)
+const office = (address: string, label: string): IpInfo => ({
+  address,
+  countryCode: 'KR',
+  ipType: 'OFFICE',
+  label,
+})
+const CLIENTS: Record<string, IpInfo> = {
+  '10.20.0.15': office('10.20.0.15', '사내망 · 박지원 업무 PC'),
+  '10.20.0.22': office('10.20.0.22', '사내망 · 최윤서 업무 PC'),
+  '10.20.0.31': office('10.20.0.31', '사내망 · 이도현 업무 PC'),
+  '175.223.14.90': {
+    address: '175.223.14.90',
+    countryCode: 'KR',
+    ipType: 'DOMESTIC',
+    label: '국내 가정용 회선 (직원 집)',
+  },
+  '185.220.101.7': {
+    address: '185.220.101.7',
+    countryCode: 'DE',
+    ipType: 'ANONYMOUS',
+    label: 'Tor 출구 IP (해외 · 탈취 공격자)',
+  },
+}
+// 탈취 의심 세션의 IP (Mock 박지원 세션 2)
+const SUSPICIOUS_IPS = ['185.220.101.7']
+const WORK_PC: Record<number, string> = { 4: '10.20.0.15', 5: '10.20.0.22', 6: '10.20.0.31' }
+
 // 최신이 앞에 오도록 정렬해서 돌려준다
 export function buildMockAuditLogs(now: Date): AuditLog[] {
   const rows: Omit<AuditLog, 'auditId'>[] = []
@@ -164,6 +194,8 @@ export function buildMockAuditLogs(now: Date): AuditLog[] {
       targetId: target?.[1] ?? null,
       detail,
       clientIp,
+      client: clientIp ? (CLIENTS[clientIp] ?? null) : null,
+      suspiciousSession: clientIp !== null && SUSPICIOUS_IPS.includes(clientIp),
       occurredAt: minutesAgo(now, minutes),
     })
   add(2 * 1440, 6, '이도현', 'APPROVAL_REQUESTED', ['APPROVAL_REQUEST', 1], '10.20.0.31')
@@ -211,7 +243,16 @@ export function resetMockInvestigation() {
   actor = MANAGER
 }
 
-function audit(action: string, target: [string, number], detail: Record<string, unknown>) {
+// 다른 Mock(결제 사건 판정 · Rule 켜기 · 차단 목록)도 감사 로그를 남긴다
+export function mockAudit(
+  action: string,
+  target: [string, number] | null,
+  detail: Record<string, unknown>,
+) {
+  audit(action, target, detail)
+}
+
+function audit(action: string, target: [string, number] | null, detail: Record<string, unknown>) {
   const s = current()
   s.audit.unshift({
     auditId: s.audit.length + 1,
@@ -219,10 +260,13 @@ function audit(action: string, target: [string, number], detail: Record<string, 
     actorId: actor.userId,
     actorName: actor.displayName,
     action,
-    targetType: target[0],
-    targetId: target[1],
+    targetType: target?.[0] ?? null,
+    targetId: target?.[1] ?? null,
     detail,
-    clientIp: null,
+    // Mock에는 실제 접속이 없어 화면에서 한 행동은 그 직원의 업무 PC로 둔다
+    clientIp: WORK_PC[actor.userId] ?? null,
+    client: CLIENTS[WORK_PC[actor.userId] ?? ''] ?? null,
+    suspiciousSession: false,
     occurredAt: new Date().toISOString(),
   })
 }
@@ -326,8 +370,11 @@ export async function mockDecideApproval(
   await mockRespond(null)
   const found = current().approvals.find((a) => a.approvalId === approvalId)
   if (!found || found.status !== 'PENDING') throw new ApprovalClosedError()
-  // 2인 승인: 요청자 본인은 승인도 거절도 할 수 없다 (DB CHECK 제약과 같은 규칙)
+  // 승인 · 거절은 보안 관리자만
+  if (actor.role !== 'SECURITY_MANAGER') throw new ApprovalForbiddenError()
+  // 관리자 승인: 요청자 본인은 승인도 거절도 할 수 없다 (DB CHECK 제약과 같은 규칙)
   if (found.requestedBy === actor.userId) throw new SelfApprovalError()
+  if (decision === 'REJECT' && !comment.trim()) throw new RejectReasonRequiredError()
   found.status = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED'
   found.decidedBy = actor.userId
   found.decidedAt = new Date().toISOString()
@@ -358,4 +405,25 @@ export function mockApprovedRuleDisables(): { ruleId: number; decidedAt: string 
       (a) => a.requestType === 'RULE_DISABLE' && a.status === 'APPROVED' && a.decidedAt !== null,
     )
     .map((a) => ({ ruleId: a.targetId, decidedAt: a.decidedAt as string }))
+}
+
+// fds Mock이 차단 해제를 계산할 때 쓴다: 승인된 차단 해제 요청 (대상 entry_id · 승인한 사람 · 시각)
+export function mockApprovedReleases(): {
+  entryId: number
+  decidedBy: number
+  decidedAt: string
+}[] {
+  return current()
+    .approvals.filter(
+      (a) =>
+        a.requestType === 'BLOCKLIST_RELEASE' &&
+        a.status === 'APPROVED' &&
+        a.decidedAt !== null &&
+        a.decidedBy !== null,
+    )
+    .map((a) => ({
+      entryId: a.targetId,
+      decidedBy: a.decidedBy as number,
+      decidedAt: a.decidedAt as string,
+    }))
 }
