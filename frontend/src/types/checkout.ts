@@ -36,3 +36,17 @@ export type CheckoutResult = {
   // CakeShop 결과 페이지 (화면 이동용, 결과의 근거 아님)
   returnUrl: string
 }
+
+// 시연용 테스트 상점 (demo 프로필 전용, CakeShop 없이 결제 흐름 확인)
+export type TestProduct = {
+  productId: string
+  title: string
+  amount: number
+  // 상품 카드의 짧은 설명 (예: 고액 주문)
+  note: string
+}
+
+export type TestOrder = {
+  // 이 토큰으로 결제창 /checkout/{토큰}을 연다
+  sessionToken: string
+}
