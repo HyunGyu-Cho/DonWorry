@@ -2,12 +2,8 @@ import assert from 'node:assert/strict'
 import { beforeEach, test } from 'node:test'
 import { RuleActionForbiddenError, RuleAlreadyEnabledError } from '../src/api/fdsErrors.ts'
 import { ApprovalDuplicateError } from '../src/api/investigationErrors.ts'
-import {
-  buildMockRuleHits,
-  mockEnableRule,
-  mockGetRules,
-  resetMockFds,
-} from '../src/api/mock/fds.ts'
+import { mockEnableRule, mockGetRules, resetMockFds } from '../src/api/mock/fds.ts'
+import { buildMockRuleHits } from '../src/api/mock/fdsEvaluations.ts'
 import {
   mockCreateApproval,
   mockDecideApproval,

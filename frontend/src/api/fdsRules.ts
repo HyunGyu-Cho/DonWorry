@@ -8,10 +8,10 @@ import {
   mockAddBlocklistEntry,
   mockEnableRule,
   mockGetBlocklist,
-  mockGetRuleHitStats,
   mockGetRules,
   mockGetStaffAlerts,
 } from './mock/fds.ts'
+import { mockGetRuleHitStats } from './mock/fdsEvaluations.ts'
 import type {
   BlocklistEntry,
   FdsRule,
