@@ -173,7 +173,7 @@ export function ReportPage() {
           description="끝나면 이 보고서가 새 버전으로 바뀌어요. 진행 과정은 사건 화면에서 볼 수 있어요."
         />
       )}
-      <Card className="dw-rp-tabs">
+      <Card className="dw-rp-tabs" data-tour="report-tabs report-open">
         <Tabs
           activeKey={tab}
           onChange={setTab}

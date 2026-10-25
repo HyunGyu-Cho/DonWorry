@@ -37,6 +37,7 @@ import {
 import { cardName, koreanWon, relativeTime } from '../../utils/humanize'
 import { distributedAttack, suspiciousSessionIds } from '../../utils/staffAccess'
 import { DecisionPanel } from './case/DecisionPanel'
+import { DEMO_CHANGED } from '../../components/tutorial/tutorialStore'
 import {
   AiSummaryCard,
   CaseFlow,
@@ -361,8 +362,12 @@ export function CaseDetailPage() {
     void fetchCase(id, merchant).then((result) => {
       if (alive) apply(result)
     })
+    // 튜토리얼 시연 버튼으로 데이터가 바뀌면 다시 읽는다
+    const reload = () => void fetchCase(id, merchant).then((result) => alive && apply(result))
+    window.addEventListener(DEMO_CHANGED, reload)
     return () => {
       alive = false
+      window.removeEventListener(DEMO_CHANGED, reload)
     }
   }, [id, merchant, apply])
 
@@ -561,7 +566,7 @@ export function CaseDetailPage() {
           <>
             {report && (
               <Link to={`${base}/${sc.caseId}/report`}>
-                <Button>AI 보고서</Button>
+                <Button data-tour="report-open">AI 보고서</Button>
               </Link>
             )}
             {back}
@@ -574,22 +579,26 @@ export function CaseDetailPage() {
         aiRunning={aiRunning}
         report={report}
       />
-      <CaseFlow
-        cards={cards}
-        caseType={sc.caseType}
-        subjectLabel={sc.subjectLabel}
-        groupingBasis={sc.groupingBasis}
-        report={report}
-        now={now}
-      />
+      <div data-tour="case-flow">
+        <CaseFlow
+          cards={cards}
+          caseType={sc.caseType}
+          subjectLabel={sc.subjectLabel}
+          groupingBasis={sc.groupingBasis}
+          report={report}
+          now={now}
+        />
+      </div>
       <div className="dw-pa-grid">
         <div className="dw-pa-col">
-          <AiSummaryCard
-            report={report}
-            run={run}
-            reportPath={`${base}/${sc.caseId}/report`}
-            now={now}
-          />
+          <div data-tour="case-ai">
+            <AiSummaryCard
+              report={report}
+              run={run}
+              reportPath={`${base}/${sc.caseId}/report`}
+              now={now}
+            />
+          </div>
           {loaded.kind === 'payment' ? (
             <PaymentTargets data={loaded} />
           ) : (
@@ -598,7 +607,7 @@ export function CaseDetailPage() {
           <RawDetails title="원본 값 보기 (사건 번호)" rows={[['사건 번호', sc.caseId]]} />
         </div>
         <div className="dw-pa-col">
-          {right}
+          <div data-tour="case-right">{right}</div>
           <CaseHistoryCard rows={history} now={now} />
         </div>
       </div>

@@ -2,6 +2,7 @@ import { BellOutlined, DownOutlined, LogoutOutlined, SettingOutlined } from '@an
 import { Button, Select, Tooltip } from 'antd'
 import type { ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { navTour } from '../utils/tutorialView'
 import { navByRole, roles, type Role, type NavGroup } from '../config/navigation'
 import { useDemo } from '../demo/DemoContext'
 import { useFeedback } from '../components/common/Feedback'
@@ -91,6 +92,7 @@ function Sidebar({ groups, demo = false }: { groups: NavGroup[]; demo?: boolean 
               <NavLink
                 key={item.path}
                 to={item.path}
+                data-tour={navTour(item.path)}
                 className={({ isActive }) =>
                   `dw-nav-link${isActive || location.pathname.startsWith(item.path + '/') ? ' active' : ''}`
                 }

@@ -3,7 +3,7 @@
 // 결제 사건의 기존 8개 절 보고서는 api/cases.ts가 가져오고, 화면에서 api/reportConvert.ts로 바꾼다
 import { api, ApiError } from './client.ts'
 import { isMock } from './mockMode.ts'
-import { mockGetCaseReport, mockGetReportRun } from './mock/report.ts'
+import { mockGetCaseReport, mockGetReportRun, mockStartBuyerRerun } from './mock/report.ts'
 import { StaffReportForbiddenError } from './reportErrors.ts'
 import type { ConclusionReport, ReportRun } from '../types/report.ts'
 
@@ -34,3 +34,8 @@ async function realGetReportRun(caseId: string): Promise<ReportRun | null> {
 
 // 사건의 최신 조사 진행 상태. 화면은 RUNNING인 동안 1초마다 다시 부른다
 export const getReportRun = isMock('report') ? mockGetReportRun : realGetReportRun
+
+// 시연 버튼(튜토리얼 ①) — 구매자 답변이 도착한 것처럼 사건 201을 다시 조사. Mock에서만 (실제는 2-23 본인 확인 응답 → 재조사)
+export const demoBuyerAnswered: (() => Promise<void>) | null = isMock('report')
+  ? mockStartBuyerRerun
+  : null

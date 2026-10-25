@@ -590,9 +590,56 @@ function buildPastReports(now: Date): ConclusionReport[] {
 // 사건 102 조사는 처음 볼 때 시작한다 (시연에서 처음부터 따라가 보게)
 const LIVE_CASE = '102'
 let liveStartedAt: Date | null = null
+// 시나리오 ①: 구매자가 "결제하지 않았어요"라고 답하면 사건 201을 v2로 다시 조사한다
+const RERUN_CASE = '201'
+let rerunStartedAt: Date | null = null
 
 export function resetMockReportRun() {
   liveStartedAt = null
+  rerunStartedAt = null
+}
+
+const RERUN_DEFS: StepDef[] = [
+  req('구매자 응답 1건 · 보고서 v2 (새 정보가 들어와 다시 조사)'),
+  tool(
+    'get_order_context',
+    900,
+    '단체 행사용 케이크 세트 주문',
+    '픽업 예정 · 구매자 응답 "결제하지 않았어요"',
+  ),
+  tool('get_case_payments', 900, '이 사건에 묶인 결제', '결제 1건 · 합계 65만 원'),
+  tool('get_fds_evidence', 1100, '결제 1건', 'Rule 3개 적중 · 55점'),
+  tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 12건 · 평균 4만 원'),
+  tool('find_similar_cases', 1000, '같은 고객 · 같은 Rule 조합', '2건 (사기 1 · 정상 1)'),
+  llm('위험 근거 4 · 정상 정황 1 · 권고 2'),
+  ...finish(2),
+]
+
+// 시연 버튼 — 구매자 답변이 도착한 것처럼 다시 조사를 시작한다 (한 번만)
+export async function mockStartBuyerRerun(): Promise<void> {
+  rerunStartedAt ??= new Date()
+  return mockRespond(undefined)
+}
+
+function rerunReport(found: ConclusionReport, run: ReportRun): ConclusionReport {
+  return {
+    ...found,
+    reportVersion: 2,
+    generatedAt: run.finishedAt ?? found.generatedAt,
+    riskScore: 88,
+    verdict: '구매자가 결제하지 않았다고 답해 카드 도용 가능성이 높습니다',
+    summary:
+      '김민수 고객 계정에서 처음 쓰는 카드로 평소(4만 원)보다 큰 65만 원을 결제했고, 구매자가 본인 확인 메일에 "결제하지 않았어요"라고 답했습니다. 다만 계정이 탈취됐다면 공격자도 메일을 받을 수 있어 약한 근거로 봅니다.',
+    riskPoints: [
+      {
+        title: '구매자가 결제하지 않았다고 답함',
+        detail: '본인 확인 메일 응답 · 계정이 털리면 공격자도 받을 수 있어 단독 근거로 쓰지 않음',
+        source: '구매자 본인 확인 응답',
+      },
+      ...found.riskPoints,
+    ],
+    trace: run.steps,
+  }
 }
 
 export function buildLiveRun(now: Date, startedAt: Date): ReportRun {
@@ -615,6 +662,11 @@ export async function mockGetCaseReport(caseId: string): Promise<ConclusionRepor
   const now = new Date()
   const found = buildMockReports(now).find((r) => r.caseId === caseId)
   checkCanRead(found)
+  // 다시 조사 중이면 지난 보고서(v1), 끝나면 새 보고서(v2)
+  if (found && caseId === RERUN_CASE && rerunStartedAt) {
+    const run = buildRun(RERUN_CASE, 2, RERUN_DEFS, rerunStartedAt, now)
+    return mockRespond(run.status === 'SUCCEEDED' ? rerunReport(found, run) : found)
+  }
   if (!found || caseId !== LIVE_CASE) return mockRespond(found ?? null)
   // 조사가 끝나야 보고서가 생긴다
   liveStartedAt ??= now
@@ -631,6 +683,9 @@ export async function mockGetReportRun(caseId: string): Promise<ReportRun | null
   const now = new Date()
   checkCanRead(buildMockReports(now).find((r) => r.caseId === caseId))
   if (!RUNS[caseId]) return mockRespond(null)
+  if (caseId === RERUN_CASE && rerunStartedAt) {
+    return mockRespond(buildRun(RERUN_CASE, 2, RERUN_DEFS, rerunStartedAt, now))
+  }
   if (caseId !== LIVE_CASE) return mockRespond(finishedRun(caseId, now))
   liveStartedAt ??= now
   return mockRespond(buildLiveRun(now, liveStartedAt))

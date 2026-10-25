@@ -236,6 +236,7 @@ export function CaseListPage({ scope = 'payment' }: { scope?: Scope }) {
             onRow={(r) => ({
               onClick: () => navigate(`${base}/${r.caseId}`),
               className: 'dw-pa-row',
+              'data-tour': `case-${r.caseId}`,
             })}
           />
         )}

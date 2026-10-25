@@ -250,7 +250,7 @@ export function ApprovalsPage() {
           <span>요청한 사람은 승인할 수 없고, 모든 승인 · 거절은 감사 로그에 남아요</span>
         </div>
       </div>
-      <Card>
+      <Card data-tour="approvals-list">
         <Tabs
           activeKey={tab}
           onChange={(key) => setTab(key as TabKey)}

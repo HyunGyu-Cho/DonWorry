@@ -321,14 +321,14 @@ export function AlertDetailPage() {
           <>
             {e.caseId && (
               <Link to={`/security/cases/${e.caseId}`}>
-                <Button>사건 보기</Button>
+                <Button data-tour="alert-case-link">사건 보기</Button>
               </Link>
             )}
             {candidates.length > 0 &&
               (allBlocked ? (
                 <Button disabled>차단 목록 등록됨</Button>
               ) : (
-                <Button danger onClick={() => setBlockOpen(true)}>
+                <Button danger data-tour="alert-block" onClick={() => setBlockOpen(true)}>
                   차단 목록에 등록
                 </Button>
               ))}

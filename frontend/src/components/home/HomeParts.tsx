@@ -11,10 +11,12 @@ export function HomeTile(props: {
   value: ReactNode
   note: ReactNode
   tone: TileTone
+  // 튜토리얼 노란 테두리 이름표
+  tour?: string
 }) {
-  const { to, label, value, note, tone } = props
+  const { to, label, value, note, tone, tour } = props
   return (
-    <Link to={to} className={`dw-home-tile dw-home-tile--${tone}`}>
+    <Link to={to} className={`dw-home-tile dw-home-tile--${tone}`} data-tour={tour}>
       <span className="dw-home-tile-label">{label}</span>
       <b className="dw-home-tile-value">{value}</b>
       <span className="dw-home-tile-note">{note}</span>

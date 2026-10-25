@@ -263,6 +263,7 @@ export function AlertListPage() {
             onRow={(e) => ({
               onClick: () => navigate(`/security/alerts/${e.evaluationId}`),
               className: 'dw-pa-row',
+              'data-tour': `alert-${e.evaluationId}`,
             })}
             pagination={{
               current: (page?.page ?? 0) + 1,
