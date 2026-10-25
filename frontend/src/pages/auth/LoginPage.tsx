@@ -238,6 +238,21 @@ export function LoginPage({
                   ? '처음 OTP를 등록할 때 받은 1회용 복구 코드를 입력하세요. 한 번 쓰면 다시 쓸 수 없습니다.'
                   : '휴대폰 인증 앱에 보이는 6자리 숫자를 입력하세요. 비밀번호가 새도 이 번호가 없으면 로그인할 수 없습니다.'}
               </p>
+              {/* 처음 쓰는 사람이 "6자리를 어디서 받지?"에서 막히지 않게 */}
+              {!useRecovery && (
+                <div className="dw-login-otp-help">
+                  <b>6자리는 어디서 보나요?</b>
+                  <span>
+                    처음 계정을 만들 때 휴대폰 인증 앱(Google Authenticator 등)에 돈워리를 등록해요.
+                    앱을 열면 30초마다 바뀌는 6자리가 보여요.
+                  </span>
+                  {demoHint && (
+                    <span className="dw-login-otp-demo">
+                      시연(Mock) 모드에서는 인증 앱 대신 고정 코드 <b>246810</b>을 넣어요.
+                    </span>
+                  )}
+                </div>
+              )}
               {remaining ? (
                 <p className="dw-login-timer" role="timer">
                   남은 시간 <b>{remaining}</b>

@@ -35,7 +35,7 @@ const BAND_LABEL: Record<string, string> = { ALLOW: '통과', REVIEW: '직원 �
 const EXAMPLES: { codes: RuleCode[]; story: string }[] = [
   {
     codes: ['HIGH_AMOUNT', 'AMOUNT_SPIKE', 'NEW_CARD'],
-    story: '65만 원 · 평소 5배 · 처음 쓰는 카드',
+    story: '65만 원 · 평소의 16배 · 처음 쓰는 카드',
   },
   {
     codes: ['CARD_TESTING', 'NEW_ACCOUNT', 'GEO_MISMATCH'],

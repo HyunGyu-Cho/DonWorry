@@ -22,7 +22,7 @@ export const SCENARIOS: Scenario[] = [
     title: '결제 사기 의심',
     roleLabel: '보안 직원',
     loginId: 'jiwon',
-    summary: '처음 쓰는 카드로 평소의 5배인 65만 원 결제가 들어와요.',
+    summary: '처음 쓰는 카드로 평소(4만 원)의 16배인 65만 원 결제가 들어와요.',
     sees: ['결제 경보', '경보 → 사건 묶기', 'AI 조사 보고서', '판정 → 조치'],
     minutes: 5,
   },

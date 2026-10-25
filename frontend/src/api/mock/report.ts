@@ -7,7 +7,7 @@ import { StaffReportForbiddenError } from '../reportErrors.ts'
 import { getMockActor } from './investigation.ts'
 import { buildRun, finish, llm, llmFailed, req, tool, totalMs } from './reportSteps.ts'
 import type { StepDef } from './reportSteps.ts'
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import type { ConclusionReport, ReportRun, SimilarCase } from '../../types/report.ts'
 
 const MODEL = 'gpt-4.1-mini · OpenAI API (예시)'
@@ -59,7 +59,7 @@ const RUNS: Record<string, { version: number; doneAgo: number; defs: StepDef[] }
       req('결제 1건 · 보고서 v1'),
       tool('get_case_payments', 900, '이 사건에 묶인 결제', '결제 1건 · 합계 65만 원'),
       tool('get_fds_evidence', 1100, '결제 1건', 'Rule 3개 적중 · 55점'),
-      tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 12건 · 평균 4만 원'),
+      tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 5건 · 평균 4만 원'),
       tool(
         'get_payment_authentication',
         800,
@@ -609,7 +609,7 @@ const RERUN_DEFS: StepDef[] = [
   ),
   tool('get_case_payments', 900, '이 사건에 묶인 결제', '결제 1건 · 합계 65만 원'),
   tool('get_fds_evidence', 1100, '결제 1건', 'Rule 3개 적중 · 55점'),
-  tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 12건 · 평균 4만 원'),
+  tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 5건 · 평균 4만 원'),
   tool('find_similar_cases', 1000, '같은 고객 · 같은 Rule 조합', '2건 (사기 1 · 정상 1)'),
   llm('위험 근거 4 · 정상 정황 1 · 권고 2'),
   ...finish(2),
@@ -621,7 +621,7 @@ export async function mockStartBuyerRerun(): Promise<void> {
   return mockRespond(undefined)
 }
 
-function rerunReport(found: ConclusionReport, run: ReportRun): ConclusionReport {
+function rerunReport(found: ConclusionReport, run: ReportRun, answeredAt: Date): ConclusionReport {
   return {
     ...found,
     reportVersion: 2,
@@ -630,6 +630,27 @@ function rerunReport(found: ConclusionReport, run: ReportRun): ConclusionReport 
     verdict: '구매자가 결제하지 않았다고 답해 카드 도용 가능성이 높습니다',
     summary:
       '김민수 고객 계정에서 처음 쓰는 카드로 평소(4만 원)보다 큰 65만 원을 결제했고, 구매자가 본인 확인 메일에 "결제하지 않았어요"라고 답했습니다. 다만 계정이 탈취됐다면 공격자도 메일을 받을 수 있어 약한 근거로 봅니다.',
+    recommendations: [
+      { label: '승인 취소 검토 · 단체 행사용 케이크 세트', kind: 'NEGATIVE' },
+      { label: '사기로 확정되면 카드 · 기기 차단 목록 등록', kind: 'INFO' },
+    ],
+    // 구매자 응답이 들어왔으니 "아직 없음"은 빼고, 답한 사람이 정말 구매자인지를 남긴다
+    unknowns: [
+      '답한 사람이 실제 구매자인지 (계정이 털리면 공격자도 메일을 받음)',
+      '새 카드를 쓴 이유 (재발급 · 가족 카드 등)',
+    ],
+    timeline: [
+      ...found.timeline,
+      {
+        at: answeredAt.toISOString(),
+        text: '구매자 본인 확인 응답 "결제하지 않았어요" → AI 다시 조사 (v2)',
+        kind: 'KEY',
+      },
+    ],
+    paymentRecommendations: (found.paymentRecommendations ?? []).map((r) => ({
+      ...r,
+      reason: '처음 쓰는 카드로 평소의 16배 금액, 구매자가 결제하지 않았다고 답함',
+    })),
     riskPoints: [
       {
         title: '구매자가 결제하지 않았다고 답함',
@@ -660,12 +681,12 @@ function checkCanRead(report: ConclusionReport | undefined) {
 
 export async function mockGetCaseReport(caseId: string): Promise<ConclusionReport | null> {
   const now = new Date()
-  const found = buildMockReports(now).find((r) => r.caseId === caseId)
+  const found = buildMockReports(mockEpoch()).find((r) => r.caseId === caseId)
   checkCanRead(found)
   // 다시 조사 중이면 지난 보고서(v1), 끝나면 새 보고서(v2)
   if (found && caseId === RERUN_CASE && rerunStartedAt) {
     const run = buildRun(RERUN_CASE, 2, RERUN_DEFS, rerunStartedAt, now)
-    return mockRespond(run.status === 'SUCCEEDED' ? rerunReport(found, run) : found)
+    return mockRespond(run.status === 'SUCCEEDED' ? rerunReport(found, run, rerunStartedAt) : found)
   }
   if (!found || caseId !== LIVE_CASE) return mockRespond(found ?? null)
   // 조사가 끝나야 보고서가 생긴다
@@ -681,12 +702,12 @@ export async function mockGetCaseReport(caseId: string): Promise<ConclusionRepor
 
 export async function mockGetReportRun(caseId: string): Promise<ReportRun | null> {
   const now = new Date()
-  checkCanRead(buildMockReports(now).find((r) => r.caseId === caseId))
+  checkCanRead(buildMockReports(mockEpoch()).find((r) => r.caseId === caseId))
   if (!RUNS[caseId]) return mockRespond(null)
   if (caseId === RERUN_CASE && rerunStartedAt) {
     return mockRespond(buildRun(RERUN_CASE, 2, RERUN_DEFS, rerunStartedAt, now))
   }
-  if (caseId !== LIVE_CASE) return mockRespond(finishedRun(caseId, now))
+  if (caseId !== LIVE_CASE) return mockRespond(finishedRun(caseId, mockEpoch()))
   liveStartedAt ??= now
   return mockRespond(buildLiveRun(now, liveStartedAt))
 }

@@ -37,7 +37,7 @@ import {
 import { cardName, koreanWon, relativeTime } from '../../utils/humanize'
 import { distributedAttack, suspiciousSessionIds } from '../../utils/staffAccess'
 import { DecisionPanel } from './case/DecisionPanel'
-import { DEMO_CHANGED } from '../../components/tutorial/tutorialStore'
+import { DEMO_CHANGED, TUTORIAL_EVENT } from '../../components/tutorial/tutorialStore'
 import {
   AiSummaryCard,
   CaseFlow,
@@ -390,6 +390,17 @@ export function CaseDetailPage() {
     return () => clearTimeout(timer)
   }, [running, loaded, id, toast])
 
+  // 조치가 결제에 반영될 때까지 2초마다 다시 본다 (조치 요청 중 → 종료)
+  const acting =
+    typeof loaded === 'object' &&
+    loaded?.kind === 'payment' &&
+    loaded.detail.securityCase.status === 'ACTION_PENDING'
+  useEffect(() => {
+    if (!acting) return
+    const timer = setTimeout(() => void load(), 2000)
+    return () => clearTimeout(timer)
+  }, [acting, loaded, load])
+
   const rules = useMemo(() => (typeof loaded === 'object' && loaded ? loaded.rules : []), [loaded])
   const ruleName = useCallback(
     (code: RuleCode) => rules.find((r) => r.ruleCode === code)?.displayName ?? code,
@@ -510,6 +521,8 @@ export function CaseDetailPage() {
                     : '판정을 확정했습니다. 조치가 요청됐어요.',
                 )
                 await load()
+                // 튜토리얼이 "판정하기" 단계를 마친 것으로 알게
+                window.dispatchEvent(new CustomEvent(TUTORIAL_EVENT, { detail: 'DECIDED' }))
                 return true
               } catch (e) {
                 void toast.error(

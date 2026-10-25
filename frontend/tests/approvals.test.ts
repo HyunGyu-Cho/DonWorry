@@ -4,7 +4,12 @@ import {
   ApprovalForbiddenError,
   RejectReasonRequiredError,
 } from '../src/api/investigationErrors.ts'
-import { mockGetHandoffs, mockSubmitDecisions, resetMockCases } from '../src/api/mock/cases.ts'
+import {
+  mockGetHandoffs,
+  mockSubmitDecisions,
+  resetMockCases,
+  setMockActionDelay,
+} from '../src/api/mock/cases.ts'
 import { mockAddBlocklistEntry, mockGetBlocklist, resetMockFds } from '../src/api/mock/fds.ts'
 import {
   buildMockAuditLogs,
@@ -90,6 +95,7 @@ test('auditTrail_recordsApprovalBlocklistAndDecision', async () => {
 
 // 조치 센터: 판정하면 조치가 생기고, 결제 상태가 바뀌면 완료
 test('handoffs_afterDecision_showCompletedVoid', async () => {
+  setMockActionDelay(0)
   const before = await mockGetHandoffs()
   assert.equal(before.length, 2)
   await mockSubmitDecisions('201', 4, {

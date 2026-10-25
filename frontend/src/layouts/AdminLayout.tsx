@@ -1,6 +1,6 @@
 import { BellOutlined, DownOutlined, LogoutOutlined, SettingOutlined } from '@ant-design/icons'
 import { Button, Select, Tooltip } from 'antd'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { navTour } from '../utils/tutorialView'
 import { navByRole, roles, type Role, type NavGroup } from '../config/navigation'
@@ -146,6 +146,11 @@ export function ManagementLayout({
   children?: ReactNode
 }) {
   const location = useLocation()
+  // 다른 화면으로 가면 맨 위부터 보이게 (이전 화면의 스크롤 위치가 남지 않게)
+  useEffect(() => {
+    window.scrollTo(0, 0)
+    document.getElementById('main')?.scrollTo(0, 0)
+  }, [location.pathname])
   return (
     <div className="admin-viewport">
       {header}

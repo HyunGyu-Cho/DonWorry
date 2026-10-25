@@ -14,6 +14,8 @@ export type TutorialStep = {
   path: string
   target?: string
   special?: TutorialSpecial
+  // 이 일이 일어나면 다음 단계로 (화면이 TUTORIAL_EVENT로 알린다, 예: DECIDED = 판정 확정)
+  doneOn?: 'DECIDED'
 }
 
 export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
@@ -39,7 +41,7 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
       title: '왜 걸렸는지 보기',
       todo: '걸린 Rule을 읽고 [사건 보기]를 눌러 보세요.',
       look: [
-        '처음 쓰는 카드 · 평소의 5배 금액 · 고액 결제가 함께 걸렸어요',
+        '처음 쓰는 카드 · 평소(4만 원)의 16배 금액 · 고액 결제가 함께 걸렸어요',
         'Rule 하나만 걸렸다면 어떻게 읽는지도 적혀 있어요',
       ],
       path: '/security/alerts/103',
@@ -90,6 +92,7 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
       look: ['결제마다 따로 판정해요', 'AI 권고와 반대로 허용하면 재인증 + 관리자 승인이 필요해요'],
       path: '/security/cases/201',
       target: 'case-right',
+      doneOn: 'DECIDED',
     },
     {
       title: '조치가 결제에 반영되는지 보기',

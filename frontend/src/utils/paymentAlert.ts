@@ -121,9 +121,13 @@ export function paymentFacts(
   }
   const amount = ctx ? koreanWon(ctx.amount) : '이 금액'
   if (hit.has('AMOUNT_SPIKE')) {
+    // 실제 배수는 평가 당시 값으로 (5배는 Rule이 걸리는 기준일 뿐)
+    const observed = detail.ruleHits.find((h) => h.ruleCode === 'AMOUNT_SPIKE')?.observedValue
     facts.push({
       label: '금액',
-      text: `${amount} · 이 고객 평소 결제보다 5배 이상 커요`,
+      text: observed
+        ? `${amount} · ${observed}예요 (기준 5배 이상)`
+        : `${amount} · 이 고객 평소 결제의 5배가 넘어요`,
       tone: 'warn',
     })
   } else if (hit.has('HIGH_AMOUNT')) {

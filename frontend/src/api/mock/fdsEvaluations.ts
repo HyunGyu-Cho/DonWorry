@@ -1,7 +1,7 @@
 // P2 결제 평가(경보) Mock — 시나리오 ① 결제 사기 · 카드 테스팅 · 차단 목록 재시도 (프로토타입 v4.2)
 // 결제 번호는 api/mock/payment.ts와 같다 (31 = 사건 201). Rule 카탈로그 7일 적중도 여기서 만든다
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import { buildMockStaffAlerts, MOCK_RULES } from './fds.ts'
 import { hitStats, HIT_DAYS } from '../../utils/ruleCatalog.ts'
 import { PAYMENT_RULE_CODES, STAFF_RULE_CODES } from '../../types/fds.ts'
@@ -195,7 +195,7 @@ const ATTENTION: FdsResult[] = ['REVIEW', 'DENY', 'ERROR']
 
 export function mockGetFdsEvaluations(query: FdsEvaluationQuery = {}): Promise<FdsEvaluationPage> {
   const { result, attentionOnly = false, search, page = 0, size = 10 } = query
-  const all = buildMockEvaluations(new Date()).map((d) => d.evaluation)
+  const all = buildMockEvaluations(mockEpoch()).map((d) => d.evaluation)
   const word = search?.trim()
   const rows = all.filter(
     (e) =>
@@ -219,7 +219,7 @@ export function mockGetFdsEvaluations(query: FdsEvaluationQuery = {}): Promise<F
 }
 
 export function mockGetFdsEvaluation(evaluationId: string): Promise<FdsEvaluationDetail | null> {
-  const found = buildMockEvaluations(new Date()).find(
+  const found = buildMockEvaluations(mockEpoch()).find(
     (d) => String(d.evaluation.evaluationId) === evaluationId,
   )
   return mockRespond(found ?? null)
@@ -264,5 +264,5 @@ export function buildMockRuleHits(now: Date): { ruleCode: RuleCode; at: string }
 export function mockGetRuleHitStats(days = HIT_DAYS): Promise<RuleHitStat[]> {
   const now = new Date()
   const codes = [...PAYMENT_RULE_CODES, ...STAFF_RULE_CODES]
-  return mockRespond(hitStats(buildMockRuleHits(now), codes, now, days))
+  return mockRespond(hitStats(buildMockRuleHits(mockEpoch()), codes, now, days))
 }
