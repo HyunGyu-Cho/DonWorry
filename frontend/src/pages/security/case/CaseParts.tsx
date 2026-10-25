@@ -1,5 +1,6 @@
-import { Button, Card, Spin, Steps, Tag } from 'antd'
+import { Button, Card, Steps, Tag } from 'antd'
 import { Link } from 'react-router-dom'
+import { TracePanel } from '../../../components/report/TracePanel'
 import { riskLevelLabel } from '../../../config/reportLevel'
 import type { CaseStatus, CaseType } from '../../../types/case'
 import type { ConclusionReport, ReportRun } from '../../../types/report'
@@ -120,21 +121,28 @@ export function AiSummaryCard(props: {
   report: ConclusionReport | null
   run: ReportRun | null
   reportPath: string
+  now: Date
 }) {
-  const { report, run, reportPath } = props
+  const { report, run, reportPath, now } = props
+  // 조사 중이면 결론 대신 과정을 실시간으로 (보고서 화면은 끝난 뒤에 생긴다)
   if (run?.status === 'RUNNING') {
-    const step = run.steps.find((s) => s.stepNo === run.currentStepNo) ?? run.steps.at(-1)
     return (
-      <Card title={`AI 조사 중 · v${run.reportVersion}`}>
-        <div className="dw-case-ai-running">
-          <Spin />
-          <div>
-            <b>{step?.label ?? '조사를 준비하고 있어요'}</b>
-            <div className="dw-muted dw-small">
-              단계 {run.steps.length}개 진행 · 끝나면 보고서가 자동으로 나와요
-            </div>
-          </div>
-        </div>
+      <Card
+        title={
+          <span>
+            <span className="dw-live-dot" aria-hidden />
+            AI가 지금 조사하고 있어요 · v{run.reportVersion}
+          </span>
+        }
+        extra={<span className="dw-muted dw-small">단계가 끝날 때마다 아래로 그려져요</span>}
+      >
+        {report && (
+          <p className="dw-muted dw-small">
+            새 정보가 들어와 다시 조사하는 중이에요. 지난 보고서(v{report.reportVersion})는 [AI
+            보고서]에서 볼 수 있어요.
+          </p>
+        )}
+        <TracePanel steps={run.steps} live startedAt={run.startedAt} now={now} />
       </Card>
     )
   }

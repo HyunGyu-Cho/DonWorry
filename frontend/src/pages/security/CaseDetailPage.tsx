@@ -372,11 +372,18 @@ export function CaseDetailPage() {
     if (!running) return
     const timer = setTimeout(() => {
       void fetchReport(id).then((rep) => {
+        setNow(new Date())
         setLoaded((prev) => (prev && typeof prev === 'object' ? { ...prev, ...rep } : prev))
+        // 조사가 끝나면 알리고, [AI 보고서] 버튼이 생긴다 (보고서 화면으로 자동 이동은 안 함)
+        if (rep.run?.status === 'SUCCEEDED') {
+          void toast.success(
+            'AI 조사가 끝났어요. 결론을 보고 [AI 보고서]에서 자세히 읽을 수 있어요.',
+          )
+        }
       })
     }, 1000)
     return () => clearTimeout(timer)
-  }, [running, loaded, id])
+  }, [running, loaded, id, toast])
 
   const rules = useMemo(() => (typeof loaded === 'object' && loaded ? loaded.rules : []), [loaded])
   const ruleName = useCallback(
@@ -577,7 +584,12 @@ export function CaseDetailPage() {
       />
       <div className="dw-pa-grid">
         <div className="dw-pa-col">
-          <AiSummaryCard report={report} run={run} reportPath={`${base}/${sc.caseId}/report`} />
+          <AiSummaryCard
+            report={report}
+            run={run}
+            reportPath={`${base}/${sc.caseId}/report`}
+            now={now}
+          />
           {loaded.kind === 'payment' ? (
             <PaymentTargets data={loaded} />
           ) : (

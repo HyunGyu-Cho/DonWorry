@@ -753,3 +753,246 @@
 .dw-pa-risk td {
   background: #fef2f2;
 }
+
+/* AI가 조사한 과정 (1-7) */
+.dw-trace-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.dw-trace-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  position: relative;
+}
+.dw-trace-list::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 8px;
+  bottom: 8px;
+  border-left: 2px solid #e2e8f0;
+}
+.dw-trace-step {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
+  margin-bottom: 8px;
+  animation: dw-trace-in 0.4s ease-out;
+}
+@keyframes dw-trace-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.dw-trace-dot {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.dw-trace-step.dw-trace-tool .dw-trace-dot {
+  border-color: #93c5fd;
+}
+.dw-trace-step.dw-trace-llm .dw-trace-dot {
+  border-color: #c4b5fd;
+}
+.dw-trace-step.dw-trace-llm_failed .dw-trace-dot {
+  border-color: #fcd34d;
+}
+.dw-trace-step.is-running .dw-trace-dot {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+.dw-trace-box {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+.dw-trace-step.dw-trace-llm_failed .dw-trace-box {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.dw-trace-box summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+.dw-trace-name {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.dw-trace-toolname {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.dw-trace-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dw-trace-bar {
+  width: 90px;
+  height: 6px;
+  border-radius: 3px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+.dw-trace-bar i {
+  display: block;
+  height: 100%;
+  background: #60a5fa;
+}
+.dw-trace-bar i.is-moving {
+  animation: dw-trace-move 1s ease-in-out infinite alternate;
+}
+@keyframes dw-trace-move {
+  from {
+    width: 15%;
+  }
+  to {
+    width: 85%;
+  }
+}
+.dw-trace-detail {
+  padding: 4px 12px 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+/* AI 보고서 화면 (1-7) */
+.dw-rp-tabs {
+  margin-bottom: 16px;
+}
+.dw-rp-tabs .ant-card-body {
+  padding: 0 20px;
+}
+.dw-rp-compare,
+.dw-rp-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+}
+.dw-rp-risk {
+  border-top: 3px solid #f87171;
+}
+.dw-rp-normal {
+  border-top: 3px solid #4ade80;
+}
+.dw-rp-point {
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13.5px;
+}
+.dw-rp-similar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+  color: #0f172a;
+}
+.dw-rp-similar:hover b {
+  color: #2563eb;
+}
+.dw-rp-simsum {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+.dw-rp-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dw-rp-timeline li {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px;
+  padding: 6px 0 6px 10px;
+  border-left: 3px solid #e2e8f0;
+  font-size: 13px;
+}
+.dw-rp-timeline li.dw-rp-tl-warning {
+  border-left-color: #f59e0b;
+}
+.dw-rp-timeline li.dw-rp-tl-key {
+  border-left-color: #2563eb;
+  font-weight: 600;
+}
+.dw-rp-subhead {
+  font-weight: 700;
+  margin: 8px 0 4px;
+}
+.dw-rp-check {
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+.dw-rp-check.is-unknown {
+  background: #fffbeb;
+}
+.dw-rp-perpay {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.dw-rp-perpay-item {
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.dw-rp-more {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px 16px;
+}
+.dw-rp-more summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.dw-rp-evidence {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.dw-live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: dw-live 1.2s ease-in-out infinite;
+  vertical-align: 1px;
+}
+@keyframes dw-live {
+  50% {
+    opacity: 0.3;
+  }
+}
