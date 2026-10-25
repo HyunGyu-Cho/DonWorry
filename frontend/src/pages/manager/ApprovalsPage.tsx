@@ -108,7 +108,7 @@ export function ApprovalsPage() {
 
   const header = (
     <PageHeader
-      title="2인 승인함"
+      title="담당자 승인함"
       description="한 사람이 혼자 위험한 변경을 반영하지 못하게, 요청한 사람과 다른 관리자가 승인합니다."
     />
   )

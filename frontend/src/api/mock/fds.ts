@@ -351,7 +351,7 @@ export async function mockEnableRule(ruleId: number): Promise<FdsRule> {
   return structuredClone(currentRules().find((r) => r.ruleId === ruleId) as FdsRule)
 }
 
-// 2인 승인으로 풀린 값은 releasedAt이 찍힌다
+// 담당자 승인으로 풀린 값은 releasedAt이 찍힌다
 function currentBlocklist(): BlocklistEntry[] {
   const releases = mockApprovedReleases()
   return [...addedEntries, ...buildMockBlocklist(new Date())].map((entry) => {

@@ -1,4 +1,4 @@
-// P3 investigation Mock — 직원 사건 · 2인 승인 · 감사 로그 (프로토타입 v3.1 시나리오)
+// P3 investigation Mock — 직원 사건 · 담당자 승인 · 감사 로그 (프로토타입 v3.1 시나리오)
 // 0-2 로그인 기록 · 0-3 직원 경보 Mock과 같은 장면이다
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
 import {
@@ -369,7 +369,7 @@ export async function mockDecideApproval(
   await mockRespond(null)
   const found = current().approvals.find((a) => a.approvalId === approvalId)
   if (!found || found.status !== 'PENDING') throw new ApprovalClosedError()
-  // 2인 승인: 요청자 본인은 승인도 거절도 할 수 없다 (DB CHECK 제약과 같은 규칙)
+  // 담당자 승인: 요청자 본인은 승인도 거절도 할 수 없다 (DB CHECK 제약과 같은 규칙)
   if (found.requestedBy === actor.userId) throw new SelfApprovalError()
   if (decision === 'REJECT' && !comment.trim()) throw new RejectReasonRequiredError()
   found.status = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED'

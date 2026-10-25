@@ -1,4 +1,4 @@
-// P3 investigation API 계약 — 직원 사건 · 2인 승인 · 감사 로그
+// P3 investigation API 계약 — 직원 사건 · 담당자 승인 · 감사 로그
 // VITE_USE_MOCK에 investigation이 있으면 Mock, 없으면 실제 API를 쓴다
 // 결제 사건 API는 api/cases.ts (팀 코드, 실제 API 연결)
 import { api, ApiError } from './client.ts'
@@ -95,7 +95,7 @@ export const getStaffCases = mock ? mockGetStaffCases : realGetStaffCases
 export const getStaffCase = mock ? mockGetStaffCase : realGetStaffCase
 // 직원 사건 조치 (보안 관리자만, 대상 직원 본인 불가)
 export const requestCaseActions = mock ? mockRequestCaseActions : realRequestCaseActions
-// 2인 승인함
+// 담당자 승인함
 export const getApprovals = mock ? mockGetApprovals : realGetApprovals
 // AI 권고 반대 판정 · Rule 끄기 · 기준 완화 · 차단 해제 요청
 export const createApproval = mock ? mockCreateApproval : realCreateApproval

@@ -417,7 +417,7 @@ export function CaseDetailPage() {
       <Card>
         <b>보안 직원이 판정합니다</b>
         <p className="dw-muted dw-small">
-          관리자는 AI 권고와 반대되는 판정이 올라오면 2인 승인함에서 승인합니다.
+          관리자는 AI 권고와 반대되는 판정이 올라오면 담당자 승인함에서 승인합니다.
         </p>
       </Card>
     ) : (

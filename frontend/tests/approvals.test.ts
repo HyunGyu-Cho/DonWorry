@@ -108,7 +108,7 @@ test('handoffs_afterDecision_showCompletedVoid', async () => {
 })
 
 test('humanText_forAuditAndExpiry', () => {
-  assert.equal(auditActionText('APPROVAL_REJECTED'), '2인 승인 · 거절')
+  assert.equal(auditActionText('APPROVAL_REJECTED'), '담당자 승인 · 거절')
   assert.equal(auditActionText('UNKNOWN_CODE'), 'UNKNOWN_CODE')
   assert.equal(auditDetailText({ attempts: 3 }), '3회 시도')
   assert.equal(auditDetailText({ rule: 'HIGH_AMOUNT' }), null)

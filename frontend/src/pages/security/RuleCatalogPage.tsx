@@ -412,7 +412,7 @@ export function RuleCatalogPage() {
         ))}
       </div>
       <p className="dw-muted dw-small dw-rule-note">
-        점수와 기준값은 시연용입니다. Rule을 끄는 것(완화)은 2인 승인이 필요하고, 다시 켜는
+        점수와 기준값은 시연용입니다. Rule을 끄는 것(완화)은 담당자 승인이 필요하고, 다시 켜는
         것(강화)은 바로 반영됩니다.
       </p>
       <Modal

@@ -21,7 +21,7 @@ const REC_TEXT: Record<AiRecommendation, [string, string]> = {
   NEEDS_CHECK: ['추가 확인 먼저', 'gold'],
 }
 
-// AI 권고와 반대인 판정 (권고가 취소인데 허용) — 1-5b에서 재인증 + 2인 승인이 붙는다
+// AI 권고와 반대인 판정 (권고가 취소인데 허용) — 1-5b에서 재인증 + 담당자 승인이 붙는다
 const opposite = (rec: AiRecommendation | undefined, d: Decision | undefined) =>
   rec === 'REJECT_REVIEW' && d === 'ACCEPT'
 

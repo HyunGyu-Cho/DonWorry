@@ -1,4 +1,4 @@
-// 2인 승인함 · 감사 로그 · 조치 센터 화면(1-6)의 말 바꾸기 — React 없이 순수 함수만 (node 테스트가 직접 불러온다)
+// 담당자 승인함 · 감사 로그 · 조치 센터 화면(1-6)의 말 바꾸기 — React 없이 순수 함수만 (node 테스트가 직접 불러온다)
 import type { HandoffRow } from '../types/case.ts'
 import type { ApprovalRequestType, AuditLog } from '../types/investigation.ts'
 
@@ -27,9 +27,9 @@ const ACTION_TEXT: Record<string, string> = {
   SESSION_CONCURRENT: '세션 동시 사용 감지',
   SESSION_TERMINATED: '세션 강제 종료',
   STAFF_UNLOCKED: '계정 잠금 해제',
-  APPROVAL_REQUESTED: '2인 승인 요청',
-  APPROVAL_APPROVED: '2인 승인 · 승인',
-  APPROVAL_REJECTED: '2인 승인 · 거절',
+  APPROVAL_REQUESTED: '담당자 승인 요청',
+  APPROVAL_APPROVED: '담당자 승인 · 승인',
+  APPROVAL_REJECTED: '담당자 승인 · 거절',
   CASE_CREATED: '사건 자동 생성',
   CASE_ACTIONS_REQUESTED: '직원 사건 판정 · 조치 요청',
   DECISION_CONFIRMED: '결제 사건 판정',

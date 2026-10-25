@@ -20,7 +20,7 @@ const otherManager = { userId: 9, role: 'SECURITY_MANAGER', displayName: '다른
 
 beforeEach(() => resetMockInvestigation())
 
-// 요청자가 자기 요청을 승인할 수 있으면 2인 승인이 무력화된다
+// 요청자가 자기 요청을 승인할 수 있으면 담당자 승인이 무력화된다
 test('mockDecideApproval_whenRequesterApprovesOwn_rejects', async () => {
   setMockActor(yunseo)
   const created = await mockCreateApproval({

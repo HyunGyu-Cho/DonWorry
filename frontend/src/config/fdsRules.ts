@@ -108,7 +108,7 @@ export const RULE_GUIDE: Record<RuleCode, RuleGuide> = {
   },
   CONFIG_WEAKEN: {
     group: '행동',
-    effect: '경보 · 2인 승인 대기에 위험 표시',
+    effect: '경보 · 담당자 승인 대기에 위험 표시',
     example: '"고액 결제" Rule 끄기 요청',
     alone: '단독으론 정상 — 오탐을 줄이려는 튜닝일 수도',
   },

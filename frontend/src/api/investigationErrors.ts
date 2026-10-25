@@ -1,6 +1,6 @@
 // P3 investigation 화면용 오류 — Mock과 실제 API가 같이 쓴다 (테스트가 불러오므로 mockMode를 쓰지 않는다)
 
-// 2인 승인: 요청한 사람은 자기 요청을 승인 · 거절할 수 없다
+// 담당자 승인: 요청한 사람은 자기 요청을 승인 · 거절할 수 없다
 export class SelfApprovalError extends Error {
   constructor() {
     super('자신이 요청한 건은 승인할 수 없습니다. 다른 보안 관리자의 확인이 필요합니다.')
