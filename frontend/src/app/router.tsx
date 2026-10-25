@@ -13,6 +13,7 @@ import { AlertListPage } from '../pages/security/AlertListPage'
 import { StaffAccessPage } from '../pages/manager/StaffAccessPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
+import { ReportPage } from '../pages/security/ReportPage'
 import { ActionCenterPage } from '../pages/security/ActionCenterPage'
 import { ApprovalsPage } from '../pages/manager/ApprovalsPage'
 import { AuditLogPage } from '../pages/manager/AuditLogPage'
@@ -51,7 +52,7 @@ export const router = createBrowserRouter([
           { path: 'blocklist', element: <BlocklistPage /> },
           { path: 'cases', element: <CaseListPage /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
-          { path: 'cases/:id/report', element: <EmptyPage title="AI 보고서" slice="1-7" /> },
+          { path: 'cases/:id/report', element: <ReportPage /> },
           { path: 'actions', element: <ActionCenterPage /> },
           { path: 'notifications', element: <EmptyPage title="메일 발송 기록" slice="1-8" /> },
           // 예전 첫 화면 주소로 들어와도 홈으로 보낸다
@@ -68,7 +69,7 @@ export const router = createBrowserRouter([
           { path: 'access', element: <StaffAccessPage /> },
           { path: 'cases', element: <CaseListPage scope="staff" /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
-          { path: 'cases/:id/report', element: <EmptyPage title="AI 보고서" slice="1-7" /> },
+          { path: 'cases/:id/report', element: <ReportPage /> },
           { path: 'audit', element: <AuditLogPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/manager" /> },
         ],

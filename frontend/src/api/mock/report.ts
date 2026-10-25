@@ -373,11 +373,15 @@ export function buildMockReports(now: Date): ConclusionReport[] {
       summary:
         '김민수 고객 계정에서 처음 쓰는 카드로 평소(4만 원)보다 큰 65만 원을 결제했습니다. 구매자 본인 확인 응답은 아직 없습니다.',
       recommendations: [
-        { label: '승인 취소 검토 · 결제 #31', kind: 'NEGATIVE' },
+        { label: '승인 취소 검토 · 단체 행사용 케이크 세트', kind: 'NEGATIVE' },
         { label: '구매자 본인 확인 연락', kind: 'INFO' },
       ],
       riskPoints: [
-        { title: '고액 결제 (+20점)', detail: '결제 #31 · 65만 원', source: 'FDS 평가' },
+        {
+          title: '고액 결제 (+20점)',
+          detail: '단체 행사용 케이크 세트 · 65만 원',
+          source: 'FDS 평가',
+        },
         {
           title: '평소보다 큰 금액 (+20점)',
           detail: '평균 4만 원 고객의 65만 원 결제',
@@ -385,7 +389,7 @@ export function buildMockReports(now: Date): ConclusionReport[] {
         },
         {
           title: '처음 쓰는 카드 (+15점)',
-          detail: '**** 1173 · 이 고객의 결제 완료 이력 없음',
+          detail: '끝자리 1173 카드 · 이 고객의 결제 완료 이력 없음',
           source: 'FDS 평가',
         },
       ],
@@ -408,18 +412,18 @@ export function buildMockReports(now: Date): ConclusionReport[] {
         '확정 후 사기면 카드 · 기기를 차단 목록에 등록',
       ],
       timeline: [
-        { at: at(60 * 24 * 12), text: '정상 결제 3만 2천 원 (**** 4821)', kind: 'NORMAL' },
+        { at: at(60 * 24 * 12), text: '정상 결제 3만 2천 원 (끝자리 4821 카드)', kind: 'NORMAL' },
         {
           at: at(25),
-          text: '결제 #31 · 65만 원 (**** 1173) → FDS 55점 REVIEW → 매입 보류',
+          text: '단체 행사용 케이크 세트 65만 원 (끝자리 1173 카드) → FDS 55점 직원 확인 → 매입 보류',
           kind: 'WARNING',
         },
-        { at: at(24), text: '사건 201 생성 · AI 조사 요청', kind: 'KEY' },
+        { at: at(24), text: '사건 자동 생성 · AI 조사 요청', kind: 'KEY' },
       ],
       paymentRecommendations: [
         {
           paymentId: '31',
-          label: '결제 #31 · 단체 행사용 케이크 세트',
+          label: '단체 행사용 케이크 세트',
           amount: 650000,
           recommendation: 'REJECT_REVIEW',
           reason: '처음 쓰는 카드로 평소의 16배 금액, 본인 확인 전',
@@ -540,7 +544,7 @@ function buildPastReports(now: Date): ConclusionReport[] {
         paymentRecommendations: [
           {
             paymentId: '18',
-            label: '결제 #18 · 생일 케이크 세트',
+            label: '생일 케이크 세트',
             amount: 480000,
             recommendation: 'REJECT_REVIEW',
             reason: '구매자가 결제하지 않았다고 응답',
@@ -572,7 +576,7 @@ function buildPastReports(now: Date): ConclusionReport[] {
         paymentRecommendations: [
           {
             paymentId: '17',
-            label: '결제 #17 · 돌잔치 케이크',
+            label: '돌잔치 케이크',
             amount: 520000,
             recommendation: 'ACCEPT_REVIEW',
             reason: '구매자 본인 결제 확인',
