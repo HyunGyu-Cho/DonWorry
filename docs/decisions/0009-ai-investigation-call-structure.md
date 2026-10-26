@@ -1,7 +1,7 @@
 # 0009. AI 조사 호출 구조 (Spring ↔ FastAPI)
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112)
+- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-26 개정: 조사 요청에 사건 종류 · AI가 쓰는 칸 3유형 (#60)
 - **관련:** Notion fds 정본 — 02 기획 2.5 · 2.6 · 2.7, 03 설계 3.5 · 3.6 · 3.7 · 3.9⑤ · 3.11, 공통 페이지 §5.3 · §5.4, [ADR-0012](0012-payment-settlement-dependency.md) (ADR-0001 대체), 화면 타입 `frontend/src/types/case.ts`
 - **영향 받는 담당:** P4 현규, P3 수민(조사 요청 · 판정 검증), P1 주환(인증 설정 · 보안 이벤트 조회), P2 · P5(Tool이 읽는 공개 api 제공), CakeShop(주문 정보), 화면 담당(보고서 응답 형식)
 
@@ -31,7 +31,7 @@ sequenceDiagram
 
     P3->>R: 조사 요청 (caseId · 증거 버전, 방식 미정 §5.3)
     R->>R: ai_reports PENDING 저장 (report_version + 1)
-    R->>A: POST /investigations (reportId, attemptId, caseId, evidenceVersion)
+    R->>A: POST /investigations (reportId, attemptId, caseId, caseType, evidenceVersion)
     A-->>R: 202 Accepted
     R->>R: RUNNING (PENDING일 때만 — 조건부 UPDATE)
     loop Agent가 필요한 증거만
@@ -126,6 +126,11 @@ sequenceDiagram
 
 - **권고 값:** `ACCEPT_REVIEW` / `REJECT_REVIEW` / `NEEDS_CHECK`. 참고용이며 최종 판정은 직원이 한다
 - **보고서 속 결제 ID:** Tool로 받은 실제 ID만 쓴다. 저장 전에 Case 소속인지 검증하고, 아니면 구조 검증 실패(시도 실패 1회)로 처리한다
+- **AI가 쓰는 칸 (2026-10-26, #60):** 화면 결론 카드(`frontend/src/types/report.ts`)의 [AI] 칸만 ai-server가 쓰고, [Spring] 칸(사건 번호 · 경위 · 결제 이름/금액 · 증거 · 비슷한 사건 · 조사 과정)은 Spring이 합쳐 `report_body`로 저장한다
+  - 사건 종류를 알아야 형식을 고를 수 있으므로 조사 요청에 `caseType`(`PAYMENT_FRAUD` · `STAFF_TAKEOVER` · `STAFF_SPRAY`)을 싣는다
+  - 공통 칸: `reportType` · `riskScore`(0~100) · `verdict` · `summary` · `recommendations[{label, kind}]` · `riskPoints[{title, detail, source}]` · `normalPoints` · `unknowns` · `checks`(1개 이상)
+  - 결제 사기만: `paymentAdvice[{paymentId, recommendation, reason}]` 1개 이상. 직원 사건 2종에 쓰면 구조 검증 실패
+  - 정의: `ai-server/app/schemas/report.py` (형식 검사 기준). 요청한 `caseType`과 답의 `reportType`이 다르면 구조 검증 실패
 - **실패 정보:** 결정 2대로 `error`는 응답에서 뺀다
 
 ## 미정 — P3 ↔ P4 계약 (공통 페이지 §5.3)

@@ -49,7 +49,7 @@ npm의 `npm ci`와 같은 역할입니다. `uv.lock`(잠금 파일)과 `pyprojec
 ### pytest
 
 - `ai-server/tests/` 아래 `test_*.py` 파일을 자동으로 찾아 돌립니다. **워크플로를 고칠 필요 없이** 파일을 넣기만 하면 CI에 포함됩니다
-- `test_health.py`(`/health` 응답)와 `test_investigations.py`(조사 접수 · 조회 · 다시 묻기, 2-14)가 있습니다
+- `test_health.py`(`/health` 응답), `test_investigations.py`(조사 접수 · 조회 · 다시 묻기, 2-14), `test_report_drafts.py`(사건 종류별 보고서 형식 검사, 2-15)가 있습니다
 
 ## 2. docs
 

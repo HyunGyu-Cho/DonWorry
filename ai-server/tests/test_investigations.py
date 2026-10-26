@@ -39,6 +39,7 @@ def body(report_id: int = 1, attempt_id: str | None = None) -> dict[str, object]
         "reportId": report_id,
         "attemptId": attempt_id or str(uuid4()),
         "caseId": 201,
+        "caseType": "PAYMENT_FRAUD",
         "evidenceVersion": 2,
     }
 
@@ -68,10 +69,15 @@ def test_accept_withoutOrWrongKey_rejected() -> None:
 
 # 필수 값이 빠지거나 잘못되면 422
 def test_accept_invalidBody_returns422() -> None:
-    missing = {"reportId": 1, "caseId": 201, "evidenceVersion": 1}
+    missing = {"reportId": 1, "caseId": 201, "caseType": "PAYMENT_FRAUD", "evidenceVersion": 1}
     assert client().post("/investigations", json=missing, headers=HEADERS).status_code == 422
     bad = body() | {"evidenceVersion": 0}
     assert client().post("/investigations", json=bad, headers=HEADERS).status_code == 422
+    # 사건 종류가 없거나 모르는 값이면 어떤 형식으로 쓸지 몰라 받지 않는다 (2-15)
+    no_type = {k: v for k, v in body().items() if k != "caseType"}
+    assert client().post("/investigations", json=no_type, headers=HEADERS).status_code == 422
+    odd_type = body() | {"caseType": "UNKNOWN"}
+    assert client().post("/investigations", json=odd_type, headers=HEADERS).status_code == 422
 
 
 # 접수 뒤 조사가 끝나면 조회에 보고서와 과정(AI 판단 → 구조 검증 통과)이 남는다
@@ -86,7 +92,8 @@ def test_find_afterAccepted_returnsSucceededReport() -> None:
     data = res.json()
     assert data["status"] == "SUCCEEDED"
     assert data["caseId"] == 201 and data["evidenceVersion"] == 2
-    assert data["report"]["additionalChecks"] == ["구매자 본인 확인"]
+    assert data["caseType"] == "PAYMENT_FRAUD"
+    assert data["report"]["checks"] == ["구매자 본인 확인 응답"]
     assert data["error"] is None
     assert [s["detail"] for s in data["steps"]] == ["AI 판단 (1차)", "구조 검증 통과"]
 
