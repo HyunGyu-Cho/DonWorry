@@ -47,6 +47,7 @@ class InvestigationService:
                     report_id=request.report_id,
                     attempt_id=request.attempt_id,
                     case_id=request.case_id,
+                    case_type=request.case_type,
                     evidence_version=request.evidence_version,
                     status=InvestigationStatus.RUNNING,
                 )
@@ -86,7 +87,7 @@ class InvestigationService:
 
             started, clock = self.now(), time.monotonic()
             try:
-                report = self.agent.parse(raw)
+                report = self.agent.parse(raw, request)
             except InvalidAnswer as invalid:
                 last_reason = invalid.reason
                 retry = attempt < self.max_llm_attempts
@@ -125,6 +126,7 @@ class InvestigationService:
             report_id=request.report_id,
             attempt_id=request.attempt_id,
             case_id=request.case_id,
+            case_type=request.case_type,
             evidence_version=request.evidence_version,
             status=status,
             steps=steps,
