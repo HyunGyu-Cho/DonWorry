@@ -79,7 +79,7 @@ def test_firstMessages_listsCasePaymentsOnlyForPaymentFraud() -> None:
 # 가짜 AI는 예시 번호 대신 질문에 적힌 결제마다 권고를 쓰고, 그 답은 검사를 통과한다
 def test_mockLlm_usesCasePaymentIds() -> None:
     fraud = request("PAYMENT_FRAUD").model_copy(update={"payment_ids": [57, 58]})
-    raw = asyncio.run(AGENT.ask(AGENT.first_messages(fraud)))
+    raw = asyncio.run(AGENT.ask(AGENT.first_messages(fraud), [])).content
 
     draft = AGENT.parse(raw, fraud)
     assert [a.payment_id for a in draft.payment_advice] == ["57", "58"]  # type: ignore[union-attr]

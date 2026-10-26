@@ -4,7 +4,8 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.agent.investigator import InvestigationAgent
-from app.agent.llm import LlmError, LlmMessage, MockLlmClient
+from app.agent.llm import LlmError, LlmMessage, LlmReply, MockLlmClient
+from app.agent.tools import ToolSpec
 from app.config import Settings
 from app.main import create_app
 from app.schemas.investigation import InvestigationRequest
@@ -24,13 +25,15 @@ class CountingLlm(MockLlmClient):
         super().__init__(invalid_answers)
         self.calls = 0
 
-    async def complete(self, messages: list[LlmMessage]) -> str:
+    async def complete(
+        self, messages: list[LlmMessage], tools: list[ToolSpec] | None = None
+    ) -> LlmReply:
         self.calls += 1
-        return await super().complete(messages)
+        return await super().complete(messages, tools)
 
 
 class BrokenLlm:
-    async def complete(self, messages: list[LlmMessage]) -> str:
+    async def complete(self, messages: list[LlmMessage], tools: list[ToolSpec]) -> LlmReply:
         raise LlmError("연결 시간 초과")
 
 
@@ -182,9 +185,11 @@ def test_run_newAttemptDuringRun_discardsOldResult() -> None:
         release = asyncio.Event()
 
         class SlowLlm(MockLlmClient):
-            async def complete(self, messages: list[LlmMessage]) -> str:
+            async def complete(
+                self, messages: list[LlmMessage], tools: list[ToolSpec] | None = None
+            ) -> LlmReply:
                 await release.wait()
-                return await super().complete(messages)
+                return await super().complete(messages, tools)
 
         service = InvestigationService(InvestigationAgent(SlowLlm()))
         old = InvestigationRequest.model_validate(body())

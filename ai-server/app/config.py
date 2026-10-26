@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # 한 번의 시도 안에서 AI 답이 형식 검사에 떨어졌을 때 다시 묻는 최대 횟수 (첫 질문 포함)
     max_llm_attempts: int = 3
 
+    # 한 시도에서 AI가 부를 수 있는 증거 조회 창구 수 (넘으면 한 번 알리고, 그래도면 형식 실패, #72)
+    max_tool_calls: int = 8
+
     # 가짜 AI가 처음 N번은 형식이 틀린 답을 낸다 — 시연 · 테스트에서 "1차 실패 → 다시 시도" 재현
     mock_invalid_answers: int = 0
 
