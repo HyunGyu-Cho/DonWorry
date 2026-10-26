@@ -20,7 +20,8 @@ export const tokens = {
     headerHeight: 56,
     sidebarWidth: 220,
     mainPadding: 32,
-    minAdminWidth: 1280,
+    // 시안 기준 폭. 이보다 좁으면 메뉴 · 여백을 줄이고 1024px 미만은 ☰ 메뉴 (1-14)
+    designWidth: 1280,
   },
   radius: {
     control: 6,
