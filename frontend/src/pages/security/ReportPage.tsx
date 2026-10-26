@@ -6,7 +6,7 @@ import { getCase } from '../../api/cases'
 import { getStaffCase } from '../../api/investigation'
 import { StaffCaseForbiddenError } from '../../api/investigationErrors'
 import { getCaseReport, getReportRun } from '../../api/report'
-import { toConclusionReport } from '../../api/reportConvert'
+import { asConclusionReport } from '../../api/reportConvert'
 import { StaffReportForbiddenError } from '../../api/reportErrors'
 import { useAuth } from '../../auth/useAuth'
 import { ConclusionCard } from '../../components/explain/ConclusionCard'
@@ -39,7 +39,7 @@ async function fetchReport(id: string, merchant: string): Promise<Loaded> {
     if (detail) {
       const legacy = latestReport(detail.reports)?.reportBody
       return {
-        report: report ?? (legacy ? toConclusionReport(legacy) : null),
+        report: report ?? (legacy ? asConclusionReport(legacy) : null),
         run,
         info: detail.securityCase,
       }

@@ -61,6 +61,30 @@ public class ReportTransitions {
         return aiReportRepository.markFailed(reportId, errorBody, micros(completedAt)) == 1;
     }
 
+    // 결과를 받았을 때 그 보고서의 대상 (Case 종류 포함)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Optional<ReportTarget> target(Long reportId) {
+        return aiReportRepository
+                .findById(reportId)
+                .flatMap(report -> securityCaseRepository
+                        .findById(report.getCaseId())
+                        .map(securityCase -> new ReportTarget(
+                                report.getId(),
+                                report.getCaseId(),
+                                securityCase.getCaseType().name(),
+                                report.getReportVersion(),
+                                report.getEvidenceVersion())));
+    }
+
+    // 끝난 보고서인지 — 없는 보고서도 끝난 것으로 본다 (더 할 일이 없음)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public boolean isFinished(Long reportId) {
+        return aiReportRepository
+                .findById(reportId)
+                .map(report -> report.getStatus().isFinished())
+                .orElse(true);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public Optional<Integer> currentEvidenceVersion(Long caseId) {
         return securityCaseRepository.findById(caseId).map(SecurityCase::getEvidenceVersion);

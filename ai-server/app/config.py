@@ -9,7 +9,11 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
 
     # Spring ↔ ai-server 서비스 간 키 (X-Service-Key). 비어 있으면 조사 API를 모두 막는다
+    # 결과를 Spring에 보낼 때도 같은 키를 쓴다 (2-17)
     service_key: str = ""
+
+    # 조사 결과를 보낼 Spring 주소. 비어 있으면 보내지 않고 조회(GET /investigations/{id})로만 확인
+    spring_base_url: str = ""
 
     # 한 번의 시도 안에서 AI 답이 형식 검사에 떨어졌을 때 다시 묻는 최대 횟수 (첫 질문 포함)
     max_llm_attempts: int = 3

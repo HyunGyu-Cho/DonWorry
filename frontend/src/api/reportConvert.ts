@@ -10,6 +10,20 @@ const RECOMMENDATION_TEXT: Record<AiRecommendation, { label: string; kind: Recom
   NEEDS_CHECK: { label: '추가 확인', kind: 'INFO' },
 }
 
+// 2-17부터 백엔드가 결론 카드 형식(schemaVersion 2)으로 저장한다 — 그건 바꾸지 않고 그대로 쓴다
+export function isConclusionReport(body: unknown): body is ConclusionReport {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    (body as { schemaVersion?: unknown }).schemaVersion === 2
+  )
+}
+
+// 옛 8개 절 형식이면 바꾸고, 결론 카드 형식이면 그대로
+export function asConclusionReport(body: ReportBody | ConclusionReport): ConclusionReport {
+  return isConclusionReport(body) ? body : toConclusionReport(body)
+}
+
 export function toConclusionReport(
   body: ReportBody,
   reportType: ReportType = 'PAYMENT_FRAUD',

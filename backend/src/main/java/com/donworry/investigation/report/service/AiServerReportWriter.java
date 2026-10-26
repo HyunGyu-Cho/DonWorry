@@ -49,21 +49,22 @@ class AiServerReportWriter implements ReportWriter {
         this.pause = pause;
     }
 
+    // 지금까지 시도한 횟수에 이어서 센다 — 결과 실패 뒤 다시 부르면 2번째 · 3번째 시도가 된다 (#64)
     @Override
     public void write(ReportTarget target) {
+        Long reportId = target.reportId();
         Outcome last = null;
-        int attempt = 0;
-        while (attempt < MAX_ATTEMPTS) {
-            attempt++;
-            UUID attemptId = attemptRegistry.next(target.reportId());
+        while (attemptRegistry.attempts(reportId) < MAX_ATTEMPTS) {
+            UUID attemptId = attemptRegistry.next(reportId);
+            int attempt = attemptRegistry.attempts(reportId);
             last = aiServerClient.requestInvestigation(
-                    target.reportId(), attemptId, target.caseId(), target.caseType(), target.evidenceVersion());
+                    reportId, attemptId, target.caseId(), target.caseType(), target.evidenceVersion());
             if (last.kind() == Kind.ACCEPTED) {
                 // 결과가 접수 응답보다 먼저 와서 이미 끝났으면 false — 덮지 않는다 (#54)
-                reportTransitions.running(target.reportId());
+                reportTransitions.running(reportId);
                 return;
             }
-            log.warn("ai-server 접수 실패 reportId={} attempt={} reason={}", target.reportId(), attempt, last.reason());
+            log.warn("ai-server 접수 실패 reportId={} attempt={} reason={}", reportId, attempt, last.reason());
             if (last.kind() == Kind.REJECTED || attempt == MAX_ATTEMPTS) {
                 break;
             }
@@ -72,8 +73,8 @@ class AiServerReportWriter implements ReportWriter {
             }
         }
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        reportTransitions.fail(target.reportId(), error(last, attempt, now), now);
-        attemptRegistry.forget(target.reportId());
+        reportTransitions.fail(reportId, error(last, attemptRegistry.attempts(reportId), now), now);
+        attemptRegistry.forget(reportId);
     }
 
     // 쉬는 중에 서버가 내려가면 더 시도하지 않는다

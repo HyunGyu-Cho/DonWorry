@@ -1,3 +1,4 @@
+import type { ConclusionReport } from '../types/report.ts'
 import type {
   ActionHandoff,
   AiReport,
@@ -40,7 +41,7 @@ type ServerPayment = Omit<CasePayment, 'casePaymentId' | 'paymentId'> & {
 type ServerReport = Omit<AiReport, 'reportId' | 'caseId' | 'reportBody'> & {
   reportId: Id
   caseId: Id
-  reportBody: ReportBody | null
+  reportBody: ReportBody | ConclusionReport | null
 }
 type ServerDecision = Omit<
   PaymentDecision,
