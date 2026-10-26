@@ -1755,3 +1755,28 @@ i.dw-stl-chip {
   color: #2563eb;
   font-size: 13px;
 }
+.dw-stl-cell .dw-stl-chip small {
+  font-size: 10px;
+  opacity: 0.85;
+}
+.dw-stl-daysum {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.dw-stl-more {
+  margin-top: 10px;
+}
+.dw-stl-list-sum {
+  margin: 0 0 10px;
+}
+.dw-stl-list-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}

@@ -147,9 +147,15 @@ export function ManagementLayout({
 }) {
   const location = useLocation()
   // 다른 화면으로 가면 맨 위부터 보이게 (이전 화면의 스크롤 위치가 남지 않게)
+  // 데이터가 늦게 와서 화면이 길어져도 밀리지 않게, 그린 뒤에도 한 번 더
   useEffect(() => {
-    window.scrollTo(0, 0)
-    document.getElementById('main')?.scrollTo(0, 0)
+    const top = () => {
+      window.scrollTo(0, 0)
+      document.getElementById('main')?.scrollTo(0, 0)
+    }
+    top()
+    const later = setTimeout(top, 400)
+    return () => clearTimeout(later)
   }, [location.pathname])
   return (
     <div className="admin-viewport">

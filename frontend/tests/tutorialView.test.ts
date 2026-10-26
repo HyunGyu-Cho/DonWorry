@@ -58,6 +58,7 @@ test('everyTarget_existsInSource', () => {
     'pages/owner/LoanProductsPage.tsx',
     'components/tutorial/TutorialPanel.tsx',
     'pages/manager/StaffAccessPage.tsx',
+    'pages/owner/SettlementCalendarPage.tsx',
   ]
   const source = files
     .map((f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'))
@@ -71,6 +72,7 @@ test('everyTarget_existsInSource', () => {
       const found =
         new RegExp(`data-tour="[^"]*\\b${step.target}\\b`).test(source) ||
         source.includes(`"${step.target}"`) ||
+        source.includes(`'${step.target}'`) ||
         source.includes(`\`${name}\${`)
       assert.ok(found, `${id}: ${step.target}`)
     }

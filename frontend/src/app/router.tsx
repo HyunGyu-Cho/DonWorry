@@ -21,6 +21,7 @@ import { SecurityHomePage } from '../pages/security/SecurityHomePage'
 import { ManagerHomePage } from '../pages/manager/ManagerHomePage'
 import { LandingPage } from '../pages/public/LandingPage'
 import { SettlementCalendarPage } from '../pages/owner/SettlementCalendarPage'
+import { SettlementDayPage } from '../pages/owner/SettlementDayPage'
 import { FundsPage } from '../pages/owner/FundsPage'
 import { LoanProductsPage } from '../pages/owner/LoanProductsPage'
 import { BuyerConfirmPage } from '../pages/public/BuyerConfirmPage'
@@ -99,6 +100,7 @@ export const router = createBrowserRouter([
           { path: 'home', element: <OwnerHomePage /> },
           { path: 'results', element: <OwnerResultsPage /> },
           { path: 'settlements', element: <SettlementCalendarPage /> },
+          { path: 'settlements/:date', element: <SettlementDayPage /> },
           { path: 'funds', element: <FundsPage /> },
           { path: 'loans', element: <LoanProductsPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },

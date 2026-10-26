@@ -679,3 +679,8 @@ textarea {
 .dw-login-links .ant-btn-link {
   padding-inline: 0;
 }
+
+/* 화면 이동 후 내용이 늦게 그려져도 스크롤 위치가 밀리지 않게 (1-13) */
+html {
+  overflow-anchor: none;
+}

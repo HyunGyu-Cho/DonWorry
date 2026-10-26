@@ -170,10 +170,13 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
     },
     {
       title: '정산 캘린더',
-      todo: '빨간 출금이 있는 날을 눌러 보고, [자금 현황]으로 가 보세요.',
-      look: ['픽업이 끝나고 3일 뒤에 정산돼요', '점선은 픽업 전이라 늦어질 수 있는 정산이에요'],
+      todo: '주문이 많은 날을 눌러 [모두 보기]로 목록을 열어 보고, 빨간 출금 날도 눌러 보세요. 다 봤으면 [자금 현황]으로 가요.',
+      look: [
+        '주문이 수십 건이어도 칸에는 합계만 보여요',
+        '픽업이 끝나고 3일 뒤에 정산돼요 · 점선은 픽업 전이라 늦어질 수 있어요',
+      ],
       path: '/owner/settlements',
-      target: 'nav-owner-funds',
+      target: 'stl-busy',
     },
     {
       title: '14일 자금 예측',

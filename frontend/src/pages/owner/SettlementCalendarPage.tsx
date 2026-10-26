@@ -1,8 +1,9 @@
-import { Alert, Button, Calendar, Card, Spin } from 'antd'
+import { Alert, Button, Calendar, Card, Drawer, Spin } from 'antd'
 import koKR from 'antd/es/calendar/locale/ko_KR'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getFundForecast, getSettlements } from '../../api/settlement'
 import { PageHeader } from '../../components/common/PageHeader'
 import { RawDetails } from '../../components/explain/RawDetails'
@@ -10,13 +11,17 @@ import { kstDate } from '../../config/settlement'
 import type { ScheduledTransfer, SettlementEntry } from '../../types/settlement'
 import { koreanWon } from '../../utils/humanize'
 import {
+  busiestDay,
   calendarItems,
   type CalendarItem,
+  DAY_PREVIEW,
+  daySummary,
   monthDay,
   monthSummary,
   STAGE_ORDER,
   STAGE_VIEW,
 } from '../../utils/settlementView'
+import { SettlementDayList } from './settlement/SettlementDayList'
 
 type Data = { settlements: SettlementEntry[]; transfers: ScheduledTransfer[] }
 
@@ -45,6 +50,8 @@ export function SettlementCalendarPage() {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState(false)
   const [retry, setRetry] = useState(0)
+  const [listOpen, setListOpen] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     let alive = true
@@ -96,6 +103,13 @@ export function SettlementCalendarPage() {
 
   const summary = monthSummary(items, month)
   const dayRows = items.get(selected) ?? []
+  const day = daySummary(dayRows)
+  const busy = busiestDay(items, month)
+  // 오른쪽 칸 미리 보기: 들어올 돈 앞 몇 건 + 나갈 돈 전부
+  const preview = [
+    ...dayRows.filter((r) => r.stage !== 'OUTFLOW').slice(0, DAY_PREVIEW),
+    ...dayRows.filter((r) => r.stage === 'OUTFLOW'),
+  ]
   const [, m] = month.split('-').map(Number)
 
   return (
@@ -144,19 +158,25 @@ export function SettlementCalendarPage() {
                 <Button onClick={() => onChange(value.add(1, 'month'))}>다음 달 ›</Button>
               </div>
             )}
+            // 칸에는 합계만 — 주문이 수십 건이어도 모양이 같다 (자세한 건 눌러서)
             cellRender={(d: Dayjs, info) => {
               if (info.type !== 'date') return info.originNode
-              const rows = items.get(d.format('YYYY-MM-DD')) ?? []
+              const date = d.format('YYYY-MM-DD')
+              const rows = items.get(date) ?? []
+              if (rows.length === 0) return null
+              const sum = daySummary(rows)
               return (
-                <div className="dw-stl-cell">
-                  {rows.slice(0, 2).map((r) => (
-                    <div key={r.key} className={`dw-stl-chip dw-stl-${r.stage}`}>
-                      {r.stage === 'OUTFLOW' ? '−' : '+'}
-                      {koreanWon(r.amount)}
+                <div className="dw-stl-cell" data-tour={date === busy ? 'stl-busy' : undefined}>
+                  {sum.inflowCount > 0 && (
+                    <div className={`dw-stl-chip dw-stl-${sum.inflowStage}`}>
+                      +{koreanWon(sum.inflow)}
+                      {sum.inflowCount > 1 && <small> ({sum.inflowCount}건)</small>}
                     </div>
-                  ))}
-                  {rows.length > 2 && (
-                    <div className="dw-muted dw-small">외 {rows.length - 2}건</div>
+                  )}
+                  {sum.outflowCount > 0 && (
+                    <div className="dw-stl-chip dw-stl-OUTFLOW" data-tour="stl-outflow">
+                      −{koreanWon(sum.outflow)}
+                    </div>
                   )}
                 </div>
               )
@@ -170,7 +190,24 @@ export function SettlementCalendarPage() {
           {dayRows.length === 0 && (
             <p className="dw-muted">이날은 들어오거나 나가는 돈이 없어요.</p>
           )}
-          {dayRows.map((r) => (
+          {day.inflowCount > 0 && (
+            <div className="dw-stl-daysum">
+              <div>
+                들어올 돈 <b className="dw-stl-in">+{koreanWon(day.inflow)}</b> · {day.inflowCount}
+                건
+              </div>
+              {(['COMPLETED', 'SCHEDULED', 'EXPECTED'] as const)
+                .filter((st) => day.byStage[st].count > 0)
+                .map((st) => (
+                  <div key={st} className="dw-muted dw-small">
+                    <span className={`dw-stl-chip dw-stl-${st}`}>{STAGE_VIEW[st].label}</span>{' '}
+                    {day.byStage[st].count}건 · +{koreanWon(day.byStage[st].amount)}
+                    {st === 'EXPECTED' && ' (픽업 전 · 늦어질 수 있음)'}
+                  </div>
+                ))}
+            </div>
+          )}
+          {preview.map((r) => (
             <div key={r.key} className="dw-stl-row">
               <div>
                 <span className={`dw-stl-chip dw-stl-${r.stage}`}>{STAGE_VIEW[r.stage].label}</span>
@@ -183,6 +220,11 @@ export function SettlementCalendarPage() {
               </b>
             </div>
           ))}
+          {day.inflowCount > DAY_PREVIEW && (
+            <Button block className="dw-stl-more" onClick={() => setListOpen(true)}>
+              {dayRows.length}건 모두 보기
+            </Button>
+          )}
           {dayRows.length > 0 && (
             <RawDetails
               title="원본 값"
@@ -194,6 +236,20 @@ export function SettlementCalendarPage() {
           )}
         </Card>
       </div>
+      <Drawer
+        open={listOpen}
+        onClose={() => setListOpen(false)}
+        width={760}
+        title={`${monthDay(selected)} 정산 · 출금 목록`}
+        extra={
+          <Button onClick={() => navigate(`/owner/settlements/${selected}`)}>
+            전체 페이지로 보기 ↗
+          </Button>
+        }
+        destroyOnHidden
+      >
+        <SettlementDayList rows={dayRows} />
+      </Drawer>
     </>
   )
 }

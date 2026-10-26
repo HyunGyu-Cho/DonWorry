@@ -10,6 +10,9 @@ import {
 } from '../src/api/mock/settlement.ts'
 import {
   balanceBars,
+  busiestDay,
+  daySummary,
+  filterDayItems,
   calendarItems,
   coversNeed,
   monthDay,
@@ -90,4 +93,21 @@ test('loans_sortedAndCoverage', () => {
   assert.equal(termText(MOCK_LOAN_PRODUCTS[1]), '12개월')
   assert.equal(termText(MOCK_LOAN_PRODUCTS[0]), '6~12개월')
   assert.equal(monthDay('2026-10-30'), '10월 30일')
+})
+
+// 주문이 수십 건인 날도 칸에는 합계만 (멘토님 질문) — 합계 · 건수 · 점선 여부가 맞아야 한다
+test('daySummary_aggregatesBusyDay', () => {
+  const items = calendarItems(settlements, transfers)
+  const busy = busiestDay(items, today.slice(0, 7))!
+  const rows = items.get(busy)!
+  const sum = daySummary(rows)
+  assert.ok(sum.inflowCount >= 20)
+  assert.equal(
+    sum.inflow,
+    rows.filter((r) => r.stage !== 'OUTFLOW').reduce((n, r) => n + r.amount, 0),
+  )
+  // 픽업 전(예상) 정산이 섞이면 칸 칩은 점선(예상)
+  assert.equal(sum.inflowStage, sum.byStage.EXPECTED.count > 0 ? 'EXPECTED' : sum.inflowStage)
+  assert.equal(filterDayItems(rows, 'EXPECTED', '').length, sum.byStage.EXPECTED.count)
+  assert.ok(filterDayItems(rows, 'ALL', '마카롱').every((r) => r.title.includes('마카롱')))
 })
