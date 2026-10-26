@@ -7,7 +7,7 @@ import { StaffReportForbiddenError } from '../reportErrors.ts'
 import { getMockActor } from './investigation.ts'
 import { buildRun, finish, llm, llmFailed, req, tool, totalMs } from './reportSteps.ts'
 import type { StepDef } from './reportSteps.ts'
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import type { ConclusionReport, ReportRun, SimilarCase } from '../../types/report.ts'
 
 const MODEL = 'gpt-4.1-mini · OpenAI API (예시)'
@@ -35,6 +35,7 @@ const RUNS: Record<string, { version: number; doneAgo: number; defs: StepDef[] }
       ...finish(3),
     ],
   },
+  // 시연에서 실시간으로 지켜보는 조사 — 1차 실패 → 다시 시도가 눈에 띄게 천천히 (약 15초)
   '102': {
     version: 1,
     doneAgo: 1,
@@ -42,13 +43,13 @@ const RUNS: Record<string, { version: number; doneAgo: number; defs: StepDef[] }
       req('직원 경보 2건 · 보고서 v1'),
       tool(
         'get_security_events',
-        1500,
+        2500,
         '직원 경보 2건 · 박지원 · 이도현 계정',
         '로그인 실패 41회 · 해외 IP 30개 · 성공 0회',
       ),
-      tool('find_similar_cases', 1000, '같은 공격 IP 묶음 · 같은 Rule 조합', '0건'),
-      llmFailed(1, '구조 검증 실패: 필수 항목 "확인할 것" 누락 → 다시 시도 (최대 3회)'),
-      llm('위험 근거 3 · 정상 정황 2 · 권고 3', 'AI 판단 (2차)'),
+      tool('find_similar_cases', 1800, '같은 공격 IP 묶음 · 같은 Rule 조합', '0건'),
+      llmFailed(1, '구조 검증 실패: 필수 항목 "확인할 것" 누락 → 다시 시도 (최대 3회)', 4000),
+      llm('위험 근거 3 · 정상 정황 2 · 권고 3', 'AI 판단 (2차)', 5000),
       ...finish(1),
     ],
   },
@@ -59,7 +60,7 @@ const RUNS: Record<string, { version: number; doneAgo: number; defs: StepDef[] }
       req('결제 1건 · 보고서 v1'),
       tool('get_case_payments', 900, '이 사건에 묶인 결제', '결제 1건 · 합계 65만 원'),
       tool('get_fds_evidence', 1100, '결제 1건', 'Rule 3개 적중 · 55점'),
-      tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 12건 · 평균 4만 원'),
+      tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 5건 · 평균 4만 원'),
       tool(
         'get_payment_authentication',
         800,
@@ -280,7 +281,7 @@ export function buildMockReports(now: Date): ConclusionReport[] {
       riskScore: 88,
       verdict: '여러 IP로 나눠 직원 계정들의 비밀번호를 대입하는 공격입니다 (아직 뚫리지 않음)',
       summary:
-        '해외 IP 30개가 10분 동안 박지원 계정에 1~2번씩, 총 40회 비밀번호를 틀렸습니다. 같은 IP가 이도현 계정도 시도했습니다. IP 하나씩 보면 기준에 못 미치지만, 계정 기준으로 묶으면 자동화 도구로 비밀번호 목록을 대입하는 전형적인 공격입니다.',
+        '해외 IP 30개가 10분 동안 1~3번씩, 총 41회 로그인에 실패했습니다 (박지원 30회 · 이도현 10회 · 없는 아이디 1회). IP 하나씩 보면 기준에 못 미치지만, 계정 기준으로 묶으면 자동화 도구로 비밀번호 목록을 대입하는 전형적인 공격입니다.',
       recommendations: [
         { label: '공격 IP 30개 일괄 차단', kind: 'NEGATIVE' },
         { label: '박지원 · 이도현 비밀번호 변경', kind: 'NEGATIVE' },
@@ -288,12 +289,12 @@ export function buildMockReports(now: Date): ConclusionReport[] {
       ],
       riskPoints: [
         {
-          title: '분산 로그인 실패',
-          detail: '박지원 계정 · 해외 IP 30개에서 10분 안 실패 40회',
+          title: '분산 무차별 대입',
+          detail: '박지원 계정 · 해외 IP 25개에서 10분 안 실패 30회',
           source: '직원 경보 #5',
         },
         {
-          title: '비밀번호 뿌리기',
+          title: '패스워드 스프레이',
           detail: '같은 IP가 박지원 · 이도현 계정에 차례로 시도',
           source: '직원 경보 #6',
         },
@@ -327,7 +328,7 @@ export function buildMockReports(now: Date): ConclusionReport[] {
       ],
       timeline: [
         { at: at(9), text: '첫 실패 · 해외 IP에서 박지원 계정 로그인 실패', kind: 'WARNING' },
-        { at: at(1), text: 'IP 30개 · 40회 실패 (IP당 1~2회)', kind: 'WARNING' },
+        { at: at(1), text: 'IP 30개 · 41회 실패 (IP당 1~3회)', kind: 'WARNING' },
         { at: at(1), text: '사건 102 생성 · AI 조사 요청', kind: 'KEY' },
       ],
       paymentRecommendations: null,
@@ -335,21 +336,21 @@ export function buildMockReports(now: Date): ConclusionReport[] {
         {
           evidenceId: 'EV-01',
           source: '직원 경보 · 직원 룰 6',
-          description: '분산 로그인 실패',
+          description: '분산 무차별 대입',
           retrievedAt: at(1),
           ref: { type: 'STAFF_ALERT', id: 5 },
         },
         {
           evidenceId: 'EV-02',
           source: '직원 경보 · 직원 룰 7',
-          description: '비밀번호 뿌리기',
+          description: '패스워드 스프레이',
           retrievedAt: at(1),
           ref: { type: 'STAFF_ALERT', id: 6 },
         },
         {
           evidenceId: 'EV-03',
           source: '직원 로그인 기록',
-          description: '해외 IP 실패 40회 · 성공 0회',
+          description: '해외 IP 실패 41회 · 성공 0회',
           retrievedAt: at(1),
           ref: null,
         },
@@ -603,15 +604,15 @@ const RERUN_DEFS: StepDef[] = [
   req('구매자 응답 1건 · 보고서 v2 (새 정보가 들어와 다시 조사)'),
   tool(
     'get_order_context',
-    900,
+    2000,
     '단체 행사용 케이크 세트 주문',
     '픽업 예정 · 구매자 응답 "결제하지 않았어요"',
   ),
-  tool('get_case_payments', 900, '이 사건에 묶인 결제', '결제 1건 · 합계 65만 원'),
-  tool('get_fds_evidence', 1100, '결제 1건', 'Rule 3개 적중 · 55점'),
-  tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 12건 · 평균 4만 원'),
-  tool('find_similar_cases', 1000, '같은 고객 · 같은 Rule 조합', '2건 (사기 1 · 정상 1)'),
-  llm('위험 근거 4 · 정상 정황 1 · 권고 2'),
+  tool('get_case_payments', 1500, '이 사건에 묶인 결제', '결제 1건 · 합계 65만 원'),
+  tool('get_fds_evidence', 1500, '결제 1건', 'Rule 3개 적중 · 55점'),
+  tool('get_payment_history', 1800, '김민수 고객 · 최근 90일', '과거 결제 5건 · 평균 4만 원'),
+  tool('find_similar_cases', 1500, '같은 고객 · 같은 Rule 조합', '2건 (사기 1 · 정상 1)'),
+  llm('위험 근거 4 · 정상 정황 1 · 권고 2', 'AI 판단', 5000),
   ...finish(2),
 ]
 
@@ -621,7 +622,7 @@ export async function mockStartBuyerRerun(): Promise<void> {
   return mockRespond(undefined)
 }
 
-function rerunReport(found: ConclusionReport, run: ReportRun): ConclusionReport {
+function rerunReport(found: ConclusionReport, run: ReportRun, answeredAt: Date): ConclusionReport {
   return {
     ...found,
     reportVersion: 2,
@@ -630,6 +631,27 @@ function rerunReport(found: ConclusionReport, run: ReportRun): ConclusionReport 
     verdict: '구매자가 결제하지 않았다고 답해 카드 도용 가능성이 높습니다',
     summary:
       '김민수 고객 계정에서 처음 쓰는 카드로 평소(4만 원)보다 큰 65만 원을 결제했고, 구매자가 본인 확인 메일에 "결제하지 않았어요"라고 답했습니다. 다만 계정이 탈취됐다면 공격자도 메일을 받을 수 있어 약한 근거로 봅니다.',
+    recommendations: [
+      { label: '승인 취소 검토 · 단체 행사용 케이크 세트', kind: 'NEGATIVE' },
+      { label: '사기로 확정되면 카드 · 기기 차단 목록 등록', kind: 'INFO' },
+    ],
+    // 구매자 응답이 들어왔으니 "아직 없음"은 빼고, 답한 사람이 정말 구매자인지를 남긴다
+    unknowns: [
+      '답한 사람이 실제 구매자인지 (계정이 털리면 공격자도 메일을 받음)',
+      '새 카드를 쓴 이유 (재발급 · 가족 카드 등)',
+    ],
+    timeline: [
+      ...found.timeline,
+      {
+        at: answeredAt.toISOString(),
+        text: '구매자 본인 확인 응답 "결제하지 않았어요" → AI 다시 조사 (v2)',
+        kind: 'KEY',
+      },
+    ],
+    paymentRecommendations: (found.paymentRecommendations ?? []).map((r) => ({
+      ...r,
+      reason: '처음 쓰는 카드로 평소의 16배 금액, 구매자가 결제하지 않았다고 답함',
+    })),
     riskPoints: [
       {
         title: '구매자가 결제하지 않았다고 답함',
@@ -660,12 +682,12 @@ function checkCanRead(report: ConclusionReport | undefined) {
 
 export async function mockGetCaseReport(caseId: string): Promise<ConclusionReport | null> {
   const now = new Date()
-  const found = buildMockReports(now).find((r) => r.caseId === caseId)
+  const found = buildMockReports(mockEpoch()).find((r) => r.caseId === caseId)
   checkCanRead(found)
   // 다시 조사 중이면 지난 보고서(v1), 끝나면 새 보고서(v2)
   if (found && caseId === RERUN_CASE && rerunStartedAt) {
     const run = buildRun(RERUN_CASE, 2, RERUN_DEFS, rerunStartedAt, now)
-    return mockRespond(run.status === 'SUCCEEDED' ? rerunReport(found, run) : found)
+    return mockRespond(run.status === 'SUCCEEDED' ? rerunReport(found, run, rerunStartedAt) : found)
   }
   if (!found || caseId !== LIVE_CASE) return mockRespond(found ?? null)
   // 조사가 끝나야 보고서가 생긴다
@@ -681,12 +703,12 @@ export async function mockGetCaseReport(caseId: string): Promise<ConclusionRepor
 
 export async function mockGetReportRun(caseId: string): Promise<ReportRun | null> {
   const now = new Date()
-  checkCanRead(buildMockReports(now).find((r) => r.caseId === caseId))
+  checkCanRead(buildMockReports(mockEpoch()).find((r) => r.caseId === caseId))
   if (!RUNS[caseId]) return mockRespond(null)
   if (caseId === RERUN_CASE && rerunStartedAt) {
     return mockRespond(buildRun(RERUN_CASE, 2, RERUN_DEFS, rerunStartedAt, now))
   }
-  if (caseId !== LIVE_CASE) return mockRespond(finishedRun(caseId, now))
+  if (caseId !== LIVE_CASE) return mockRespond(finishedRun(caseId, mockEpoch()))
   liveStartedAt ??= now
   return mockRespond(buildLiveRun(now, liveStartedAt))
 }

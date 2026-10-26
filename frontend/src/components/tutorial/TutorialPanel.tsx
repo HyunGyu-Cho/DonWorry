@@ -1,6 +1,6 @@
 import { Button, Tag } from 'antd'
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { demoBuyerAnswered } from '../../api/report'
 import { useAuth } from '../../auth/useAuth'
 import { MAILPIT_URL } from '../../config/demoLinks'
@@ -8,35 +8,64 @@ import { SCENARIOS, scenarioById } from '../../config/scenarios'
 import { TUTORIAL_STEPS } from '../../config/tutorialSteps'
 import { isDone, progressText, resolveStep } from '../../utils/tutorialView'
 import { useScreenMode } from '../explain/useScreenMode'
-import { DEMO_CHANGED, tutorialStore, useTutorial } from './tutorialStore'
+import { DEMO_CHANGED, TUTORIAL_EVENT, tutorialStore, useTutorial } from './tutorialStore'
+
+// 카드가 놓일 수 있는 자리 (CSS .dw-tut · .dw-tut--left와 같게) — 오른쪽 아래, 메뉴 옆 왼쪽 아래
+const CARD_W = 340
+const CARD_GAP = 20
+const LEFT_X = 240
+
+// right = 기본 자리, left = 왼쪽 아래로 비킴, mini = 어느 쪽도 대상을 가려서 작게 접음
+export type CardPlace = 'right' | 'left' | 'mini'
 
 // 노란 테두리 — 화면이 늦게 그려져도 붙도록 잠깐씩 다시 찾는다. 없으면 조용히 넘어간다
-function useTourHighlight(target: string | undefined) {
+// 테두리 대상이 카드 자리와 겹치면 비킬 자리를 고른다 (오른쪽 → 왼쪽 → 작게 접기)
+function useTourHighlight(target: string | undefined, cardHeight: number) {
+  const [place, setPlace] = useState<CardPlace>('right')
   useEffect(() => {
     if (!target) return
+    const overlaps = (el: Element, x: number) => {
+      const r = el.getBoundingClientRect()
+      const top = window.innerHeight - CARD_GAP - cardHeight
+      return (
+        r.width > 0 &&
+        r.right > x &&
+        r.left < x + CARD_W &&
+        r.bottom > top &&
+        r.top < window.innerHeight
+      )
+    }
     const mark = () => {
-      // 한 요소에 이름표가 여러 개일 수 있다 (띄어쓰기로 구분)
+      // 한 요소에 이름표가 여러 개일 수 있고, 단계도 대상 여러 개를 가리킬 수 있다 (둘 다 띄어쓰기로 구분)
+      const wanted = target.split(' ')
       const names = (el: Element) => (el.getAttribute('data-tour') ?? '').split(' ')
       document.querySelectorAll('.dw-tour-on').forEach((el) => {
-        if (!names(el).includes(target)) el.classList.remove('dw-tour-on')
+        if (!names(el).some((n) => wanted.includes(n))) el.classList.remove('dw-tour-on')
       })
-      document
-        .querySelectorAll(`[data-tour~="${target}"]`)
-        .forEach((el) => el.classList.add('dw-tour-on'))
+      const found = wanted.flatMap((w) => [...document.querySelectorAll(`[data-tour~="${w}"]`)])
+      found.forEach((el) => el.classList.add('dw-tour-on'))
+      // 카드 안의 버튼(tutorial-actions)은 피할 필요가 없다. 좁은 화면은 카드가 화면 폭이라 그대로
+      const targets = found.filter((el) => !el.closest('.dw-tut'))
+      if (window.innerWidth <= 600 || targets.length === 0) return setPlace('right')
+      const rightX = window.innerWidth - CARD_GAP - CARD_W
+      const hits = (x: number) => targets.some((el) => overlaps(el, x))
+      setPlace(!hits(rightX) ? 'right' : !hits(LEFT_X) ? 'left' : 'mini')
     }
-    mark()
+    const first = setTimeout(mark, 0)
     const timer = setInterval(mark, 400)
     return () => {
+      clearTimeout(first)
       clearInterval(timer)
       document.querySelectorAll('.dw-tour-on').forEach((el) => el.classList.remove('dw-tour-on'))
     }
-  }, [target])
+  }, [target, cardHeight])
+  return target ? place : 'right'
 }
 
 // 튜토리얼 패널 — 오른쪽 아래 안내 카드 (튜토리얼 모드에서만)
 export function TutorialPanel() {
   const { mode } = useScreenMode()
-  const { user } = useAuth()
+  const { user, store } = useAuth()
   const { pathname } = useLocation()
   const tutorial = useTutorial()
   const scenario = tutorial.scenarioId === null ? null : scenarioById(tutorial.scenarioId)
@@ -53,11 +82,42 @@ export function TutorialPanel() {
 
   const done = isDone(steps, effective)
   const step = active && !done ? steps[effective] : undefined
-  useTourHighlight(mode === 'TUTORIAL' && !tutorial.collapsed ? step?.target : undefined)
+  const place = useTourHighlight(
+    mode === 'TUTORIAL' && !tutorial.collapsed ? step?.target : undefined,
+    320,
+  )
+  const navigate = useNavigate()
+  // 화면이 알린 일(예: 판정 확정)을 이 단계가 기다리고 있었으면 다음 단계로
+  const doneOn = step?.doneOn
+  useEffect(() => {
+    if (!doneOn) return
+    const onEvent = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === doneOn) {
+        tutorialStore.setStep(effective + 1, window.location.pathname)
+      }
+    }
+    window.addEventListener(TUTORIAL_EVENT, onEvent)
+    return () => window.removeEventListener(TUTORIAL_EVENT, onEvent)
+  }, [doneOn, effective])
   const [busy, setBusy] = useState(false)
   const [rerunSent, setRerunSent] = useState(false)
+  const [openedStep, setOpenedStep] = useState<number | null>(null)
 
+  const cardClass = `dw-tut${place === 'left' ? ' dw-tut--left' : ''}`
   if (mode !== 'TUTORIAL') return null
+  // 어느 쪽에 둬도 대상을 가리면 작게 접어 둔다 — 누르면 이 단계 동안은 펼쳐 둔다
+  if (place === 'mini' && openedStep !== effective && !tutorial.collapsed) {
+    return (
+      <button
+        type="button"
+        className="dw-tut-fab"
+        onClick={() => setOpenedStep(effective)}
+        aria-label="튜토리얼 안내 펼치기"
+      >
+        🧭 {scenario?.mark} {progressText(steps, effective)} · {step?.todo ?? '안내 펼치기'}
+      </button>
+    )
+  }
   if (tutorial.collapsed) {
     return (
       <button
@@ -84,7 +144,7 @@ export function TutorialPanel() {
   if (!scenario || wrongUser) {
     const mine = SCENARIOS.filter((s) => s.loginId === user?.loginId)
     return (
-      <aside className="dw-tut" aria-label="튜토리얼 안내">
+      <aside className={cardClass} aria-label="튜토리얼 안내">
         {head}
         {wrongUser && scenario && (
           <p className="dw-tut-warn">
@@ -117,7 +177,7 @@ export function TutorialPanel() {
   if (done) {
     const next = SCENARIOS.find((s) => s.id === scenario.id + 1)
     return (
-      <aside className="dw-tut" aria-label="튜토리얼 안내">
+      <aside className={cardClass} aria-label="튜토리얼 안내">
         {head}
         <p className="dw-tut-title">시나리오 {scenario.mark} 끝 · 이런 걸 봤어요</p>
         <ul className="dw-tut-list">
@@ -133,9 +193,16 @@ export function TutorialPanel() {
                 다음 시나리오 {next.mark}
               </Button>
             ) : (
-              <Link to="/">
-                <Button type="primary">다음 시나리오 {next.mark} (다른 계정)</Button>
-              </Link>
+              <Button
+                type="primary"
+                onClick={async () => {
+                  // 다른 계정 시나리오 — 로그아웃하고 그 시나리오의 로그인 화면으로 바로
+                  await store.logout().catch(() => undefined)
+                  navigate(`/login?scenario=${next.id}`)
+                }}
+              >
+                다음 시나리오 {next.mark} (로그아웃 후 {next.roleLabel})
+              </Button>
             ))}
         </div>
       </aside>
@@ -157,7 +224,7 @@ export function TutorialPanel() {
   }
 
   return (
-    <aside className="dw-tut" aria-label="튜토리얼 안내">
+    <aside className={cardClass} aria-label="튜토리얼 안내">
       {head}
       <div className="dw-tut-progress">
         <span>{progressText(steps, effective)}</span>

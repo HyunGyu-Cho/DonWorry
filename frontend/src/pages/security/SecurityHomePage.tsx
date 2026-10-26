@@ -132,9 +132,9 @@ function SecurityHomeBody({
           })}
         </HomeList>
         <HomeList
-          title="최근 7일 많이 걸린 Rule"
+          title="최근 7일 적중 많은 Rule"
           more={{ to: '/security/rules', label: 'Rule 카탈로그' }}
-          empty="최근 7일 동안 걸린 Rule이 없어요."
+          empty="최근 7일 동안 적중한 Rule이 없어요."
         >
           {topRules(stats).map((s) => (
             <HomeRow

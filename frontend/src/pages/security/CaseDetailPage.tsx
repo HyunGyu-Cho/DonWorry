@@ -30,6 +30,7 @@ import {
   ACTION_LABEL,
   historyText,
   paymentFlowCards,
+  recommendationDone,
   staffFlowCards,
   staffVerdicts,
   type StaffVerdict,
@@ -37,7 +38,7 @@ import {
 import { cardName, koreanWon, relativeTime } from '../../utils/humanize'
 import { distributedAttack, suspiciousSessionIds } from '../../utils/staffAccess'
 import { DecisionPanel } from './case/DecisionPanel'
-import { DEMO_CHANGED } from '../../components/tutorial/tutorialStore'
+import { DEMO_CHANGED, TUTORIAL_EVENT } from '../../components/tutorial/tutorialStore'
 import {
   AiSummaryCard,
   CaseFlow,
@@ -249,7 +250,11 @@ function OverridePendingCard(props: { approval: ApprovalRequest; manager: boolea
 }
 
 // 직원 사건 판정 (보안 관리자) — 판정을 고르면 조치 묶음을 요청한다
-function StaffDecision(props: { staffCase: StaffCase; locked: boolean; onDone: () => void }) {
+function StaffDecision(props: {
+  staffCase: StaffCase
+  locked: boolean
+  onDone: () => Promise<unknown>
+}) {
   const { staffCase, locked, onDone } = props
   const { toast, confirmDanger } = useFeedback()
   const [pick, setPick] = useState<StaffVerdict | null>(null)
@@ -278,7 +283,7 @@ function StaffDecision(props: { staffCase: StaffCase; locked: boolean; onDone: (
   const submit = () =>
     pick &&
     confirmDanger({
-      title: `"${pick.title}"(으)로 판정할까요?`,
+      title: `${pick.title}할까요?`,
       content: `다음 조치를 바로 요청합니다: ${pick.actions.map((a) => ACTION_LABEL[a]).join(' · ')}`,
       onConfirm: async () => {
         try {
@@ -287,8 +292,9 @@ function StaffDecision(props: { staffCase: StaffCase; locked: boolean; onDone: (
             pick.actions.map((actionType) => ({ actionType })),
             reason.trim(),
           )
+          // 바뀐 상태를 먼저 그린 뒤 알린다 (옛 상태가 잠깐 남지 않게)
+          await onDone()
           void toast.success('판정했습니다. 조치가 요청됐어요.')
-          onDone()
         } catch (e) {
           void toast.error(
             e instanceof CaseActionForbiddenError ? e.message : '판정하지 못했습니다.',
@@ -389,6 +395,17 @@ export function CaseDetailPage() {
     }, 1000)
     return () => clearTimeout(timer)
   }, [running, loaded, id, toast])
+
+  // 조치가 결제에 반영될 때까지 2초마다 다시 본다 (조치 요청 중 → 종료)
+  const acting =
+    typeof loaded === 'object' &&
+    loaded?.kind === 'payment' &&
+    loaded.detail.securityCase.status === 'ACTION_PENDING'
+  useEffect(() => {
+    if (!acting) return
+    const timer = setTimeout(() => void load(), 2000)
+    return () => clearTimeout(timer)
+  }, [acting, loaded, load])
 
   const rules = useMemo(() => (typeof loaded === 'object' && loaded ? loaded.rules : []), [loaded])
   const ruleName = useCallback(
@@ -510,6 +527,8 @@ export function CaseDetailPage() {
                     : '판정을 확정했습니다. 조치가 요청됐어요.',
                 )
                 await load()
+                // 튜토리얼이 "판정하기" 단계를 마친 것으로 알게
+                window.dispatchEvent(new CustomEvent(TUTORIAL_EVENT, { detail: 'DECIDED' }))
                 return true
               } catch (e) {
                 void toast.error(
@@ -531,13 +550,7 @@ export function CaseDetailPage() {
     }))
   } else {
     const { staffCase } = loaded
-    right = (
-      <StaffDecision
-        staffCase={staffCase}
-        locked={aiRunning || !report}
-        onDone={() => void load()}
-      />
-    )
+    right = <StaffDecision staffCase={staffCase} locked={aiRunning || !report} onDone={load} />
     history = [
       {
         key: 'created',
@@ -597,6 +610,11 @@ export function CaseDetailPage() {
               run={run}
               reportPath={`${base}/${sc.caseId}/report`}
               now={now}
+              doneOf={
+                loaded.kind === 'staff'
+                  ? (label) => recommendationDone(label, loaded.staffCase.actions)
+                  : undefined
+              }
             />
           </div>
           {loaded.kind === 'payment' ? (

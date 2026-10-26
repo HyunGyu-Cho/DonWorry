@@ -30,6 +30,8 @@ export type RuleGuide = {
   example: string
   // 이 Rule 하나만 걸렸을 때의 해석 — 오탐 가능성을 함께 보여 준다
   alone: string
+  // 업계 영어 이름 (Rule 카탈로그 카드에만 작게)
+  english?: string
 }
 
 // 프로토타입 v3.1 문구
@@ -115,13 +117,15 @@ export const RULE_GUIDE: Record<RuleCode, RuleGuide> = {
   STAFF_DISTRIBUTED: {
     group: '분산 공격',
     effect: '경보 · 위험도 높음 (IP별 규칙을 피하는 공격)',
-    example: '해외 IP 30개에서 1~2번씩, 총 40회 실패',
+    example: '해외 IP 25개에서 1~2번씩, 총 30회 실패',
     alone: '단독으론 주의 — 회사 VPN 출구가 여러 개일 수도',
+    english: 'Distributed Brute Force',
   },
   PASSWORD_SPRAY: {
     group: '분산 공격',
     effect: '경보 · 위험도 높음',
     example: '같은 IP가 박지원 · 이도현 계정에 차례로 시도',
     alone: '단독으론 주의 — 공용 PC일 수도',
+    english: 'Password Spraying',
   },
 }

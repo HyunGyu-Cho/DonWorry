@@ -6,7 +6,7 @@ import type { ReportRun, ReportStep, ReportStepKind, ReportToolName } from '../.
 export type StepDef = [ReportStepKind, string, ReportToolName | null, number, string, string]
 
 const TOOL_LABEL: Record<ReportToolName, string> = {
-  get_fds_evidence: 'FDS 점수 · 걸린 Rule 조회',
+  get_fds_evidence: 'FDS 점수 · 적중 Rule 조회',
   get_case_payments: '사건에 묶인 결제 조회',
   get_payment_history: '고객 과거 결제 조회',
   get_payment_authentication: '카드 인증 · 승인 정보 조회',
@@ -31,19 +31,19 @@ export const tool = (name: ReportToolName, ms: number, asked: string, got: strin
   asked,
   got,
 ]
-export const llm = (got: string, label = 'AI 판단'): StepDef => [
+export const llm = (got: string, label = 'AI 판단', ms = 3200): StepDef => [
   'LLM',
   label,
   null,
-  3200,
+  ms,
   '근거 요약 · 판단 요청',
   got,
 ]
-export const llmFailed = (attempt: number, got: string): StepDef => [
+export const llmFailed = (attempt: number, got: string, ms = 2600): StepDef => [
   'LLM_FAILED',
   `AI 판단 (${attempt}차)`,
   null,
-  2600,
+  ms,
   '근거 요약 · 판단 요청',
   got,
 ]

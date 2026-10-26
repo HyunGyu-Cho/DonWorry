@@ -57,6 +57,9 @@ test('everyTarget_existsInSource', () => {
     'pages/owner/FundsPage.tsx',
     'pages/owner/LoanProductsPage.tsx',
     'components/tutorial/TutorialPanel.tsx',
+    'pages/manager/StaffAccessPage.tsx',
+    'pages/owner/SettlementCalendarPage.tsx',
+    'pages/security/BlocklistPage.tsx',
   ]
   const source = files
     .map((f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'))
@@ -64,14 +67,17 @@ test('everyTarget_existsInSource', () => {
   for (const [id, list] of Object.entries(TUTORIAL_STEPS)) {
     for (const step of list) {
       if (!step.target) continue
-      if (step.target.startsWith('nav-')) continue
-      // alert-103 · case-102처럼 번호가 붙는 이름표는 앞부분으로, 여러 이름표를 단 요소는 그중 하나로 찾는다
-      const name = step.target.replace(/-\d+$/, '-')
-      const found =
-        new RegExp(`data-tour="[^"]*\\b${step.target}\\b`).test(source) ||
-        source.includes(`"${step.target}"`) ||
-        source.includes(`\`${name}\${`)
-      assert.ok(found, `${id}: ${step.target}`)
+      for (const target of step.target.split(' ')) {
+        if (target.startsWith('nav-')) continue
+        // alert-103 · case-102처럼 번호가 붙는 이름표는 앞부분으로, 여러 이름표를 단 요소는 그중 하나로 찾는다
+        const name = target.replace(/-\d+$/, '-')
+        const found =
+          new RegExp(`data-tour="[^"]*\\b${target}\\b`).test(source) ||
+          source.includes(`"${target}"`) ||
+          source.includes(`'${target}'`) ||
+          source.includes(`\`${name}\${`)
+        assert.ok(found, `${id}: ${target}`)
+      }
     }
   }
 })

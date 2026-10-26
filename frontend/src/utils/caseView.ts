@@ -134,6 +134,24 @@ export const ACTION_LABEL: Record<CaseActionType, string> = {
   CLEAR_FLAG: '경고 해제',
 }
 
+// AI 권고 문장 → 그 권고를 이미 한 조치 (사건 화면에서 ✓ 완료로 보여 준다)
+const REC_ACTION: [RegExp, CaseActionType][] = [
+  [/세션.*종료/, 'KILL_SESSIONS'],
+  [/계정 잠금/, 'LOCK_STAFF'],
+  [/요청 거절/, 'REJECT_PENDING'],
+  [/판정 재검토/, 'REVIEW_DECISIONS'],
+  [/IP.*차단/, 'BLOCK_IPS'],
+  [/비밀번호.*(변경|재등록)/, 'FORCE_PW'],
+  [/감시/, 'WATCH'],
+]
+export function recommendationDone(
+  label: string,
+  actions: { actionType: CaseActionType; status: string }[],
+): boolean {
+  const type = REC_ACTION.find(([re]) => re.test(label))?.[1]
+  return !!type && actions.some((a) => a.status === 'DONE' && a.actionType === type)
+}
+
 const HISTORY_TEXT: Record<string, string> = {
   CASE_CREATED: '사건 자동 생성',
   PAYMENT_LINKED: '결제 경보 연결',

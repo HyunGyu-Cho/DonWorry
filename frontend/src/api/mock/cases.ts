@@ -6,7 +6,7 @@ import { mockConsumeReauth } from './identity.ts'
 import { mockAudit, mockCreateApproval, mockOverrideApprovals } from './investigation.ts'
 import { buildMockPayments } from './payment.ts'
 import { buildMockReports } from './report.ts'
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import type {
   ActionHandoff,
   CaseDetail,
@@ -210,7 +210,7 @@ export function buildMockCases(now: Date): CaseDetail[] {
 
 // 화면에서 판정한 내용은 새로고침 전까지만 남는다
 let store: CaseDetail[] | null = null
-const current = () => syncOverrides((store ??= buildMockCases(new Date())))
+const current = () => syncHandoffs(syncOverrides((store ??= buildMockCases(mockEpoch()))))
 
 export function resetMockCases() {
   store = null
@@ -264,7 +264,7 @@ function addHistory(
   })
 }
 
-// 판정 반영 → 결제별 조치 인계(매입 · 승인 취소)는 바로 접수된 것으로 둔다. 모두 판정되면 종료
+// 판정 반영 → 결제별 조치 인계(매입 · 승인 취소)를 요청한다. 반영은 ACTION_DELAY 뒤 읽을 때 (syncHandoffs)
 function applyDecisions(
   found: CaseDetail,
   staffId: number,
@@ -289,24 +289,58 @@ function applyDecisions(
       handoffId: `${decisionId}-H`,
       decisionId,
       actionType: d.decision === 'ACCEPT' ? 'CAPTURE' : 'VOID',
-      status: 'ACCEPTED',
+      status: 'REQUESTED',
       targetOperationId: null,
       requestedAt: at,
-      acceptedAt: at,
+      acceptedAt: null,
       lastErrorCode: null,
     })
-    const p = found.payments.find((x) => x.casePaymentId === d.casePaymentId)
-    if (p) p.paymentStatus = d.decision === 'ACCEPT' ? 'CAPTURED' : 'VOIDED'
   }
   addHistory(found, 'DECISION_CONFIRMED', staffId, at)
-  addHistory(found, 'HANDOFF_ACCEPTED', null, at)
-  if (found.decisions.length === found.payments.length) {
-    found.securityCase.status = 'CLOSED'
-    found.securityCase.closedAt = at
-    addHistory(found, 'CASE_CLOSED', null, at)
-  } else {
-    found.securityCase.status = 'DECISION_PENDING'
+  addHistory(found, 'HANDOFF_REQUESTED', null, at)
+  found.securityCase.status =
+    found.decisions.length === found.payments.length ? 'ACTION_PENDING' : 'DECISION_PENDING'
+}
+
+// 시연에서 "④ 조치"를 볼 수 있게 결제 반영을 잠깐 미룬다 (테스트는 0으로)
+let actionDelayMs = 5000
+export function setMockActionDelay(ms: number) {
+  actionDelayMs = ms
+}
+
+// 요청한 지 actionDelayMs가 지난 조치는 결제에 반영된 것으로 — 모두 반영되면 사건 종료
+function syncHandoffs(cases: CaseDetail[]): CaseDetail[] {
+  const now = Date.now()
+  for (const found of cases) {
+    let changed = false
+    for (const h of found.handoffs) {
+      if (h.status !== 'REQUESTED') continue
+      const doneAt = Date.parse(h.requestedAt) + actionDelayMs
+      if (doneAt > now) continue
+      const at = new Date(doneAt).toISOString()
+      h.status = 'ACCEPTED'
+      h.acceptedAt = at
+      const decision = found.decisions.find((d) => d.decisionId === h.decisionId)
+      const p = found.payments.find((x) => x.casePaymentId === decision?.casePaymentId)
+      if (p) p.paymentStatus = h.actionType === 'CAPTURE' ? 'CAPTURED' : 'VOIDED'
+      addHistory(found, 'HANDOFF_ACCEPTED', null, at)
+      changed = true
+    }
+    const allDone =
+      found.decisions.length === found.payments.length &&
+      found.handoffs.every((h) => h.status === 'ACCEPTED')
+    if (changed && allDone && found.securityCase.status === 'ACTION_PENDING') {
+      const at =
+        found.handoffs
+          .map((h) => h.acceptedAt ?? '')
+          .sort()
+          .at(-1) ?? new Date().toISOString()
+      found.securityCase.status = 'CLOSED'
+      found.securityCase.closedAt = at
+      addHistory(found, 'CASE_CLOSED', null, at)
+    }
   }
+  return cases
 }
 
 // 관리자 승인을 기다리던 판정: 승인되면 반영, 거절되면 판정 대기로 (Rule 끄기와 같이 읽을 때 반영)
@@ -342,7 +376,7 @@ function syncOverrides(cases: CaseDetail[]): CaseDetail[] {
 
 // AI 권고가 "승인 취소 검토"인데 매입 허용을 고른 결제 (권고 반대 판단은 서버 몫 — 화면 표시는 참고)
 function oppositeDecisions(caseId: string, decisions: Decided): Decided {
-  const report = buildMockReports(new Date()).find((r) => r.caseId === caseId)
+  const report = buildMockReports(mockEpoch()).find((r) => r.caseId === caseId)
   const recs = report?.paymentRecommendations ?? []
   return decisions.filter((d) => {
     const payment = current()
@@ -375,7 +409,7 @@ export async function mockSubmitDecisions(
     return { outcome: 'DECIDED', approvalId: null }
   }
   if (!mockConsumeReauth(request.reauthToken, staffId)) throw new ReauthRequiredError()
-  const titles = buildMockPayments(new Date())
+  const titles = buildMockPayments(mockEpoch())
   const first = found.payments.find((p) => p.casePaymentId === opposite[0].casePaymentId)
   const title = titles.find((t) => t.paymentId === first?.paymentId)?.orderTitle ?? '결제'
   const approval = await mockCreateApproval({
@@ -399,7 +433,7 @@ export async function mockSubmitDecisions(
 
 // 조치 센터: 모든 결제 사건의 조치 인계를 최신순으로
 export function mockGetHandoffs(): Promise<HandoffRow[]> {
-  const payments = buildMockPayments(new Date())
+  const payments = buildMockPayments(mockEpoch())
   const rows: HandoffRow[] = []
   for (const d of current()) {
     for (const h of d.handoffs) {

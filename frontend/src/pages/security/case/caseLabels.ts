@@ -20,8 +20,8 @@ export const caseStatusLabel: Record<CaseStatus, Label> = {
   INVESTIGATING: { label: '조사 중', color: 'processing' },
   DECISION_PENDING: { label: '판정 대기', color: 'gold' },
   APPROVAL_PENDING: { label: '관리자 승인 대기', color: 'purple' },
-  ACTION_PENDING: { label: '인계 대기', color: 'geekblue' },
-  ACTION_FAILED: { label: '인계 실패', color: 'red' },
+  ACTION_PENDING: { label: '조치 진행 중', color: 'geekblue' },
+  ACTION_FAILED: { label: '조치 실패', color: 'red' },
   CLOSED: { label: '종료', color: 'default' },
 }
 
@@ -63,7 +63,7 @@ export const decisionLabel: Record<Decision, Label> = {
 export const handoffStatusLabel: Record<HandoffStatus, Label> = {
   REQUESTED: { label: '접수 확인 중', color: 'processing' },
   ACCEPTED: { label: '접수 완료', color: 'green' },
-  FAILED: { label: '인계 실패', color: 'red' },
+  FAILED: { label: '조치 실패', color: 'red' },
 }
 
 export const actionTypeLabel: Record<ActionType, string> = {
@@ -81,9 +81,9 @@ export const historyEventLabel: Record<CaseHistoryEventType, string> = {
   CASE_CREATED: 'Case 생성',
   PAYMENT_LINKED: '결제 연결',
   DECISION_CONFIRMED: '직원 판정 확정',
-  HANDOFF_REQUESTED: '금융 조치 인계 요청',
+  HANDOFF_REQUESTED: '금융 조치 요청',
   HANDOFF_ACCEPTED: '담당 모듈 접수 확인',
-  HANDOFF_FAILED: '금융 조치 인계 실패',
+  HANDOFF_FAILED: '금융 조치 실패',
   CASE_STATUS_CHANGED: 'Case 상태 변경',
   CASE_CLOSED: 'Case 종료',
 }

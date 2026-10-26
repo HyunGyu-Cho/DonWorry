@@ -1,7 +1,7 @@
 // P2 fds Mock — Rule은 seed_fds_rules와 같고, 차단 목록 · 직원 경보는 프로토타입 v3.1 시나리오
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
 import { RuleActionForbiddenError, RuleAlreadyEnabledError } from '../fdsErrors.ts'
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import {
   getMockActor,
   mockApprovedReleases,
@@ -193,7 +193,7 @@ export const MOCK_RULES: FdsRule[] = [
   rule(
     14,
     'STAFF_DISTRIBUTED',
-    '분산 로그인 실패',
+    '분산 무차별 대입',
     '한 계정에 10분 안 서로 다른 IP 5개 이상에서 로그인 실패',
     'ALERT',
     0,
@@ -203,7 +203,7 @@ export const MOCK_RULES: FdsRule[] = [
   rule(
     15,
     'PASSWORD_SPRAY',
-    '비밀번호 뿌리기',
+    '패스워드 스프레이',
     '한 IP가 10분 안에 직원 계정 2개 이상에 로그인 시도',
     'ALERT',
     0,
@@ -284,7 +284,7 @@ export function buildMockStaffAlerts(now: Date): StaffAlert[] {
       4,
       'STAFF_DISTRIBUTED',
       'HIGH',
-      '박지원 계정 · 해외 IP 30개에서 10분 안 실패 40회',
+      '박지원 계정 · 해외 IP 25개에서 10분 안 실패 30회',
       1,
       {
         ips: 30,
@@ -354,7 +354,7 @@ export async function mockEnableRule(ruleId: number): Promise<FdsRule> {
 // 관리자 승인으로 풀린 값은 releasedAt이 찍힌다
 function currentBlocklist(): BlocklistEntry[] {
   const releases = mockApprovedReleases()
-  return [...addedEntries, ...buildMockBlocklist(new Date())].map((entry) => {
+  return [...addedEntries, ...buildMockBlocklist(mockEpoch())].map((entry) => {
     const r = releases.find((x) => x.entryId === entry.entryId)
     return r ? { ...entry, releasedAt: r.decidedAt, releasedBy: r.decidedBy } : entry
   })
@@ -390,7 +390,7 @@ export function mockAddBlocklistEntry(input: NewBlocklistEntry): Promise<Blockli
 }
 
 export function mockGetStaffAlerts(query: StaffAlertQuery = {}): Promise<StaffAlert[]> {
-  const rows = buildMockStaffAlerts(new Date()).filter(
+  const rows = buildMockStaffAlerts(mockEpoch()).filter(
     (row) =>
       (query.userId === undefined || row.userId === query.userId) &&
       (!query.severity || row.severity === query.severity) &&

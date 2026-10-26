@@ -27,6 +27,9 @@ export type CalendarItem = {
   // 정산은 "받는 돈"(수수료 뺀 금액), 출금은 나가는 돈
   sub: string
   rawId: string
+  // 정산만: 결제 금액 · 수수료 (목록 표)
+  gross?: number
+  fee?: number
 }
 
 // 정산이 캘린더에 놓이는 날 = 완료일 → 확정일 → 예상일
@@ -50,6 +53,8 @@ export function calendarItems(
       amount: s.settlementAmount,
       sub: `결제 ${koreanWon(s.grossAmount)} − 수수료 ${koreanWon(s.feeAmount)}`,
       rawId: s.settlementId,
+      gross: s.grossAmount,
+      fee: s.feeAmount,
     })
   }
   for (const t of transfers) {
@@ -136,3 +141,63 @@ export const termText = (p: LoanProduct) =>
   p.minTermMonths === p.maxTermMonths
     ? `${p.maxTermMonths}개월`
     : `${p.minTermMonths}~${p.maxTermMonths}개월`
+
+export type DaySummary = {
+  inflow: number
+  inflowCount: number
+  outflow: number
+  outflowCount: number
+  // 들어올 돈 칩 색: 모두 완료면 완료, 픽업 전(예상)이 섞이면 예상(점선), 아니면 예정
+  inflowStage: CalendarStage
+  byStage: Record<CalendarStage, { count: number; amount: number }>
+}
+
+// 날짜 칸 · 오른쪽 칸 요약 — 주문이 수십 건이어도 칸에는 합계만 (1-13 멘토님 질문)
+export function daySummary(rows: CalendarItem[]): DaySummary {
+  const byStage = Object.fromEntries(
+    STAGE_ORDER.map((s) => [s, { count: 0, amount: 0 }]),
+  ) as DaySummary['byStage']
+  for (const r of rows) {
+    byStage[r.stage].count += 1
+    byStage[r.stage].amount += r.amount
+  }
+  const ins = rows.filter((r) => r.stage !== 'OUTFLOW')
+  const inflowStage: CalendarStage =
+    ins.length > 0 && ins.every((r) => r.stage === 'COMPLETED')
+      ? 'COMPLETED'
+      : byStage.EXPECTED.count > 0
+        ? 'EXPECTED'
+        : 'SCHEDULED'
+  return {
+    inflow: ins.reduce((n, r) => n + r.amount, 0),
+    inflowCount: ins.length,
+    outflow: byStage.OUTFLOW.amount,
+    outflowCount: byStage.OUTFLOW.count,
+    inflowStage,
+    byStage,
+  }
+}
+
+// 오른쪽 칸에서 미리 보여 줄 주문 수 — 넘으면 [모두 보기]
+export const DAY_PREVIEW = 5
+
+// 목록 창 · 전체 페이지 거르기: 상태 + 주문 이름 검색
+export function filterDayItems(
+  rows: CalendarItem[],
+  stage: CalendarStage | 'ALL',
+  query: string,
+): CalendarItem[] {
+  const q = query.trim()
+  return rows.filter((r) => (stage === 'ALL' || r.stage === stage) && (!q || r.title.includes(q)))
+}
+
+// 그 달에서 주문이 가장 많은 날 (튜토리얼이 노란 테두리를 붙인다)
+export function busiestDay(items: Map<string, CalendarItem[]>, month: string): string | null {
+  let best: [string, number] | null = null
+  for (const [date, rows] of items) {
+    if (!date.startsWith(month)) continue
+    const n = rows.filter((r) => r.stage !== 'OUTFLOW').length
+    if (!best || n > best[1]) best = [date, n]
+  }
+  return best && best[1] > 1 ? best[0] : null
+}

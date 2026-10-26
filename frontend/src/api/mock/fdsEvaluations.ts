@@ -1,7 +1,7 @@
 // P2 결제 평가(경보) Mock — 시나리오 ① 결제 사기 · 카드 테스팅 · 차단 목록 재시도 (프로토타입 v4.2)
 // 결제 번호는 api/mock/payment.ts와 같다 (31 = 사건 201). Rule 카탈로그 7일 적중도 여기서 만든다
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import { buildMockStaffAlerts, MOCK_RULES } from './fds.ts'
 import { hitStats, HIT_DAYS } from '../../utils/ruleCatalog.ts'
 import { PAYMENT_RULE_CODES, STAFF_RULE_CODES } from '../../types/fds.ts'
@@ -38,8 +38,11 @@ type Seed = {
   hits: Hit[]
 }
 
-// 점수 계산까지 간 평가는 차단 목록 미일치 + Rule 7개를 모두 남긴다
-const scored = (matched: Partial<Record<PaymentRuleCode, [number, string]>>): Hit[] => {
+// 점수 계산까지 간 평가는 차단 목록 미일치 + Rule 7개를 모두 남긴다. notes = 미적중 값을 바꿀 때
+const scored = (
+  matched: Partial<Record<PaymentRuleCode, [number, string]>>,
+  notes: Partial<Record<PaymentRuleCode, string>> = {},
+): Hit[] => {
   const all: [PaymentRuleCode, string][] = [
     ['BLOCKLIST', '차단 목록과 일치하는 값 없음'],
     ['HIGH_AMOUNT', '50만 원 미만'],
@@ -52,7 +55,7 @@ const scored = (matched: Partial<Record<PaymentRuleCode, [number, string]>>): Hi
   ]
   return all.map(([code, normal]) => {
     const hit = matched[code]
-    return hit ? [code, hit[0], hit[1]] : [code, 0, normal]
+    return hit ? [code, hit[0], hit[1]] : [code, 0, notes[code] ?? normal]
   })
 }
 
@@ -66,11 +69,18 @@ const SEEDS: Seed[] = [
     orderTitle: '조각 케이크',
     minutes: 3,
     result: 'DENY',
-    hits: scored({
-      NEW_ACCOUNT: [20, '가입 40분 만에 결제'],
-      CARD_TESTING: [45, '같은 접속에서 1시간 안에 카드 3장 시도'],
-      GEO_MISMATCH: [25, '미국 발급 카드 · 네덜란드 익명 접속(Tor)'],
-    }),
+    hits: scored(
+      {
+        NEW_ACCOUNT: [20, '가입 40분 만에 결제'],
+        CARD_TESTING: [45, '같은 접속에서 1시간 안에 카드 3장 시도'],
+        GEO_MISMATCH: [25, '미국 발급 카드 · 네덜란드 익명 접속(Tor)'],
+      },
+      // 가입 40분 계정이라 비교할 이전 결제가 없다
+      {
+        AMOUNT_SPIKE: '이전 결제가 없어 비교 못 함',
+        NEW_CARD: '이전 결제가 없어 비교 못 함',
+      },
+    ),
   },
   {
     evaluationId: 105,
@@ -195,7 +205,7 @@ const ATTENTION: FdsResult[] = ['REVIEW', 'DENY', 'ERROR']
 
 export function mockGetFdsEvaluations(query: FdsEvaluationQuery = {}): Promise<FdsEvaluationPage> {
   const { result, attentionOnly = false, search, page = 0, size = 10 } = query
-  const all = buildMockEvaluations(new Date()).map((d) => d.evaluation)
+  const all = buildMockEvaluations(mockEpoch()).map((d) => d.evaluation)
   const word = search?.trim()
   const rows = all.filter(
     (e) =>
@@ -219,7 +229,7 @@ export function mockGetFdsEvaluations(query: FdsEvaluationQuery = {}): Promise<F
 }
 
 export function mockGetFdsEvaluation(evaluationId: string): Promise<FdsEvaluationDetail | null> {
-  const found = buildMockEvaluations(new Date()).find(
+  const found = buildMockEvaluations(mockEpoch()).find(
     (d) => String(d.evaluation.evaluationId) === evaluationId,
   )
   return mockRespond(found ?? null)
@@ -264,5 +274,5 @@ export function buildMockRuleHits(now: Date): { ruleCode: RuleCode; at: string }
 export function mockGetRuleHitStats(days = HIT_DAYS): Promise<RuleHitStat[]> {
   const now = new Date()
   const codes = [...PAYMENT_RULE_CODES, ...STAFF_RULE_CODES]
-  return mockRespond(hitStats(buildMockRuleHits(now), codes, now, days))
+  return mockRespond(hitStats(buildMockRuleHits(mockEpoch()), codes, now, days))
 }

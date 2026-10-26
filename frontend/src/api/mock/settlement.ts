@@ -30,6 +30,21 @@ function kstAt(now: Date, dayOffset: number, hour: number) {
   return new Date(Date.parse(`${today}T00:00:00+09:00`) + dayOffset * DAY + hour * HOUR)
 }
 
+// [주문 이름, 금액] — 4건 중 1건은 아직 픽업 확인 전이라 예상 정산 (점선)
+const BUSY_TITLES: [string, number][] = [
+  ['컵케이크 6구', 18000],
+  ['조각 케이크 세트', 22000],
+  ['마카롱 12구', 24000],
+  ['미니 케이크', 15000],
+]
+const BUSY_DAY_ORDERS: [string, string, string, number, number, boolean, boolean][] = Array.from(
+  { length: 20 },
+  (_, i) => {
+    const [title, amount] = BUSY_TITLES[i % BUSY_TITLES.length]
+    return [String(8 + i), String(50 + i), title, amount, -1, i % 4 !== 3, false]
+  },
+)
+
 export function buildMockSettlements(now: Date): SettlementEntry[] {
   // [정산 번호, 결제 번호, 주문 이름, 금액, 픽업 예정(며칠 뒤), 픽업 완료 여부, 정산 완료 여부]
   const rows: [string, string, string, number, number, boolean, boolean][] = [
@@ -40,6 +55,8 @@ export function buildMockSettlements(now: Date): SettlementEntry[] {
     ['5', '33', '딸기 생크림 케이크', 38000, 1, false, false],
     ['6', '45', '기념일 레터링 케이크', 260000, 4, false, false],
     ['7', '46', '단체 행사 세트 (20개)', 900000, 6, false, false],
+    // 주문이 몰린 날 (멘토님 질문: 하루 주문이 수십 건이면?) — 어제 픽업한 소형 주문 20건이 모레 정산
+    ...BUSY_DAY_ORDERS,
   ]
   return rows.map(([settlementId, paymentId, orderTitle, gross, pickupDay, picked, done]) => {
     const pickupAt = kstAt(now, pickupDay, 15).toISOString()

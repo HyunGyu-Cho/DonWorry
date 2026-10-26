@@ -11,9 +11,23 @@ export type AuthUser = {
   permissions: string[]
 }
 
-// 로그인 1단계(아이디 · 비밀번호) 결과. 직원은 2단계 인증(OTP)이 남고, 사장님은 바로 끝난다
+// 2단계 확인 방법: OTP = 인증 앱 6자리(직원), EMAIL = 가입 이메일로 보낸 6자리(사장님 · 위험할 때만)
+export type ChallengeMethod = 'OTP' | 'EMAIL'
+// 사장님에게 이메일 확인을 묻는 이유: 처음 보는 기기 · 비밀번호 5번 이상 틀린 뒤
+export type ChallengeReason = 'NEW_DEVICE' | 'FAILED_ATTEMPTS'
+
+// 로그인 1단계(아이디 · 비밀번호) 결과. 직원은 항상 OTP, 사장님은 평소엔 바로 끝나고 위험할 때만 이메일 확인
+// method · sentTo · reason은 1-13 보강 — 없으면 OTP (2단계 P1에서 백엔드)
 export type LoginStep =
-  | { status: 'OTP_REQUIRED'; challengeId: string; expiresAt: string }
+  | {
+      status: 'OTP_REQUIRED'
+      challengeId: string
+      expiresAt: string
+      method?: ChallengeMethod
+      // 가린 이메일 (o****@cakeshop.kr), EMAIL일 때만
+      sentTo?: string
+      reason?: ChallengeReason
+    }
   | { status: 'SUCCESS'; user: AuthUser }
 
 // staff_login_events.result
@@ -65,7 +79,7 @@ export type StaffSession = {
   endReason: SessionEndReason | null
 }
 
-// 직원 계정 목록 (직원 접속 감시 · 직원 정보 탭, 1-2)
+// 직원 계정 목록 (로그인 모니터링 · 직원 정보 탭, 1-2)
 export type StaffAccount = {
   userId: number
   displayName: string

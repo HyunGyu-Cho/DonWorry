@@ -58,3 +58,6 @@ export const useTutorial = () =>
 
 // 다시 불러오라는 신호 — 시연 버튼으로 Mock 데이터를 바꾼 뒤 사건 화면이 새로 읽게
 export const DEMO_CHANGED = 'donworry:demo-changed'
+
+// 화면이 튜토리얼에 알리는 일 (예: DECIDED = 판정 확정) — 그 일을 기다리던 단계는 다음으로 넘어간다
+export const TUTORIAL_EVENT = 'donworry:tutorial'

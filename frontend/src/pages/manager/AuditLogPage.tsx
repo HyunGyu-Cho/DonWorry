@@ -80,13 +80,13 @@ export function AuditLogPage() {
 
   const columns: ColumnsType<AuditLog> = [
     {
-      title: '시각',
+      title: '발생 시각',
       dataIndex: 'occurredAt',
       width: 110,
       render: (v: string) => relativeTime(v, now),
     },
     {
-      title: '누가',
+      title: '직원',
       key: 'who',
       width: 100,
       render: (_, l) =>
@@ -97,7 +97,7 @@ export function AuditLogPage() {
         ),
     },
     {
-      title: '어디서',
+      title: '접속 위치',
       key: 'where',
       render: (_, l) =>
         l.client ? (
@@ -116,7 +116,7 @@ export function AuditLogPage() {
         ),
     },
     {
-      title: '무엇을',
+      title: '작업',
       key: 'what',
       render: (_, l) => (
         <div>

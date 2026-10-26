@@ -136,7 +136,7 @@ export function BlocklistPage() {
       render: (t: BlocklistType) => <Tag>{typeLabel(t)}</Tag>,
     },
     {
-      title: '값 · 사유',
+      title: '차단 값 · 등록 사유',
       key: 'value',
       render: (_, b) => {
         const label = blocklistValueLabel(b)
@@ -144,13 +144,18 @@ export function BlocklistPage() {
           <div>
             {label && <b>{label} · </b>}
             <span>{b.reason}</span>
+            {now.getTime() - Date.parse(b.createdAt) < FRESH_MINUTES * 60_000 && (
+              <Tag color="blue" className="dw-pa-new-tag">
+                방금 등록
+              </Tag>
+            )}
             <RawDetails title="원본 값" rows={[['값', <code key="v">{b.entryValue}</code>]]} />
           </div>
         )
       },
     },
     {
-      title: '등록',
+      title: '등록 시각',
       key: 'created',
       width: 150,
       render: (_, b) => (
@@ -179,7 +184,7 @@ export function BlocklistPage() {
             )}
           </div>
         ) : (
-          <span className="dw-muted">—</span>
+          <span className="dw-muted dw-small">아직 막은 결제 없음</span>
         ),
     },
     {
@@ -221,6 +226,7 @@ export function BlocklistPage() {
         ))}
       </div>
       <Card
+        data-tour="blocklist-table"
         title="등록된 값"
         extra={<span className="dw-muted dw-small">결제 경보 상세에서 등록</span>}
       >

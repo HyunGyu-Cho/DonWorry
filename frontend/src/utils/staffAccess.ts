@@ -1,4 +1,4 @@
-// 직원 접속 감시 화면(1-2)의 계산 — React 없이 순수 함수만 (node 테스트가 직접 불러온다)
+// 로그인 모니터링 화면(1-2)의 계산 — React 없이 순수 함수만 (node 테스트가 직접 불러온다)
 // 날짜 · 시간은 한국 시간 기준
 import type { StaffLoginEvent, StaffSession } from '../types/auth.ts'
 
@@ -107,16 +107,19 @@ export type DistributedAttack = {
   belowPerIpThreshold: boolean
 }
 
-// 최근 10분 사내망 밖 실패가 IP 10개 이상에 흩어져 있으면 분산 공격으로 본다. 아니면 null
+// 가장 최근 사내망 밖 실패부터 거슬러 10분 안의 실패가 IP 10개 이상에 흩어져 있으면 분산 공격으로 본다
+// (지금 시각이 아니라 마지막 시도 기준 — 공격 한 묶음을 그대로 보여 준다). 마지막 시도가 하루보다 오래면 null
 export function distributedAttack(
   events: StaffLoginEvent[],
   now: Date,
   windowMinutes = AUTH_FAIL_WINDOW_MINUTES,
 ): DistributedAttack | null {
-  const since = now.getTime() - windowMinutes * MINUTE
-  const recent = events.filter(
-    (e) => isFail(e) && isOutside(e) && Date.parse(e.occurredAt) >= since,
-  )
+  const fails = events.filter((e) => isFail(e) && isOutside(e))
+  if (fails.length === 0) return null
+  const latest = Math.max(...fails.map((e) => Date.parse(e.occurredAt)))
+  if (latest < now.getTime() - 24 * 60 * MINUTE) return null
+  const since = latest - windowMinutes * MINUTE
+  const recent = fails.filter((e) => Date.parse(e.occurredAt) >= since)
   const perIp = new Map<string, IpFailures>()
   for (const e of recent) {
     const row = perIp.get(e.ip.address) ?? {

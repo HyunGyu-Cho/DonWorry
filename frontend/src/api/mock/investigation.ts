@@ -10,7 +10,7 @@ import {
   SelfApprovalError,
   StaffCaseForbiddenError,
 } from '../investigationErrors.ts'
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import type { AuthUser, IpInfo } from '../../types/auth.ts'
 import type {
   ApprovalDecision,
@@ -19,6 +19,7 @@ import type {
   AuditLog,
   AuditLogQuery,
   CaseAction,
+  CaseActionType,
   NewApprovalRequest,
   NewCaseAction,
   StaffCase,
@@ -226,7 +227,7 @@ let state: MockState | null = null
 
 function current(): MockState {
   if (!state) {
-    const now = new Date()
+    const now = mockEpoch()
     state = {
       cases: buildMockStaffCases(now),
       approvals: buildMockApprovals(now),
@@ -384,7 +385,31 @@ export async function mockDecideApproval(
     ['APPROVAL_REQUEST', approvalId],
     { comment },
   )
+  // 탈취 의심 세션에서 온 요청을 거절하면 그 직원의 사건 기록에도 남긴다
+  if (decision === 'REJECT' && found.riskStaffHitIds.length > 0) {
+    mockRecordStaffAction(found.requestedBy, 'REJECT_PENDING')
+  }
   return structuredClone(found)
+}
+
+// 다른 화면에서 한 조치(세션 강제 종료 · 위험 요청 거절)도 그 직원의 열린 사건 기록에 남긴다 (1-13)
+export function mockRecordStaffAction(userId: number, actionType: CaseActionType) {
+  const open = current().cases.find(
+    (c) => c.status !== 'CLOSED' && c.subjectUserIds.includes(userId),
+  )
+  if (!open) return
+  const now = new Date().toISOString()
+  open.actions.push({
+    caseActionId: current().nextActionId++,
+    caseId: open.caseId,
+    actionType,
+    targetRef: null,
+    status: 'DONE',
+    requestedBy: actor.userId,
+    requestedAt: now,
+    completedAt: now,
+    failureReason: null,
+  })
 }
 
 export function mockGetAuditLogs(query: AuditLogQuery = {}): Promise<AuditLog[]> {

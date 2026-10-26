@@ -7,6 +7,7 @@ import {
   mockGetHandoffs,
   mockSubmitDecisions,
   resetMockCases,
+  setMockActionDelay,
 } from '../src/api/mock/cases.ts'
 import {
   DEMO_OTP,
@@ -40,6 +41,7 @@ async function loginJiwon() {
 }
 
 beforeEach(async () => {
+  setMockActionDelay(0)
   resetMockCases()
   resetMockInvestigation()
   await mockLogout()

@@ -9,6 +9,7 @@ import {
 import { ApiError } from '../../api/client'
 import { AccountLockedError, InvalidCredentialsError, InvalidOtpError } from '../../api/auth'
 import type { LoginProgress } from '../../auth/authStore'
+import type { ChallengeMethod, ChallengeReason } from '../../types/auth'
 import type { Scenario } from '../../config/scenarios'
 
 export type LoginValues = { loginId: string; password: string }
@@ -24,7 +25,19 @@ type LoginPageProps = {
   scenario?: Scenario | null
 }
 type Feedback = 'ready' | 'invalid' | 'input' | 'network' | 'otp' | 'recovery' | 'locked'
-type Challenge = { challengeId: string; expiresAt: string }
+type Challenge = {
+  challengeId: string
+  expiresAt: string
+  method: ChallengeMethod
+  sentTo: string | null
+  reason: ChallengeReason | null
+}
+
+// 사장님 이메일 확인 — 왜 한 번 더 묻는지 처음 보는 사람 말로
+const EMAIL_REASON: Record<ChallengeReason, string> = {
+  NEW_DEVICE: '처음 보는 기기에서 로그인했어요.',
+  FAILED_ATTEMPTS: '비밀번호가 여러 번 틀려서 한 번 더 확인해요.',
+}
 
 const feedbackMessages: Record<Feedback, string> = {
   ready: '로그인 기능 연결 준비 중입니다.',
@@ -100,7 +113,13 @@ export function LoginPage({
     void run('password', async () => {
       const progress = await onSubmit({ loginId: values.loginId.trim(), password: values.password })
       if (!progress.done) {
-        setChallenge({ challengeId: progress.challengeId, expiresAt: progress.expiresAt })
+        setChallenge({
+          challengeId: progress.challengeId,
+          expiresAt: progress.expiresAt,
+          method: progress.method,
+          sentTo: progress.sentTo,
+          reason: progress.reason,
+        })
         setUseRecovery(false)
         setOtp('')
       }
@@ -118,12 +137,17 @@ export function LoginPage({
     setOtp('')
   }
 
+  const byEmail = challenge?.method === 'EMAIL'
   const alert = feedback && (
     <div role={feedback === 'ready' ? 'status' : 'alert'} className="dw-login-error">
       <Alert
         type={feedback === 'ready' ? 'info' : 'error'}
         showIcon
-        message={feedbackMessages[feedback]}
+        message={
+          feedback === 'otp' && byEmail
+            ? '코드가 맞지 않습니다. 메일로 받은 최신 6자리를 입력해 주세요.'
+            : feedbackMessages[feedback]
+        }
       />
     </div>
   )
@@ -225,19 +249,56 @@ export function LoginPage({
                   <p>
                     보안 직원 jiwon · 보안 관리자 yunseo · 사장님 boss — 비밀번호 1234
                     <br />
-                    직원 OTP 246810 · 복구 코드 DW-RECOVERY-0001
+                    직원 OTP 246810 · 복구 코드 DW-RECOVERY-0001 · 사장님 새 기기 이메일 코드 135790
                   </p>
                 </div>
               )}
             </>
           ) : (
             <>
-              <h2 id="login-title">{useRecovery ? '복구 코드로 로그인' : '2단계 인증'}</h2>
+              <h2 id="login-title">
+                {useRecovery
+                  ? '복구 코드로 로그인'
+                  : byEmail
+                    ? '이메일로 한 번 더 확인할게요'
+                    : '2단계 인증'}
+              </h2>
               <p className="dw-login-description">
                 {useRecovery
                   ? '처음 OTP를 등록할 때 받은 1회용 복구 코드를 입력하세요. 한 번 쓰면 다시 쓸 수 없습니다.'
-                  : '휴대폰 인증 앱에 보이는 6자리 숫자를 입력하세요. 비밀번호가 새도 이 번호가 없으면 로그인할 수 없습니다.'}
+                  : byEmail
+                    ? `${challenge.reason ? EMAIL_REASON[challenge.reason] : ''} 가입한 이메일 ${challenge.sentTo ?? ''}로 보낸 6자리를 넣어 주세요.`
+                    : '휴대폰 인증 앱에 보이는 6자리 숫자를 입력하세요. 비밀번호가 새도 이 번호가 없으면 로그인할 수 없습니다.'}
               </p>
+              {byEmail && (
+                <div className="dw-login-otp-help">
+                  <b>왜 한 번 더 확인하나요?</b>
+                  <span>
+                    비밀번호가 새도 이메일까지 가진 사람만 들어올 수 있게 해요. 평소 쓰던 기기에서는
+                    묻지 않아요. 메일이 안 보이면 스팸함도 확인해 주세요.
+                  </span>
+                  {demoHint && (
+                    <span className="dw-login-otp-demo">
+                      시연(Mock) 모드에서는 메일 대신 고정 코드 <b>135790</b>을 넣어요.
+                    </span>
+                  )}
+                </div>
+              )}
+              {/* 처음 쓰는 사람이 "6자리를 어디서 받지?"에서 막히지 않게 */}
+              {!useRecovery && !byEmail && (
+                <div className="dw-login-otp-help">
+                  <b>6자리는 어디서 보나요?</b>
+                  <span>
+                    처음 계정을 만들 때 휴대폰 인증 앱(Google Authenticator 등)에 돈워리를 등록해요.
+                    앱을 열면 30초마다 바뀌는 6자리가 보여요.
+                  </span>
+                  {demoHint && (
+                    <span className="dw-login-otp-demo">
+                      시연(Mock) 모드에서는 인증 앱 대신 고정 코드 <b>246810</b>을 넣어요.
+                    </span>
+                  )}
+                </div>
+              )}
               {remaining ? (
                 <p className="dw-login-timer" role="timer">
                   남은 시간 <b>{remaining}</b>
@@ -291,7 +352,7 @@ export function LoginPage({
                     value={otp}
                     disabled={submitting || !remaining}
                     formatter={(value) => value.replace(/\D/g, '')}
-                    aria-label="인증 코드 6자리"
+                    aria-label={byEmail ? '이메일 확인 코드 6자리' : '인증 코드 6자리'}
                     onChange={(value) => {
                       setOtp(value)
                       submitOtp(value)
@@ -314,15 +375,17 @@ export function LoginPage({
                 <Button type="link" icon={<ArrowLeftOutlined />} onClick={backToPassword}>
                   처음으로
                 </Button>
-                <Button
-                  type="link"
-                  onClick={() => {
-                    setUseRecovery((v) => !v)
-                    setFeedback(null)
-                  }}
-                >
-                  {useRecovery ? '인증 앱으로 입력' : '인증 앱을 잃었어요'}
-                </Button>
+                {!byEmail && (
+                  <Button
+                    type="link"
+                    onClick={() => {
+                      setUseRecovery((v) => !v)
+                      setFeedback(null)
+                    }}
+                  >
+                    {useRecovery ? '인증 앱으로 입력' : '인증 앱을 잃었어요'}
+                  </Button>
+                )}
               </div>
             </>
           )}

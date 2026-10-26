@@ -8,6 +8,7 @@ import {
   mockGetCases,
   mockSubmitDecisions,
   resetMockCases,
+  setMockActionDelay,
 } from '../src/api/mock/cases.ts'
 import { buildMockStaffAlerts } from '../src/api/mock/fds.ts'
 import { buildMockEvaluations } from '../src/api/mock/fdsEvaluations.ts'
@@ -28,6 +29,8 @@ import {
 const now = new Date('2026-10-24T06:00:00Z')
 const name = (code: string) => code
 beforeEach(() => {
+  // 조치 반영 지연 없이 (지연 자체는 따로 검사)
+  setMockActionDelay(0)
   resetMockCases()
   resetMockInvestigation()
 })
@@ -117,4 +120,24 @@ test('mockGetStaffCase_whenNotManager_forbidden', async () => {
   assert.equal(await mockGetStaffCase('999'), null)
   setMockActor({ userId: 5, role: 'SECURITY_MANAGER', displayName: '최윤서' })
   assert.equal((await mockGetStaffCase('101'))?.caseType, 'STAFF_TAKEOVER')
+})
+
+// 시연에서 "④ 조치"가 보이게: 판정 직후엔 조치 요청 중, 지연이 지나면 결제 반영 · 종료
+test('decision_staysInActionUntilDelay', async () => {
+  setMockActionDelay(60_000)
+  const before = await mockGetCase('201')
+  await mockSubmitDecisions('201', 4, {
+    evidenceVersion: before!.securityCase.evidenceVersion,
+    reportId: before!.reports[0].reportId,
+    decisions: [{ casePaymentId: '2011', decision: 'REJECT', reason: '구매자 부인' }],
+    reauthToken: null,
+  })
+  const pending = await mockGetCase('201')
+  assert.equal(pending?.securityCase.status, 'ACTION_PENDING')
+  assert.equal(pending?.payments[0].paymentStatus, 'HELD')
+  assert.equal(pending?.handoffs[0].status, 'REQUESTED')
+  setMockActionDelay(0)
+  const done = await mockGetCase('201')
+  assert.equal(done?.securityCase.status, 'CLOSED')
+  assert.equal(done?.payments[0].paymentStatus, 'VOIDED')
 })

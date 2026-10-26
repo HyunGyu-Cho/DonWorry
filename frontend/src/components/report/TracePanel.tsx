@@ -60,11 +60,13 @@ export function TracePanel({ steps, live = false, startedAt, now, model }: Trace
                   <span className="dw-trace-meta">
                     {failed && !running && <Tag color="gold">다시 시도</Tag>}
                     {running && <Tag color="processing">{runningText(s.kind)}</Tag>}
-                    <span className="dw-muted dw-small">{seconds(start)} ~</span>
+                    <span className="dw-muted dw-small">{seconds(start)}부터</span>
                     <span className="dw-trace-bar">
                       <i className={running ? 'is-moving' : ''} style={{ width: `${width}%` }} />
                     </span>
-                    <b className="dw-small">{running ? '…' : seconds(s.durationMs ?? 0)}</b>
+                    <b className="dw-small">
+                      {running ? '…' : `${seconds(s.durationMs ?? 0)} 걸림`}
+                    </b>
                   </span>
                 </summary>
                 <dl className="dw-rule-rows dw-trace-detail">

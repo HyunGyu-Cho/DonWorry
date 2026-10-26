@@ -3,7 +3,7 @@
 // 메일 본문은 Mailpit에서 보므로 여기에는 발송 기록만 둔다
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
 import { ConfirmAlreadyAnsweredError, ConfirmLinkExpiredError } from '../paymentErrors.ts'
-import { mockRespond } from './respond.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import type {
   BuyerAnswer,
   BuyerConfirmation,
@@ -354,19 +354,19 @@ export function resetMockPayment() {
   answers.clear()
 }
 
-function findLink(token: string, now: Date) {
+function findLink(token: string) {
   const link = MOCK_CONFIRM_TOKENS[token]
   if (!link || link.expiresInMinutes <= 0) throw new ConfirmLinkExpiredError()
-  const payment = buildMockPayments(now).find((p) => p.paymentId === link.paymentId)!
+  const payment = buildMockPayments(mockEpoch()).find((p) => p.paymentId === link.paymentId)!
   return { link, payment }
 }
 
 export function mockGetPaymentContext(paymentId: string): Promise<PaymentContext | null> {
-  return mockRespond(buildMockPayments(new Date()).find((p) => p.paymentId === paymentId) ?? null)
+  return mockRespond(buildMockPayments(mockEpoch()).find((p) => p.paymentId === paymentId) ?? null)
 }
 
 export function mockGetNotifications(query: NotificationQuery = {}): Promise<Notification[]> {
-  const rows = buildMockNotifications(new Date()).filter(
+  const rows = buildMockNotifications(mockEpoch()).filter(
     (n) =>
       (!query.recipientType || n.recipientType === query.recipientType) &&
       (!query.paymentId || n.paymentId === query.paymentId),
@@ -375,13 +375,13 @@ export function mockGetNotifications(query: NotificationQuery = {}): Promise<Not
 }
 
 export function mockGetOwnerResults(result?: OwnerSecurityResult): Promise<OwnerPaymentResult[]> {
-  const rows = buildMockOwnerResults(new Date()).filter((r) => !result || r.result === result)
+  const rows = buildMockOwnerResults(mockEpoch()).filter((r) => !result || r.result === result)
   return mockRespond(rows)
 }
 
 export async function mockGetBuyerConfirmRequest(token: string): Promise<BuyerConfirmRequest> {
   const now = new Date()
-  const { link, payment } = findLink(token, now)
+  const { link, payment } = findLink(token)
   return mockRespond({
     merchantName: MERCHANT_NAME,
     orderTitle: payment.orderTitle,
@@ -396,7 +396,7 @@ export async function mockAnswerBuyerConfirm(
   token: string,
   answer: BuyerAnswer,
 ): Promise<BuyerConfirmation> {
-  const { payment } = findLink(token, new Date())
+  const { payment } = findLink(token)
   if (answers.has(token)) throw new ConfirmAlreadyAnsweredError()
   const saved: BuyerConfirmation = {
     confirmationId: String(answers.size + 1),

@@ -44,10 +44,14 @@ const TARGET_TEXT: Record<string, string> = {
   FDS_RULE: 'Rule',
   BLOCKLIST_ENTRY: '차단 목록 값',
 }
-// 대상 이름 (번호는 원본 보기에서). 대상이 없으면 null
-export function auditTargetText(log: Pick<AuditLog, 'targetType' | 'targetId'>): string | null {
+// 대상 이름 (번호는 원본 보기에서). 대상이 없거나 작업 이름에 이미 들어 있으면 null
+// 예: "관리자 승인 요청 · 승인 요청"처럼 같은 말이 두 번 나오지 않게
+export function auditTargetText(
+  log: Pick<AuditLog, 'targetType' | 'targetId' | 'action'>,
+): string | null {
   if (!log.targetType) return null
-  return TARGET_TEXT[log.targetType] ?? log.targetType
+  const text = TARGET_TEXT[log.targetType] ?? log.targetType
+  return auditActionText(log.action).includes(text) ? null : text
 }
 
 // 상세 값 중 사람이 읽을 것만 한 줄로 (사유 · 메모 · 시도 횟수 · 새 기기)

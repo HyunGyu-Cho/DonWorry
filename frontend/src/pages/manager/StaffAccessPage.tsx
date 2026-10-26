@@ -15,6 +15,7 @@ import {
 import { getStaffCases } from '../../api/investigation'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useFeedback } from '../../components/common/Feedback'
+import { TUTORIAL_EVENT } from '../../components/tutorial/tutorialStore'
 import { RawDetails } from '../../components/explain/RawDetails'
 import { TermTip } from '../../components/explain/TermTip'
 import type { StaffAccount, StaffLoginEvent, StaffSession } from '../../types/auth'
@@ -117,7 +118,7 @@ async function fetchAccessData(): Promise<Data | null> {
 }
 
 export function StaffAccessPage() {
-  const { toast } = useFeedback()
+  const { toast, confirmDanger } = useFeedback()
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState(false)
   const [tab, setTab] = useState<TabKey>('alerts')
@@ -178,7 +179,7 @@ export function StaffAccessPage() {
   if (error) {
     return (
       <>
-        <PageHeader title="직원 접속 감시" />
+        <PageHeader title="로그인 모니터링" />
         <Alert
           type="warning"
           showIcon
@@ -191,7 +192,7 @@ export function StaffAccessPage() {
   if (!data || !summary) {
     return (
       <>
-        <PageHeader title="직원 접속 감시" />
+        <PageHeader title="로그인 모니터링" />
         <div className="dw-error-view" role="status">
           <Spin size="large" />
         </div>
@@ -211,13 +212,13 @@ export function StaffAccessPage() {
 
   const alertColumns: ColumnsType<StaffAlert> = [
     {
-      title: '언제',
+      title: '발생 시각',
       dataIndex: 'detectedAt',
       width: 120,
       render: (v: string) => relativeTime(v, now),
     },
-    { title: '걸린 규칙', dataIndex: 'ruleCode', width: 190, render: (v: string) => ruleName(v) },
-    { title: '무슨 일', dataIndex: 'summary' },
+    { title: '적중 Rule', dataIndex: 'ruleCode', width: 190, render: (v: string) => ruleName(v) },
+    { title: '내용', dataIndex: 'summary' },
     {
       title: '위험도',
       dataIndex: 'severity',
@@ -238,7 +239,7 @@ export function StaffAccessPage() {
   const sessionColumns: ColumnsType<StaffSession> = [
     { title: '직원', dataIndex: 'displayName', width: 110 },
     {
-      title: '어디서 · 기기',
+      title: '접속 위치 · 기기',
       render: (_, s) => (
         <div>
           <Place ip={s.ip} />
@@ -247,7 +248,7 @@ export function StaffAccessPage() {
       ),
     },
     {
-      title: '시작',
+      title: '시작 시각',
       dataIndex: 'startedAt',
       width: 120,
       render: (v: string) => relativeTime(v, now),
@@ -274,13 +275,22 @@ export function StaffAccessPage() {
           <Button
             size="small"
             danger={suspicious.has(s.staffSessionId)}
+            data-tour={suspicious.has(s.staffSessionId) ? 'session-kill' : undefined}
             loading={busy === `s${s.staffSessionId}`}
+            // 되돌릴 수 없는 동작이라 어느 세션인지 확인하고 끊는다
             onClick={() =>
-              void act(
-                `s${s.staffSessionId}`,
-                () => terminateStaffSession(s.staffSessionId),
-                `${s.displayName} 세션을 종료했습니다. 이 기기는 다시 로그인해야 합니다.`,
-              )
+              confirmDanger({
+                title: `${s.displayName} 님의 세션을 끊을까요?`,
+                content: `${placeName(s.ip.label)} · ${s.deviceLabel ?? '기기 정보 없음'} 세션이에요. 끊으면 이 기기는 비밀번호와 OTP로 다시 로그인해야 해요.`,
+                onConfirm: async () => {
+                  await act(
+                    `s${s.staffSessionId}`,
+                    () => terminateStaffSession(s.staffSessionId),
+                    `${s.displayName} 세션을 종료했습니다. 이 기기는 다시 로그인해야 합니다.`,
+                  )
+                  window.dispatchEvent(new CustomEvent(TUTORIAL_EVENT, { detail: 'SESSION_ENDED' }))
+                },
+              })
             }
           >
             종료
@@ -291,7 +301,7 @@ export function StaffAccessPage() {
 
   const loginColumns: ColumnsType<StaffLoginEvent> = [
     {
-      title: '언제',
+      title: '발생 시각',
       dataIndex: 'occurredAt',
       width: 120,
       render: (v: string) => relativeTime(v, now),
@@ -302,7 +312,7 @@ export function StaffAccessPage() {
       render: (_, e) =>
         data.accounts.find((a) => a.userId === e.userId)?.displayName ?? `없는 아이디`,
     },
-    { title: '어디서', render: (_, e) => <Place ip={e.ip} /> },
+    { title: '접속 위치', render: (_, e) => <Place ip={e.ip} /> },
     {
       title: '결과',
       dataIndex: 'result',
@@ -383,8 +393,8 @@ export function StaffAccessPage() {
   return (
     <>
       <PageHeader
-        title="직원 접속 감시"
-        description="돈워리 직원(보안 직원 · 관리자) 계정의 로그인과 세션을 지켜봅니다. 직원은 사내망 업무 PC에서 비밀번호 + OTP로 로그인합니다."
+        title="로그인 모니터링"
+        description="돈워리 직원(보안 직원 · 관리자) 계정의 로그인과 세션을 모니터링해요. 직원은 보통 사내망 업무 PC 한두 대에서 비밀번호 + OTP로 로그인해요."
         actions={
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
             새로고침
@@ -432,6 +442,7 @@ export function StaffAccessPage() {
           extra={
             <Segmented
               size="small"
+              data-tour="access-by-account"
               value={attackView}
               onChange={(v) => setAttackView(v as 'ip' | 'account')}
               options={[
@@ -442,10 +453,16 @@ export function StaffAccessPage() {
           }
           style={{ marginBottom: 20 }}
         >
+          {/* 처음 보는 사람용 한 줄 — 왜 IP가 여러 개면 문제인지 */}
+          <p className="dw-attack-why">
+            보통은 "같은 IP가 10분에 {PER_IP_THRESHOLD}번 틀리면 차단"으로 막아요. 공격자는 이걸
+            피하려고 IP를 수십 개로 나눠 하나당 1~3번씩만 시도해요. 그래서 IP마다 세면 안 걸리고,
+            <b> 계정 기준으로 묶어야</b> 공격이 보여요.
+          </p>
           {attackView === 'ip' ? (
             <>
               <p className="dw-attack-lead">
-                최근 10분, 사내망 밖 IP <b>{attack.ips.length}개</b>가 1~
+                마지막 시도 전 10분 동안 사내망 밖 IP <b>{attack.ips.length}개</b>가 1~
                 {Math.max(...attack.ips.map((i) => i.failures))}번씩 실패했어요.{' '}
                 {attack.belowPerIpThreshold &&
                   `IP 하나씩 보면 모두 "10분 ${PER_IP_THRESHOLD}회" 기준 아래라 기존 규칙으로는 경보가 없어요.`}
@@ -507,7 +524,7 @@ export function StaffAccessPage() {
           },
           {
             key: 'sessions',
-            label: `세션 ${active.length}`,
+            label: <span data-tour="session-kill">세션 {active.length}</span>,
             children: (
               <Card
                 className="dw-table-card"

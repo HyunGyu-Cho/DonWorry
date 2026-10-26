@@ -8,8 +8,8 @@ import {
   StaffActionForbiddenError,
 } from '../auth.ts'
 import { ApiError } from '../client.ts'
-import { getMockActor, setMockActor } from './investigation.ts'
-import { mockRespond } from './respond.ts'
+import { getMockActor, mockRecordStaffAction, setMockActor } from './investigation.ts'
+import { mockEpoch, mockRespond } from './respond.ts'
 import type {
   AuthUser,
   ReauthTicket,
@@ -137,7 +137,7 @@ export function buildMockLoginEvents(now: Date): StaffLoginEvent[] {
   // 직원 계정 탈취: 집에서 로그인(새 기기) → 해외 Tor IP에서 비밀번호 성공 후 OTP 3회 실패
   add(780, 'jiwon', HOME_IP, 'SUCCESS', '집 PC · Chrome · Windows')
   for (const m of [95, 94, 93]) add(m, 'jiwon', ATTACK_IP, 'BAD_OTP', 'Unknown · Firefox · Linux')
-  // 분산 공격: 10분 안에 IP 30개에서 실패 40회. 일부 IP는 두 계정을 번갈아 시도(비밀번호 뿌리기)
+  // 분산 공격: 10분 안에 IP 30개에서 실패 41회 (박지원 30 · 이도현 10 · 없는 아이디 1, IP당 1~3회). 일부 IP는 두 계정을 번갈아 시도(패스워드 스프레이)
   for (let i = 0; i < 40; i += 1) {
     const target = i % 4 === 3 ? 'dohyun' : 'jiwon'
     add(9 - i * 0.2, target, DISTRIBUTED_IPS[i % 30], 'BAD_PASSWORD', null)
@@ -219,23 +219,51 @@ function signIn(user: AuthUser): AuthUser {
   return copy
 }
 
-// 진행 중인 2단계 인증 요청: challengeId → 사용자 · 틀린 횟수
-const challenges = new Map<string, { user: AuthUser; failures: number }>()
+// 진행 중인 2단계 인증 요청: challengeId → 사용자 · 틀린 횟수 · 확인 방법
+const challenges = new Map<string, { user: AuthUser; failures: number; method: 'OTP' | 'EMAIL' }>()
+
+// 사장님 위험 기반 확인 (1-13, 현규 결정 B): 처음 보는 기기이거나 비밀번호를 5번 이상 틀린 뒤면 이메일 6자리
+export const DEMO_EMAIL_CODE = '135790'
+export const OWNER_STEP_UP_FAILURES = 5
+// 사장님 가입 이메일 (가린 값만 화면에 보낸다)
+const OWNER_EMAIL: Record<string, string> = { boss: 'o****@cakeshop.kr' }
+// 비밀번호를 연달아 틀린 횟수 (아이디별) · 이번 화면에서 확인을 마친 기기 (새로 고침하면 다시 새 기기)
+const passwordFailures = new Map<string, number>()
+const knownDevices = new Set<string>()
 // OTP를 이만큼 틀리면 계정을 잠근다 (Mock은 이번 요청만 끝냄)
 export const MAX_OTP_FAILURES = 5
 
 export async function mockStartLogin(loginId: string, password: string): Promise<LoginStep> {
   await mockRespond(null)
-  const found = MOCK_USERS.find((u) => u.loginId === loginId.trim().toLowerCase())
-  if (!found || password !== DEMO_PASSWORD) throw new InvalidCredentialsError()
+  const id = loginId.trim().toLowerCase()
+  const found = MOCK_USERS.find((u) => u.loginId === id)
+  if (!found || password !== DEMO_PASSWORD) {
+    if (found) passwordFailures.set(id, (passwordFailures.get(id) ?? 0) + 1)
+    throw new InvalidCredentialsError()
+  }
   if (lockedUsers.has(found.userId)) throw new AccountLockedError()
-  if (!needsOtp(found)) return { status: 'SUCCESS', user: signIn(found) }
   const challengeId = `mock-${found.loginId}-${Date.now()}`
-  challenges.set(challengeId, { user: found, failures: 0 })
+  const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString()
+  if (needsOtp(found)) {
+    challenges.set(challengeId, { user: found, failures: 0, method: 'OTP' })
+    return { status: 'OTP_REQUIRED', challengeId, expiresAt, method: 'OTP' }
+  }
+  // 사장님: 평소엔 바로 끝, 위험할 때만 이메일 확인
+  const reason =
+    (passwordFailures.get(id) ?? 0) >= OWNER_STEP_UP_FAILURES
+      ? 'FAILED_ATTEMPTS'
+      : !knownDevices.has(id)
+        ? 'NEW_DEVICE'
+        : null
+  if (!reason) return { status: 'SUCCESS', user: signIn(found) }
+  challenges.set(challengeId, { user: found, failures: 0, method: 'EMAIL' })
   return {
     status: 'OTP_REQUIRED',
     challengeId,
-    expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    expiresAt,
+    method: 'EMAIL',
+    sentTo: OWNER_EMAIL[id] ?? '가입한 이메일',
+    reason,
   }
 }
 
@@ -253,11 +281,20 @@ async function finishChallenge(challengeId: string, ok: boolean): Promise<AuthUs
     throw new InvalidOtpError()
   }
   challenges.delete(challengeId)
+  // 확인을 마치면 실패 횟수를 지우고 이 기기를 기억한다
+  passwordFailures.delete(found.user.loginId)
+  knownDevices.add(found.user.loginId)
   return signIn(found.user)
 }
 
-export const mockVerifyOtp = (challengeId: string, code: string) =>
-  finishChallenge(challengeId, code.trim() === DEMO_OTP)
+// 6자리 확인 — 인증 앱(OTP) 또는 이메일 코드
+export const mockVerifyOtp = (challengeId: string, code: string) => {
+  const method = challenges.get(challengeId)?.method
+  return finishChallenge(
+    challengeId,
+    code.trim() === (method === 'EMAIL' ? DEMO_EMAIL_CODE : DEMO_OTP),
+  )
+}
 
 export const mockSubmitRecoveryCode = (challengeId: string, recoveryCode: string) =>
   finishChallenge(challengeId, recoveryCode.trim().toUpperCase() === DEMO_RECOVERY_CODE)
@@ -303,7 +340,7 @@ export async function mockLogout(): Promise<void> {
 }
 
 export function mockGetLoginEvents(query: LoginEventQuery = {}): Promise<StaffLoginEvent[]> {
-  const rows = buildMockLoginEvents(new Date()).filter(
+  const rows = buildMockLoginEvents(mockEpoch()).filter(
     (row) =>
       (!query.loginId || row.loginIdAttempted === query.loginId) &&
       (!query.ip || row.ip.address === query.ip) &&
@@ -325,18 +362,20 @@ export function resetMockIdentity() {
   lockedUsers.clear()
   for (const [userId, reason] of INITIAL_LOCKS) lockedUsers.set(userId, reason)
   challenges.clear()
+  passwordFailures.clear()
+  knownDevices.clear()
   saveSession(null)
 }
 
-function sessionsNow(now: Date): StaffSession[] {
-  return buildMockStaffSessions(now).map((s) => {
+function sessionsNow(): StaffSession[] {
+  return buildMockStaffSessions(mockEpoch()).map((s) => {
     const endedAt = terminated.get(s.staffSessionId)
     return endedAt && s.endedAt === null ? { ...s, endedAt, endReason: 'FORCED' } : s
   })
 }
 
 export function mockGetStaffSessions(activeOnly = true): Promise<StaffSession[]> {
-  const rows = sessionsNow(new Date())
+  const rows = sessionsNow()
   return mockRespond(activeOnly ? rows.filter((row) => row.endedAt === null) : rows)
 }
 
@@ -363,7 +402,7 @@ export function buildMockStaffAccounts(now: Date): StaffAccount[] {
 }
 
 export function mockGetStaffAccounts(): Promise<StaffAccount[]> {
-  return mockRespond(buildMockStaffAccounts(new Date()))
+  return mockRespond(buildMockStaffAccounts(mockEpoch()))
 }
 
 const requireManager = () => {
@@ -372,15 +411,16 @@ const requireManager = () => {
 
 export async function mockTerminateStaffSession(staffSessionId: number): Promise<StaffSession> {
   requireManager()
-  const found = sessionsNow(new Date()).find((s) => s.staffSessionId === staffSessionId)
+  const found = sessionsNow().find((s) => s.staffSessionId === staffSessionId)
   if (!found || found.endedAt !== null) throw new StaffActionDoneError()
   terminated.set(staffSessionId, new Date().toISOString())
-  return mockRespond(sessionsNow(new Date()).find((s) => s.staffSessionId === staffSessionId)!)
+  mockRecordStaffAction(found.userId, 'KILL_SESSIONS')
+  return mockRespond(sessionsNow().find((s) => s.staffSessionId === staffSessionId)!)
 }
 
 export async function mockUnlockStaffAccount(userId: number): Promise<StaffAccount> {
   requireManager()
   if (!lockedUsers.has(userId)) throw new StaffActionDoneError()
   lockedUsers.delete(userId)
-  return mockRespond(buildMockStaffAccounts(new Date()).find((a) => a.userId === userId)!)
+  return mockRespond(buildMockStaffAccounts(mockEpoch()).find((a) => a.userId === userId)!)
 }
