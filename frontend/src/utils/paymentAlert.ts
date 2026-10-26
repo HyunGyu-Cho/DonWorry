@@ -58,7 +58,8 @@ export function verdict(e: Pick<FdsEvaluationSummary, 'result' | 'hitRuleCodes'>
   return { label, tone, meaning: band(e.result)?.meaning ?? '' }
 }
 
-export type Fact = { label: string; text: string; tone: Exclude<Tone, 'muted'> }
+// muted = 비교할 이력이 없어 좋다 나쁘다 말할 수 없음
+export type Fact = { label: string; text: string; tone: Tone }
 
 // 결제 한 건을 카드 · 접속 · 기기 · 계정 · 금액 · 시도 순서로 한 줄씩
 export function paymentFacts(
@@ -72,13 +73,17 @@ export function paymentFacts(
     return [{ label: '차단', text: '과거 사기로 확인된 값과 일치해요', tone: 'bad' }]
   }
   const facts: Fact[] = []
+  // 가입 직후 계정은 이전 결제가 없어 카드 · 금액을 "평소"와 비교할 수 없다
+  const noHistory = hit.has('NEW_ACCOUNT')
   const card = cardName(ctx?.cardLast4 ?? null)
   const issued = ctx?.cardCountry ? `${countryName(ctx.cardCountry)} 발급` : null
   const cardDesc = [card, issued].filter(Boolean).join(', ')
   facts.push(
     hit.has('NEW_CARD')
       ? { label: '카드', text: `이 고객이 처음 쓰는 카드예요 (${cardDesc})`, tone: 'warn' }
-      : { label: '카드', text: `평소 쓰던 카드예요 (${cardDesc})`, tone: 'ok' },
+      : noHistory
+        ? { label: '카드', text: `이전 결제가 없어 비교할 수 없어요 (${cardDesc})`, tone: 'muted' }
+        : { label: '카드', text: `평소 쓰던 카드예요 (${cardDesc})`, tone: 'ok' },
   )
   const ip = ctx?.ip ?? null
   const where = ip ? placeName(ip.label) : '확인되지 않은 접속 위치'
@@ -99,7 +104,15 @@ export function paymentFacts(
     })
   }
   if (ctx?.deviceLabel) {
-    facts.push({ label: '기기', text: `${ctx.deviceLabel}에서 결제했어요`, tone: 'ok' })
+    // 자동화 브라우저 = 사람이 아니라 프로그램이 조작하는 브라우저 (점수와 무관한 안내)
+    const bot = ctx.deviceLabel.includes('자동화')
+    facts.push({
+      label: '기기',
+      text: bot
+        ? `${ctx.deviceLabel}에서 결제했어요 · 사람이 아니라 프로그램이 조작했을 수 있어요`
+        : `${ctx.deviceLabel}에서 결제했어요`,
+      tone: bot ? 'warn' : 'ok',
+    })
   }
   const joined = ctx?.customerJoinedAt ? Date.parse(ctx.customerJoinedAt) : null
   const paid = ctx ? Date.parse(ctx.requestedAt) : null
@@ -136,6 +149,12 @@ export function paymentFacts(
       text: `${amount} · 50만 원이 넘는 고액이에요 (이 고객에겐 평소 수준)`,
       tone: 'warn',
     })
+  } else if (noHistory) {
+    facts.push({
+      label: '금액',
+      text: `${amount} · 이전 결제가 없어 비교할 수 없어요`,
+      tone: 'muted',
+    })
   } else {
     facts.push({ label: '금액', text: `${amount} · 평소와 비슷한 금액이에요`, tone: 'ok' })
   }
@@ -155,6 +174,8 @@ export type BlockCandidate = {
   label: string
   // 이미 차단 목록에 있으면 true
   already: boolean
+  // recommend = 이 사람만 쓰는 값, caution = 여러 사람이 같이 쓸 수 있는 값 (IP)
+  advice: 'recommend' | 'caution'
 }
 
 // 이메일은 앞 한 글자만 남긴다 (minsu.kim@example.com → m*******@example.com)
@@ -173,7 +194,7 @@ export function blockCandidates(
   const active = blocklist.filter((b) => b.releasedAt === null)
   const has = (type: BlocklistType, value: string) =>
     active.some((b) => b.entryType === type && b.entryValue === value)
-  const rows: Omit<BlockCandidate, 'already'>[] = []
+  const rows: Omit<BlockCandidate, 'already' | 'advice'>[] = []
   if (ctx.cardLast4) {
     rows.push({ type: 'CARD', value: `**** ${ctx.cardLast4}`, label: cardName(ctx.cardLast4) })
   }
@@ -198,7 +219,11 @@ export function blockCandidates(
       label: `이메일 · ${maskEmail(ctx.buyerEmail)}`,
     })
   }
-  return rows.map((r) => ({ ...r, already: has(r.type, r.value) }))
+  return rows.map((r) => ({
+    ...r,
+    already: has(r.type, r.value),
+    advice: r.type === 'IP' ? 'caution' : 'recommend',
+  }))
 }
 
 // entry_id → 승인을 기다리는 해제 요청

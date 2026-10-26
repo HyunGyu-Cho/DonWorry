@@ -7,6 +7,7 @@ import { getFdsEvaluation, type FdsEvaluationDetail, type FdsRuleHit } from '../
 import { addBlocklistEntry, getBlocklist } from '../../api/fdsRules'
 import { getPaymentContext } from '../../api/payment'
 import { useFeedback } from '../../components/common/Feedback'
+import { TUTORIAL_EVENT } from '../../components/tutorial/tutorialStore'
 import { PageHeader } from '../../components/common/PageHeader'
 import { RawDetails } from '../../components/explain/RawDetails'
 import { TermTip } from '../../components/explain/TermTip'
@@ -45,7 +46,7 @@ async function fetchAlert(id: string): Promise<Data | 'missing' | null> {
   }
 }
 
-const FACT_ICON: Record<Fact['tone'], string> = { ok: '✅', warn: '⚠', bad: '🔴' }
+const FACT_ICON: Record<Fact['tone'], string> = { ok: '✅', warn: '⚠', bad: '🔴', muted: '➖' }
 
 function FactRow({ fact }: { fact: Fact }) {
   return (
@@ -138,7 +139,7 @@ function RuleTable({ detail }: { detail: FdsEvaluationDetail }) {
     { title: '평가 당시 값', dataIndex: 'observedValue', render: (v: string | null) => v ?? '—' },
   ]
   return (
-    <Card title="어떤 Rule에 걸렸나" extra={<Link to="/security/rules">Rule 카탈로그 →</Link>}>
+    <Card title="Rule별 점수" extra={<Link to="/security/rules">Rule 카탈로그 →</Link>}>
       {detail.ruleHits.length === 0 ? (
         <p className="dw-muted">평가가 끝나지 않아 Rule 결과가 없습니다.</p>
       ) : (
@@ -175,13 +176,16 @@ interface BlockModalProps {
   onDone: () => void
 }
 
-// 고른 값만 차단 목록에 올린다. 공용 IP 같은 오등록을 막으려고 하나씩 고르게 한다
+const keyOf = (c: BlockCandidate) => `${c.type}:${c.value}`
+
+// 고른 값만 차단 목록에 올린다. 이 사람만 쓰는 값은 미리 골라 두고, 공용 IP는 직원이 직접 고르게 한다
 function BlockModal({ open, candidates, onClose, onDone }: BlockModalProps) {
   const { toast } = useFeedback()
-  const [picked, setPicked] = useState<string[]>([])
+  const [picked, setPicked] = useState<string[]>(() =>
+    candidates.filter((c) => c.advice === 'recommend' && !c.already).map(keyOf),
+  )
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
-  const keyOf = (c: BlockCandidate) => `${c.type}:${c.value}`
 
   const close = () => {
     setPicked([])
@@ -200,6 +204,7 @@ function BlockModal({ open, candidates, onClose, onDone }: BlockModalProps) {
       )
       setPicked([])
       setReason('')
+      window.dispatchEvent(new CustomEvent(TUTORIAL_EVENT, { detail: 'BLOCK_ADDED' }))
       onDone()
     } catch {
       void toast.error('등록하지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -220,15 +225,26 @@ function BlockModal({ open, candidates, onClose, onDone }: BlockModalProps) {
       onCancel={close}
     >
       <p>
-        등록한 값과 일치하는 결제는 점수 계산 없이 바로 거절돼요. 여러 사람이 함께 쓰는 값(회사 ·
-        카페 IP 등)은 정상 고객까지 막을 수 있으니 확인 후 골라 주세요.
+        등록한 값과 일치하는 결제는 점수 계산 없이 바로 거절돼요. <b>추천</b>은 이 사람만 쓰는
+        값이라 미리 골라 두었어요. <b>주의</b>는 여러 사람이 같이 쓸 수 있는 값이라 정상 고객까지
+        막힐 수 있어요.
       </p>
       <Checkbox.Group value={picked} onChange={(v) => setPicked(v as string[])}>
         <div className="dw-pa-candidates">
           {candidates.map((c) => (
             <Checkbox key={keyOf(c)} value={keyOf(c)} disabled={c.already}>
               {c.label}
-              {c.already && <Tag style={{ marginLeft: 8 }}>등록됨</Tag>}
+              {c.already ? (
+                <Tag style={{ marginLeft: 8 }}>등록됨</Tag>
+              ) : c.advice === 'recommend' ? (
+                <Tag color="green" style={{ marginLeft: 8 }}>
+                  추천
+                </Tag>
+              ) : (
+                <Tag color="gold" style={{ marginLeft: 8 }}>
+                  주의 · 여러 명이 같이 씀
+                </Tag>
+              )}
             </Checkbox>
           ))}
         </div>
@@ -310,6 +326,7 @@ export function AlertDetailPage() {
   const { detail, payment } = data
   const e = detail.evaluation
   const allBlocked = candidates.length > 0 && candidates.every((c) => c.already)
+  const blockedCount = candidates.filter((c) => c.already).length
   const others = detail.history.filter((h) => h.evaluationId !== e.evaluationId)
 
   return (
@@ -323,6 +340,11 @@ export function AlertDetailPage() {
               <Link to={`/security/cases/${e.caseId}`}>
                 <Button data-tour="alert-case-link">사건 보기</Button>
               </Link>
+            )}
+            {blockedCount > 0 && !allBlocked && (
+              <Tag color="green" className="dw-pa-blocked-tag">
+                차단 {blockedCount}건 등록됨 ✓
+              </Tag>
             )}
             {candidates.length > 0 &&
               (allBlocked ? (
@@ -403,6 +425,8 @@ export function AlertDetailPage() {
         </div>
       </div>
       <BlockModal
+        // 열 때마다 새로 그려 추천 값을 다시 골라 둔다
+        key={blockOpen ? 'open' : 'closed'}
         open={blockOpen}
         candidates={candidates}
         onClose={() => setBlockOpen(false)}

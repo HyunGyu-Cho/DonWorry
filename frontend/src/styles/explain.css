@@ -554,6 +554,15 @@
 .dw-pa-fact--bad {
   background: #fef2f2;
 }
+.dw-pa-fact--muted {
+  color: #64748b;
+}
+.dw-pa-blocked-tag {
+  margin: 0;
+}
+.dw-pa-new-tag {
+  margin-left: 6px;
+}
 .dw-pa-fact-label {
   color: #64748b;
   font-size: 12.5px;

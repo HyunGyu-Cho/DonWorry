@@ -66,6 +66,13 @@ test('paymentFacts_followRuleHits', () => {
   assert.equal(testing.find((f) => f.label === '접속')?.tone, 'bad')
   assert.match(testing.find((f) => f.label === '계정')?.text ?? '', /가입 40분 만에/)
   assert.ok(testing.some((f) => f.label === '시도' && f.tone === 'bad'))
+  // 가입 직후 계정은 카드 · 금액을 평소와 비교할 수 없다고 말한다
+  const of34 = (label: string) => testing.find((f) => f.label === label)
+  assert.equal(of34('카드')?.tone, 'muted')
+  assert.match(of34('카드')?.text ?? '', /비교할 수 없어요/)
+  assert.equal(of34('금액')?.tone, 'muted')
+  // 자동화 브라우저는 정상(✅)으로 보이지 않는다
+  assert.equal(of34('기기')?.tone, 'warn')
 
   // 차단 목록 일치면 비교 없이 한 줄
   const blocked = paymentFacts(byPayment(32), paymentOf(32))
@@ -91,6 +98,11 @@ test('blockCandidates_marksAlreadyBlocked_andHidesRawValues', () => {
     ],
   )
   assert.equal(c[0].value, '**** 4402')
+  // IP만 여러 사람이 같이 쓸 수 있어 주의, 나머지는 추천
+  assert.deepEqual(
+    c.map((x) => x.advice),
+    ['recommend', 'recommend', 'caution', 'recommend'],
+  )
   for (const x of c) assert.doesNotMatch(x.label, /\d+\.\d+\.\d+\.\d+|DEV-|yuna\./)
   assert.equal(maskEmail('minsu.kim@example.com'), 'm********@example.com')
   assert.equal(

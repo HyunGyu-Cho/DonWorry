@@ -15,8 +15,8 @@ export type TutorialStep = {
   target?: string
   special?: TutorialSpecial
   // 이 일이 일어나면 다음 단계로 (화면이 TUTORIAL_EVENT로 알린다)
-  // DECIDED = 판정 확정, APPROVAL_DECIDED = 관리자 승인 · 거절, SESSION_ENDED = 세션 강제 종료
-  doneOn?: 'DECIDED' | 'APPROVAL_DECIDED' | 'SESSION_ENDED'
+  // DECIDED = 판정 확정, APPROVAL_DECIDED = 관리자 승인 · 거절, SESSION_ENDED = 세션 강제 종료, BLOCK_ADDED = 차단 목록 등록
+  doneOn?: 'DECIDED' | 'APPROVAL_DECIDED' | 'SESSION_ENDED' | 'BLOCK_ADDED'
 }
 
 export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
@@ -251,7 +251,7 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
     {
       title: '결제 경보 보기',
       todo: '[결제 경보]에서 정하늘 고객의 "거절" 경보를 눌러 보세요.',
-      look: ['90점 이상은 사람을 기다리지 않고 바로 거절해요'],
+      look: ['70점 이상은 사람을 기다리지 않고 바로 거절해요'],
       path: '/security/alerts',
       target: 'alert-106',
     },
@@ -264,13 +264,14 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
       ],
       path: '/security/alerts/106',
       target: 'alert-block',
+      doneOn: 'BLOCK_ADDED',
     },
     {
       title: '차단 목록',
       todo: '[차단 목록]에서 방금 등록한 값과 막은 횟수를 확인해 보세요.',
       look: ['차단 목록과 일치하면 점수 계산 없이 바로 막아요', '해제는 관리자 승인이 필요해요'],
       path: '/security/blocklist',
-      target: 'nav-security-blocklist',
+      target: 'nav-security-blocklist blocklist-table',
     },
   ],
 }

@@ -59,6 +59,7 @@ test('everyTarget_existsInSource', () => {
     'components/tutorial/TutorialPanel.tsx',
     'pages/manager/StaffAccessPage.tsx',
     'pages/owner/SettlementCalendarPage.tsx',
+    'pages/security/BlocklistPage.tsx',
   ]
   const source = files
     .map((f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'))
