@@ -51,5 +51,12 @@ fds:
 
 donworry:
   report:
-    # 보고서 내용을 채우는 쪽. fake = Spring 안의 템플릿으로 바로 완료 (2-16 전까지), 2-16에서 ai-server 추가
+    # 보고서 내용을 채우는 쪽. fake = Spring 안의 템플릿으로 바로 완료, ai-server = ai-server에 조사를 맡김
+    # 결과 받기(2-17) 전에는 ai-server로 바꾸면 보고서가 "생성 중"에서 멈춘다
     writer: ${DONWORRY_REPORT_WRITER:fake}
+  ai-server:
+    base-url: ${DONWORRY_AI_SERVER_URL:http://localhost:8000}
+    # ai-server의 AI_SERVER_SERVICE_KEY와 같은 값. 저장소에 올리지 않고 환경 변수로만 넣는다
+    service-key: ${DONWORRY_AI_SERVER_SERVICE_KEY:}
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
