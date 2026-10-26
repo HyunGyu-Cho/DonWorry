@@ -170,7 +170,7 @@ class ReportServiceTests {
         securityCase.increaseEvidenceVersion();
         securityCaseRepository.save(securityCase);
 
-        reportService.afterFinished(new ReportTarget(first.getId(), securityCase.getId(), 1, 1));
+        reportService.afterFinished(new ReportTarget(first.getId(), securityCase.getId(), "PAYMENT_FRAUD", 1, 1));
 
         assertThat(reportsOf(securityCase.getId()))
                 .extracting(AiReport::getEvidenceVersion)

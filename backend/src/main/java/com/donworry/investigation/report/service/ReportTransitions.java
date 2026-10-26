@@ -30,9 +30,9 @@ public class ReportTransitions {
     // 같은 버전 번호를 동시에 잡으면 UNIQUE 위반이 그대로 나간다 — 부르는 쪽이 합류로 처리한다
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<ReportTarget> reserve(Long caseId, int evidenceVersion, Instant now) {
-        Optional<Integer> current = securityCaseRepository.findById(caseId).map(SecurityCase::getEvidenceVersion);
+        Optional<SecurityCase> securityCase = securityCaseRepository.findById(caseId);
         // Case가 없거나 증거 버전이 이미 앞섰으면 낡은 요청 — 새 버전 요청이 만든다
-        if (current.isEmpty() || current.get() != evidenceVersion) {
+        if (securityCase.isEmpty() || securityCase.get().getEvidenceVersion() != evidenceVersion) {
             return Optional.empty();
         }
         if (aiReportRepository.existsByCaseIdAndStatusIn(caseId, EnumSet.of(PENDING, RUNNING))
@@ -41,7 +41,14 @@ public class ReportTransitions {
         }
         int reportVersion = aiReportRepository.findMaxReportVersion(caseId).orElse(0) + 1;
         AiReport saved = aiReportRepository.save(AiReport.pending(caseId, reportVersion, evidenceVersion, now));
-        return Optional.of(new ReportTarget(saved.getId(), caseId, reportVersion, evidenceVersion));
+        String caseType = securityCase.get().getCaseType().name();
+        return Optional.of(new ReportTarget(saved.getId(), caseId, caseType, reportVersion, evidenceVersion));
+    }
+
+    // ai-server가 접수(202)했을 때. 결과가 먼저 와서 이미 끝났으면 false (덮지 않음)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean running(Long reportId) {
+        return aiReportRepository.markRunning(reportId) == 1;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
