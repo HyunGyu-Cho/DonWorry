@@ -14,6 +14,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.donworry.investigation.report.client.AiServerClient;
 import java.io.IOException;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.mock.http.client.MockClientHttpRequest;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.web.client.ResponseActions;
@@ -45,6 +47,7 @@ class AiServerReportWriterTests {
     List<Duration> pauses;
     List<String> sentBodies;
     AiServerReportWriter writer;
+    AiServerClient client;
 
     @BeforeEach
     void setUp() {
@@ -56,8 +59,8 @@ class AiServerReportWriterTests {
         attemptRegistry = new AttemptRegistry();
         pauses = new ArrayList<>();
         sentBodies = new ArrayList<>();
-        writer = new AiServerReportWriter(
-                new AiServerClient(builder.build(), KEY), reportTransitions, attemptRegistry, pauses::add);
+        client = new AiServerClient(builder.build(), KEY);
+        writer = new AiServerReportWriter(client, reportTransitions, attemptRegistry, pauses::add);
     }
 
     // 조사 요청 한 번을 기대하고, 보낸 본문을 기록해 둔다
@@ -172,5 +175,27 @@ class AiServerReportWriterTests {
 
         verify(reportTransitions).running(7L);
         verify(reportTransitions, never()).fail(anyLong(), any(), any());
+    }
+
+    // 결과 직접 조회 — 끝난 결과는 읽고, 없음(404) · 연결 실패는 빈 값 (2-18)
+    @Test
+    void findResult_okOrMissing() {
+        UUID attemptId = UUID.randomUUID();
+        aiServer.expect(requestTo("http://ai-server/investigations/7?attemptId=" + attemptId))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(AiServerClient.SERVICE_KEY_HEADER, KEY))
+                .andRespond(withSuccess(
+                        "{\"reportId\":7,\"attemptId\":\"" + attemptId + "\",\"status\":\"FAILED\"}",
+                        MediaType.APPLICATION_JSON));
+        aiServer.expect(requestTo("http://ai-server/investigations/8?attemptId=" + attemptId))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+        aiServer.expect(requestTo("http://ai-server/investigations/9?attemptId=" + attemptId))
+                .andRespond(withException(new IOException("연결 실패")));
+
+        assertThat(client.findResult(7L, attemptId))
+                .hasValueSatisfying(r -> assertThat(r.isFinished()).isTrue());
+        assertThat(client.findResult(8L, attemptId)).isEmpty();
+        assertThat(client.findResult(9L, attemptId)).isEmpty();
+        aiServer.verify();
     }
 }

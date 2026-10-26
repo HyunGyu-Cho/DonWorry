@@ -9,6 +9,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import lombok.extern.slf4j.Slf4j;
@@ -74,7 +75,9 @@ public class ReportResultService {
             return;
         }
         Optional<ReportTarget> found = reportTransitions.target(reportId);
-        if (found.isEmpty()) {
+        // 그사이 대체됨 · 실패로 끝났으면 할 일이 없다 (2-18)
+        if (found.isEmpty() || reportTransitions.isFinished(reportId)) {
+            attemptRegistry.forget(reportId);
             return;
         }
         ReportTarget target = found.get();
@@ -92,13 +95,33 @@ public class ReportResultService {
             }
             return;
         }
+        failAttempt(target, result.isSucceeded() ? "AI_RESULT_INVALID" : "AI_RESULT_FAILED", problem.get(), now);
+    }
+
+    // 결과가 제때 오지 않았고 ai-server에 물어도 끝난 결과가 없을 때 — 시도 1번 실패로 센다 (2-18)
+    public void timedOut(Long reportId, UUID attemptId) {
+        if (!attemptRegistry.isCurrent(reportId, attemptId)) {
+            return;
+        }
+        Optional<ReportTarget> found = reportTransitions.target(reportId);
+        if (found.isEmpty() || reportTransitions.isFinished(reportId)) {
+            attemptRegistry.forget(reportId);
+            return;
+        }
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        failAttempt(found.get(), "AI_RESULT_TIMEOUT", "결과가 제시간에 오지 않음", now);
+    }
+
+    // 시도 1번 실패 — 총 3번 전이면 새 시도로 다시 요청, 3번째면 FAILED로 끝낸다
+    private void failAttempt(ReportTarget target, String code, String reason, Instant now) {
+        Long reportId = target.reportId();
         int attempts = attemptRegistry.attempts(reportId);
-        log.warn("조사 결과 실패 reportId={} attempt={} reason={}", reportId, attempts, problem.get());
+        log.warn("조사 결과 실패 reportId={} attempt={} code={} reason={}", reportId, attempts, code, reason);
         if (attempts < AiServerReportWriter.MAX_ATTEMPTS) {
             retryExecutor.execute(() -> retry(target));
             return;
         }
-        if (reportTransitions.fail(reportId, error(result, problem.get(), attempts, now), now)) {
+        if (reportTransitions.fail(reportId, error(code, reason, attempts, now), now)) {
             finish(target);
         }
     }
@@ -134,9 +157,7 @@ public class ReportResultService {
     }
 
     // 개발자 조사용 실패 정보 — P3 · 화면에는 넘기지 않는다 (ReportService.snapshot)
-    private static Map<String, Object> error(
-            InvestigationResultRequest result, String reason, int attempts, Instant now) {
-        String code = result.isSucceeded() ? "AI_RESULT_INVALID" : "AI_RESULT_FAILED";
+    private static Map<String, Object> error(String code, String reason, int attempts, Instant now) {
         return Map.of(
                 "error", Map.of("code", code, "reason", reason, "attempts", attempts, "lastAttemptAt", now.toString()));
     }

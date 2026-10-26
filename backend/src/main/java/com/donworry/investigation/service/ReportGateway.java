@@ -19,7 +19,8 @@ public interface ReportGateway {
         return findByCase(caseId).stream().max(Comparator.comparingInt(ReportSnapshot::reportVersion));
     }
 
-    // 상태값은 P4 정본(PENDING · RUNNING · SUCCEEDED · FAILED)을 문자열로 받는다
+    // 상태값은 P4 정본(PENDING · RUNNING · SUCCEEDED · FAILED · SUPERSEDED)을 문자열로 받는다
+    // SUPERSEDED = 새 정보로 다음 버전이 이어받은 옛 버전 (#68) — 최신 버전은 늘 새 버전이다
     record ReportSnapshot(
             Long reportId,
             Long caseId,

@@ -36,6 +36,8 @@ export const reportStatusLabel: Record<ReportStatus, Label> = {
   RUNNING: { label: '생성 중', color: 'processing' },
   SUCCEEDED: { label: '생성 완료', color: 'green' },
   FAILED: { label: '생성 실패', color: 'red' },
+  // 새 정보로 다시 조사해서 이 버전은 닫힘 — 실패가 아니므로 회색
+  SUPERSEDED: { label: '새 정보로 대체됨', color: 'default' },
 }
 
 export const paymentStatusLabel: Record<PaymentStatus, Label> = {
