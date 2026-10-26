@@ -7,7 +7,11 @@ import {
   setMockActor,
 } from '../src/api/mock/investigation.ts'
 import { buildMockReports, mockGetCaseReport } from '../src/api/mock/report.ts'
-import { toConclusionReport } from '../src/api/reportConvert.ts'
+import {
+  asConclusionReport,
+  isConclusionReport,
+  toConclusionReport,
+} from '../src/api/reportConvert.ts'
 import { StaffReportForbiddenError } from '../src/api/reportErrors.ts'
 import { riskLevel } from '../src/config/reportLevel.ts'
 import type { ReportBody } from '../src/types/case.ts'
@@ -146,4 +150,13 @@ test('mockReports_referOnlyExistingCasesAndAlerts', () => {
       )
     }
   }
+})
+
+// 2-17: 백엔드가 결론 카드 형식(schemaVersion 2)으로 저장한 본문은 바꾸지 않고 그대로 쓴다
+test('asConclusionReport_schemaVersion2_usedAsIs', () => {
+  const stored = toConclusionReport(legacy)
+  assert.equal(isConclusionReport(stored), true)
+  assert.equal(isConclusionReport(legacy), false)
+  assert.equal(asConclusionReport(stored), stored)
+  assert.deepEqual(asConclusionReport(legacy), stored)
 })

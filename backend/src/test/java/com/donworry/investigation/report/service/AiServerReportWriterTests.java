@@ -52,6 +52,7 @@ class AiServerReportWriterTests {
         aiServer = MockRestServiceServer.bindTo(builder).build();
         reportTransitions = mock(ReportTransitions.class);
         when(reportTransitions.running(anyLong())).thenReturn(true);
+        when(reportTransitions.casePaymentIds(201L)).thenReturn(List.of(31L, 32L));
         attemptRegistry = new AttemptRegistry();
         pauses = new ArrayList<>();
         sentBodies = new ArrayList<>();
@@ -82,6 +83,8 @@ class AiServerReportWriterTests {
                 .andExpect(jsonPath("$.caseId").value(201))
                 .andExpect(jsonPath("$.caseType").value("PAYMENT_FRAUD"))
                 .andExpect(jsonPath("$.evidenceVersion").value(2))
+                .andExpect(jsonPath("$.paymentIds[0]").value(31))
+                .andExpect(jsonPath("$.paymentIds[1]").value(32))
                 .andExpect(jsonPath("$.attemptId").isNotEmpty())
                 .andRespond(withStatus(HttpStatus.ACCEPTED));
 

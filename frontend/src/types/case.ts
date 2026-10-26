@@ -4,6 +4,7 @@
  */
 
 import type { RuleCode } from './fds.ts'
+import type { ConclusionReport } from './report.ts'
 
 // ── 상태값 (설계 3.3) ──
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
@@ -148,7 +149,8 @@ export type AiReport = {
   reportVersion: number
   evidenceVersion: number
   status: ReportStatus
-  reportBody: ReportBody | null
+  // 옛 8개 절 형식(템플릿 작성기) 또는 결론 카드 형식(ai-server 결과, schemaVersion 2 · 2-17)
+  reportBody: ReportBody | ConclusionReport | null
   createdAt: string
   completedAt: string | null
 }

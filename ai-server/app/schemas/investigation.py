@@ -11,12 +11,15 @@ from app.schemas.report import CaseType, ReportDraft
 
 # Spring → ai-server 조사 요청 (ADR-0009 결정 1)
 # 작업 ID는 reportId, 시도마다 attemptId가 새로 붙는다. caseType으로 보고서 형식을 고른다 (2-15)
+# paymentIds는 AI가 사건 결제 번호를 지어내지 않도록 함께 받는다 (2-17)
 class InvestigationRequest(CamelModel):
     report_id: int = Field(gt=0)
     attempt_id: UUID
     case_id: int = Field(gt=0)
     case_type: CaseType
     evidence_version: int = Field(ge=1)
+    # 사건에 묶인 결제 번호 — 결제별 권고(paymentAdvice)는 이 번호만 쓸 수 있다. 직원 사건은 빈 목록
+    payment_ids: list[int] = []
 
 
 class AcceptedResponse(CamelModel):

@@ -12,6 +12,8 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 // 실제 MariaDB에서 ai_reports 저장 · 버전 제약 · 최대 버전 조회 · 조건부 상태 변경을 확인한다
 // 각 테스트는 트랜잭션 안에서 돌고 끝나면 롤백된다
+// DB는 다른 테스트(커밋하는 흐름 테스트)와 함께 쓰므로 Case ID를 테스트마다 새로 뽑는다
 @Tag("mariadb")
 @SpringBootTest
 @Import(MariaDbTestContainerConfig.class)
@@ -37,14 +40,28 @@ class AiReportRepositoryTests {
     @Autowired
     EntityManager entityManager;
 
+    // 흐름 테스트가 만드는 실제 Case ID(1부터)와 겹치지 않는 큰 값에서 시작한다
+    static final AtomicLong NEXT_CASE_ID = new AtomicLong(9_000_000L);
+
+    long caseId;
+    long otherCaseId;
+    long emptyCaseId;
+
+    @BeforeEach
+    void newCaseIds() {
+        caseId = NEXT_CASE_ID.incrementAndGet();
+        otherCaseId = NEXT_CASE_ID.incrementAndGet();
+        emptyCaseId = NEXT_CASE_ID.incrementAndGet();
+    }
+
     // 같은 Case에 같은 보고서 버전을 두 번 저장하면 DB가 막는다
     @Test
     void aiReport_sameCaseAndVersionTwice_violatesUniqueConstraint() {
-        aiReportRepository.save(AiReport.pending(1L, 1, 1, NOW));
+        aiReportRepository.save(AiReport.pending(caseId, 1, 1, NOW));
         entityManager.flush();
 
         assertThatThrownBy(() -> {
-                    aiReportRepository.save(AiReport.pending(1L, 1, 2, NOW));
+                    aiReportRepository.save(AiReport.pending(caseId, 1, 2, NOW));
                     entityManager.flush();
                 })
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -53,26 +70,26 @@ class AiReportRepositoryTests {
     // 최대 보고서 버전은 해당 Case 것만 보고, 보고서가 없으면 빈 값이다
     @Test
     void findMaxReportVersion_returnsLatestOfThatCaseOnly() {
-        aiReportRepository.save(AiReport.pending(1L, 1, 1, NOW));
-        aiReportRepository.save(AiReport.pending(1L, 2, 2, NOW));
-        aiReportRepository.save(AiReport.pending(2L, 5, 3, NOW));
+        aiReportRepository.save(AiReport.pending(caseId, 1, 1, NOW));
+        aiReportRepository.save(AiReport.pending(caseId, 2, 2, NOW));
+        aiReportRepository.save(AiReport.pending(otherCaseId, 5, 3, NOW));
         entityManager.flush();
 
-        assertThat(aiReportRepository.findMaxReportVersion(1L)).contains(2);
-        assertThat(aiReportRepository.findMaxReportVersion(3L)).isEmpty();
+        assertThat(aiReportRepository.findMaxReportVersion(caseId)).contains(2);
+        assertThat(aiReportRepository.findMaxReportVersion(emptyCaseId)).isEmpty();
     }
 
     // 새 보고서를 저장하고 다시 읽으면 PENDING · 본문 없음 · 생성 시각 그대로다
     @Test
     void aiReport_pendingSavedAndReloaded_keepsValues() {
         Instant createdWithNanos = NOW.plusNanos(123);
-        AiReport saved = aiReportRepository.save(AiReport.pending(1L, 1, 3, createdWithNanos));
+        AiReport saved = aiReportRepository.save(AiReport.pending(caseId, 1, 3, createdWithNanos));
         entityManager.flush();
         entityManager.clear();
 
         AiReport reloaded = aiReportRepository.findById(saved.getId()).orElseThrow();
 
-        assertThat(reloaded.getCaseId()).isEqualTo(1L);
+        assertThat(reloaded.getCaseId()).isEqualTo(caseId);
         assertThat(reloaded.getReportVersion()).isEqualTo(1);
         assertThat(reloaded.getEvidenceVersion()).isEqualTo(3);
         assertThat(reloaded.getStatus()).isEqualTo(ReportStatus.PENDING);
@@ -132,7 +149,7 @@ class AiReportRepositoryTests {
     // 정상 흐름: 생성 대기 → 생성 중 → 완료, 완료 때 본문 · 완료 시각이 함께 저장된다
     @Test
     void markStatus_normalFlow_savesBodyAndCompletedAt() {
-        Long id = pending(1L, 1);
+        Long id = pending(caseId, 1);
 
         assertThat(aiReportRepository.markRunning(id)).isEqualTo(1);
         assertThat(reload(id).getStatus()).isEqualTo(ReportStatus.RUNNING);
@@ -147,7 +164,7 @@ class AiReportRepositoryTests {
     // 결과가 접수 응답보다 먼저 와서 완료되면, 뒤이은 생성 중 변경은 0건이고 완료가 유지된다
     @Test
     void markRunning_afterSucceeded_changesNothing() {
-        Long id = pending(1L, 1);
+        Long id = pending(caseId, 1);
         aiReportRepository.markSucceeded(id, BODY, NOW);
 
         assertThat(aiReportRepository.markRunning(id)).isZero();
@@ -157,7 +174,7 @@ class AiReportRepositoryTests {
     // 실패로 끝난 뒤 늦게 온 성공 결과는 뒤집지 않는다 — 본문 · 완료 시각도 그대로
     @Test
     void markSucceeded_afterFailed_keepsFailure() {
-        Long id = reportIn(ReportStatus.FAILED, 1L, 1);
+        Long id = reportIn(ReportStatus.FAILED, caseId, 1);
 
         assertThat(aiReportRepository.markSucceeded(id, BODY, NOW.plusSeconds(30)))
                 .isZero();
@@ -171,8 +188,8 @@ class AiReportRepositoryTests {
     // 한 보고서를 바꿔도 같은 Case의 다른 버전 보고서는 영향이 없다
     @Test
     void markStatus_otherVersion_untouched() {
-        Long v1 = reportIn(ReportStatus.SUCCEEDED, 1L, 1);
-        Long v2 = pending(1L, 2);
+        Long v1 = reportIn(ReportStatus.SUCCEEDED, caseId, 1);
+        Long v2 = pending(caseId, 2);
 
         aiReportRepository.markFailed(v2, ERROR, NOW);
 
@@ -200,7 +217,7 @@ class AiReportRepositoryTests {
                     assertThat(from.canBecome(next)).isFalse();
                     continue;
                 }
-                Long id = reportIn(from, 1L, version++);
+                Long id = reportIn(from, caseId, version++);
                 int changed = move(id, next);
                 ReportStatus after = reload(id).getStatus();
 

@@ -36,6 +36,11 @@ class MockLlmClient:
             await asyncio.sleep(self.delay_seconds)
         answered = sum(1 for m in messages if m.role == "assistant")
         draft = copy.deepcopy(ANSWERS[_case_type(messages)])
+        payment_ids = _payment_ids(messages)
+        if "paymentAdvice" in draft and payment_ids:
+            # 시연 답의 예시 번호 대신 질문에 적힌 사건 결제 번호마다 권고를 쓴다
+            advice = draft["paymentAdvice"][0]
+            draft["paymentAdvice"] = [{**advice, "paymentId": pid} for pid in payment_ids]
         if answered < self.invalid_answers:
             # 실제 LLM이 자주 하는 실수처럼 필수 항목 하나를 빠뜨린다
             del draft["checks"]
@@ -49,6 +54,15 @@ def _case_type(messages: list[LlmMessage]) -> str:
         if found and found.group(1) in ANSWERS:
             return found.group(1)
     return "PAYMENT_FRAUD"
+
+
+# 질문의 "이 사건의 결제 번호: 57, 58 — ..." 줄에서 번호를 읽는다 (가짜 AI 전용)
+def _payment_ids(messages: list[LlmMessage]) -> list[str]:
+    for message in messages:
+        found = re.search(r"이 사건의 결제 번호: ([\d, ]+)", message.content)
+        if found:
+            return [part.strip() for part in found.group(1).split(",") if part.strip()]
+    return []
 
 
 def create_llm_client(settings: Settings) -> LlmClient:

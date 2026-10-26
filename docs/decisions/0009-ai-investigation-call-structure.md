@@ -1,7 +1,7 @@
 # 0009. AI 조사 호출 구조 (Spring ↔ FastAPI)
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-26 개정: 조사 요청에 사건 종류 · AI가 쓰는 칸 3유형 (#60)
+- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-26 개정: 조사 요청에 사건 종류 · AI가 쓰는 칸 3유형 (#60) · 결과 수신 · 완료 통지(임시) (#64)
 - **관련:** Notion fds 정본 — 02 기획 2.5 · 2.6 · 2.7, 03 설계 3.5 · 3.6 · 3.7 · 3.9⑤ · 3.11, 공통 페이지 §5.3 · §5.4, [ADR-0012](0012-payment-settlement-dependency.md) (ADR-0001 대체), 화면 타입 `frontend/src/types/case.ts`
 - **영향 받는 담당:** P4 현규, P3 수민(조사 요청 · 판정 검증), P1 주환(인증 설정 · 보안 이벤트 조회), P2 · P5(Tool이 읽는 공개 api 제공), CakeShop(주문 정보), 화면 담당(보고서 응답 형식)
 
@@ -31,7 +31,7 @@ sequenceDiagram
 
     P3->>R: 조사 요청 (caseId · 증거 버전, 방식 미정 §5.3)
     R->>R: ai_reports PENDING 저장 (report_version + 1)
-    R->>A: POST /investigations (reportId, attemptId, caseId, caseType, evidenceVersion)
+    R->>A: POST /investigations (reportId, attemptId, caseId, caseType, evidenceVersion, paymentIds)
     A-->>R: 202 Accepted
     R->>R: RUNNING (PENDING일 때만 — 조건부 UPDATE)
     loop Agent가 필요한 증거만
@@ -131,6 +131,14 @@ sequenceDiagram
   - 공통 칸: `reportType` · `riskScore`(0~100) · `verdict` · `summary` · `recommendations[{label, kind}]` · `riskPoints[{title, detail, source}]` · `normalPoints` · `unknowns` · `checks`(1개 이상)
   - 결제 사기만: `paymentAdvice[{paymentId, recommendation, reason}]` 1개 이상. 직원 사건 2종에 쓰면 구조 검증 실패
   - 정의: `ai-server/app/schemas/report.py` (형식 검사 기준). 요청한 `caseType`과 답의 `reportType`이 다르면 구조 검증 실패
+- **결과 수신 구현 (2026-10-26, #64)**
+  - ai-server는 조사가 끝나면 `POST /internal/ai/reports/{reportId}/result`로 결과를 보낸다. 같은 서비스 키(`X-Service-Key`)를 쓴다. 보내기 실패는 기록만 하고, Spring의 조회(`GET /investigations/{reportId}`)로 복구한다 (2-18)
+  - Spring은 AI 칸을 다시 검사하고(사건 종류 · 필수 칸 · 위험도 범위 · 결제별 권고의 결제 번호가 Case 소속인지), 화면 결론 카드(`frontend/src/types/report.ts` ConclusionReport, schemaVersion 2)로 합쳐 `report_body`에 저장한다. 모르는 칸(경위 · 증거 · 비슷한 사건)은 빈 목록으로 둔다
+  - 접수 실패(결정 2)와 결과 실패(ai-server가 실패를 보냄 · Spring 검사 실패)를 **같은 횟수**로 센다. 첫 시도 포함 총 3번이면 `FAILED`
+  - `/internal/ai/**`는 직원 로그인이 아니라 서비스 키로 지킨다. 보안 설정(P1)이 전체 API를 잠글 때도 이 경로는 열어 둔다
+  - 조사 요청에 사건에 묶인 결제 번호 `paymentIds`를 싣는다 (직원 사건은 빈 목록). 결제 사기면 AI 질문에 이 번호를 적고, ai-server는 답의 결제별 권고가 이 목록 밖이면 구조 검증 실패로 다시 묻는다. Spring의 소속 검사는 마지막 방어선으로 그대로 둔다
+    - 이유: 요청에 사건 번호만 있으면 AI는 결제 번호를 알 수 없어 지어낼 수밖에 없다. 실제로 셋을 띄워 돌리자 가짜 AI의 예시 번호가 3번 모두 소속 검사에 걸려 결제 사기 보고서가 늘 `FAILED`가 됐다
+    - 버린 안: Tool(2-19)이 생길 때까지 미루기 — 그때까지 ai-server 방식에서 결제 사기 보고서가 한 번도 성공하지 못한다. 결제 금액 · 이력 같은 자세한 증거는 계획대로 2-19 Tool로 읽고, 이 목록은 "이 사건 결제는 이것뿐"이라는 기준으로 남는다
 - **실패 정보:** 결정 2대로 `error`는 응답에서 뺀다
 
 ## 미정 — P3 ↔ P4 계약 (공통 페이지 §5.3)
@@ -143,6 +151,7 @@ sequenceDiagram
 - 조사 요청 입력에는 최소 `caseId` · 증거 버전이 들어간다 (§5.3)
 - 결정 3은 P3가 증거 버전을 커밋한 **뒤에** 조사를 요청한다고 전제한다. 요청 방식을 정할 때 이 순서를 함께 합의한다
 - P4는 조사 완료 · 실패를 P3가 알 수 있게 해야 한다 (§5.3, 설계 3.7 "P3가 최신 보고서 확인 가능")
+- **임시 구현 (2026-10-26, #64):** 보고서가 끝나면 P4가 같은 모듈의 P3 `CaseStatusService.refreshById`를 바로 불러 사건 상태를 갱신한다. P3와 통지 방식을 합의하면 이 호출을 바꾼다
 
 ## Tool 조회 실패 처리 — 정본 원칙만 따르고 세부는 미정 (공통 페이지 §5.4)
 

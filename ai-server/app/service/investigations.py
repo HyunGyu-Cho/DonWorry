@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.agent.investigator import InvalidAnswer, InvestigationAgent
 from app.agent.llm import LlmError
+from app.client.spring import ResultNotifier
 from app.schemas.investigation import (
     AcceptedResponse,
     FailureInfo,
@@ -30,8 +31,11 @@ class InvestigationService:
         agent: InvestigationAgent,
         max_llm_attempts: int = 3,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        notifier: ResultNotifier | None = None,
     ) -> None:
         self.agent = agent
+        # 조사가 끝나면 Spring에 결과를 보낸다 (없으면 조회로만 확인)
+        self.notifier = notifier
         self.max_llm_attempts = max_llm_attempts
         self.now = now
         # reportId → 현재 시도 하나만 (ADR-0009: 현재 attemptId만 반영)
@@ -69,8 +73,11 @@ class InvestigationService:
         result = await self._investigate(request)
         # 그사이 새 시도가 들어왔으면 이 결과는 버린다
         latest = self.jobs.get(request.report_id)
-        if latest is not None and latest.result.attempt_id == request.attempt_id:
-            latest.result = result
+        if latest is None or latest.result.attempt_id != request.attempt_id:
+            return
+        latest.result = result
+        if self.notifier is not None:
+            await self.notifier.notify(result)
 
     async def _investigate(self, request: InvestigationRequest) -> InvestigationResult:
         steps: list[TraceStep] = []

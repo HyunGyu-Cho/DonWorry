@@ -41,6 +41,7 @@ def body(report_id: int = 1, attempt_id: str | None = None) -> dict[str, object]
         "caseId": 201,
         "caseType": "PAYMENT_FRAUD",
         "evidenceVersion": 2,
+        "paymentIds": [31],
     }
 
 
