@@ -78,13 +78,24 @@ export function similarSummary(list: SimilarCase[]): string {
 // 보고서 화면에 무엇을 보여 줄지
 // NOT_READY = 조사 중이고 보고서가 아직 없음 → 사건 화면으로 안내
 // RERUNNING = 이전 보고서는 있고 새 버전을 조사 중 → 이전 보고서 + 안내 띠
-export type ReportPageState = 'NOT_READY' | 'RERUNNING' | 'READY' | 'NONE'
+// FAILED = 조사가 최종 실패했고 보여 줄 보고서가 없음 → 직접 판정 안내 (2-17b)
+// LATEST_FAILED = 최신 조사는 실패, 이전 완료 보고서는 있음 → 이전 보고서 + 실패 띠
+export type ReportPageState =
+  'NOT_READY' | 'RERUNNING' | 'READY' | 'NONE' | 'FAILED' | 'LATEST_FAILED'
 
 export function reportPageState(
   report: ConclusionReport | null,
   run: ReportRun | null,
 ): ReportPageState {
   const running = run?.status === 'RUNNING'
-  if (!report) return running ? 'NOT_READY' : 'NONE'
-  return running && run.reportVersion > report.reportVersion ? 'RERUNNING' : 'READY'
+  const failed = run?.status === 'FAILED'
+  if (!report) return running ? 'NOT_READY' : failed ? 'FAILED' : 'NONE'
+  const newer = run !== null && run.reportVersion > report.reportVersion
+  if (running && newer) return 'RERUNNING'
+  return failed && newer ? 'LATEST_FAILED' : 'READY'
 }
+
+// 실패 안내 문구 — 보고서 화면 · 사건 화면 "AI 조사 요약"이 같이 쓴다 (실패 이유는 보여 주지 않음)
+export const REPORT_FAILED_TITLE = 'AI 조사에 실패했어요. 판정은 직접 해 주세요'
+export const REPORT_FAILED_DETAIL =
+  'AI가 정해진 횟수만큼 조사했지만 쓸 수 있는 보고서를 만들지 못했어요. 사건의 결제 정보와 경보를 보고 판정해 주세요.'

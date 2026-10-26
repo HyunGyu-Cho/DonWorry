@@ -16,7 +16,7 @@ import { useDemo } from '../../demo/DemoContext'
 import type { CaseStatus, CaseType } from '../../types/case'
 import type { ConclusionReport, ReportRun } from '../../types/report'
 import { latestReport } from '../../utils/caseRules'
-import { reportPageState } from '../../utils/reportView'
+import { REPORT_FAILED_DETAIL, REPORT_FAILED_TITLE, reportPageState } from '../../utils/reportView'
 import { caseTypeLabel } from './case/caseLabels'
 import {
   Checks,
@@ -121,6 +121,20 @@ export function ReportPage() {
 
   const { report, run, info } = loaded
   const state = reportPageState(report, run)
+  if (state === 'FAILED') {
+    return (
+      <Result
+        status="warning"
+        title={REPORT_FAILED_TITLE}
+        subTitle={REPORT_FAILED_DETAIL}
+        extra={
+          <Link to={`${base}/${id}`}>
+            <Button type="primary">사건 화면에서 판정하기</Button>
+          </Link>
+        }
+      />
+    )
+  }
   if (state === 'NOT_READY' || state === 'NONE' || !report) {
     return (
       <Result
@@ -164,6 +178,15 @@ export function ReportPage() {
           </>
         }
       />
+      {state === 'LATEST_FAILED' && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`최신 조사(v${run?.reportVersion})는 실패했어요. 아래는 이전 보고서(v${report.reportVersion})예요`}
+          description="최신 정보로는 AI 보고서를 만들지 못했어요. 판정할 때 최신 결제 정보를 함께 확인해 주세요."
+        />
+      )}
       {state === 'RERUNNING' && (
         <Alert
           type="info"

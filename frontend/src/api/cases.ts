@@ -1,3 +1,4 @@
+import type { RuleCode } from '../types/fds.ts'
 import type { ConclusionReport } from '../types/report.ts'
 import type {
   ActionHandoff,
@@ -34,9 +35,15 @@ type ServerSecurityCase = Omit<SecurityCase, 'caseId' | 'merchantId'> & {
   merchantId: Id
 }
 type ServerSummary = Omit<CaseSummary, 'caseId' | 'merchantId'> & { caseId: Id; merchantId: Id }
-type ServerPayment = Omit<CasePayment, 'casePaymentId' | 'paymentId'> & {
+// 백엔드는 아직 적중 Rule을 ruleHits로만 보내고 경보 번호는 없다 — 칸 맞추기 전체는 2-34
+type ServerPayment = Omit<
+  CasePayment,
+  'casePaymentId' | 'paymentId' | 'hitRuleCodes' | 'evaluationId'
+> & {
   casePaymentId: Id
   paymentId: Id
+  hitRuleCodes?: RuleCode[]
+  evaluationId?: number | null
 }
 type ServerReport = Omit<AiReport, 'reportId' | 'caseId' | 'reportBody'> & {
   reportId: Id
@@ -224,6 +231,8 @@ function toDetail(detail: ServerDetail): CaseDetail {
       ...p,
       casePaymentId: str(p.casePaymentId),
       paymentId: str(p.paymentId),
+      hitRuleCodes: p.hitRuleCodes ?? (p.ruleHits as RuleCode[]),
+      evaluationId: p.evaluationId ?? null,
     })),
     reports: detail.reports.map((r) => ({
       ...r,

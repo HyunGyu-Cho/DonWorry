@@ -599,6 +599,7 @@ export function CaseDetailPage() {
           subjectLabel={sc.subjectLabel}
           groupingBasis={sc.groupingBasis}
           report={report}
+          aiFailed={run?.status === 'FAILED'}
           now={now}
         />
       </div>
