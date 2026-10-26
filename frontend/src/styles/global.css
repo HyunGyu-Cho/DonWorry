@@ -72,13 +72,12 @@ textarea {
   line-height: 1.6;
 }
 
-/* Admin: 원본 시안 고정 규격, 1280px 미만은 가로 스크롤.
-   헤더·사이드바는 fixed가 아닌 sticky — fixed면 가로 스크롤 시 헤더 오른쪽(로그아웃)이 잘린 채 남는다. */
+/* Admin: 1280px 이상은 원본 시안 규격. 더 좁으면 메뉴 · 여백을 줄이고, 1024px 미만은 메뉴를 ☰ 속으로 (1-14).
+   헤더·사이드바는 fixed가 아닌 sticky. */
 .admin-viewport {
   display: grid;
   grid-template-columns: var(--dw-sidebar-width) minmax(0, 1fr);
   grid-template-rows: var(--dw-header-height) 1fr;
-  min-width: 1280px;
   min-height: 100vh;
 }
 .dw-header {
@@ -683,4 +682,73 @@ textarea {
 /* 화면 이동 후 내용이 늦게 그려져도 스크롤 위치가 밀리지 않게 (1-13) */
 html {
   overflow-anchor: none;
+}
+
+/* 좁은 화면 (1-14) — 1280px 미만은 메뉴 · 여백을 줄이고, 1024px 미만은 메뉴를 ☰로 여는 옆 창으로 */
+.dw-menu-toggle {
+  display: none;
+}
+@media (max-width: 1279px) {
+  :root {
+    --dw-sidebar-width: 188px;
+    --dw-content-padding: 20px;
+  }
+  .dw-brand {
+    padding-left: 22px;
+  }
+}
+@media (max-width: 1023px) {
+  .admin-viewport {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dw-brand {
+    width: auto;
+    flex: 0 0 auto;
+    padding-left: 56px;
+  }
+  .dw-menu-toggle {
+    display: inline-flex;
+    position: fixed;
+    z-index: 120;
+    top: 12px;
+    left: 12px;
+  }
+  .dw-sidebar {
+    position: fixed;
+    left: 0;
+    width: 240px;
+    z-index: 115;
+    transform: translateX(-100%);
+    transition: transform 0.2s;
+  }
+  .dw-sidebar.is-open {
+    transform: none;
+    box-shadow: 8px 0 24px rgb(15 23 42 / 0.25);
+  }
+  .dw-menu-backdrop {
+    position: fixed;
+    inset: var(--dw-header-height) 0 0;
+    z-index: 110;
+    background: rgb(15 23 42 / 0.35);
+  }
+  .dw-main {
+    grid-column: 1;
+  }
+  .dw-header-tools {
+    gap: 8px;
+    padding-right: 12px;
+  }
+  .dw-page-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .dw-page-actions {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 640px) {
+  .dw-header .dw-role-pill,
+  .dw-header .dw-muted-label {
+    display: none;
+  }
 }

@@ -1,6 +1,12 @@
-import { BellOutlined, DownOutlined, LogoutOutlined, SettingOutlined } from '@ant-design/icons'
+import {
+  BellOutlined,
+  DownOutlined,
+  LogoutOutlined,
+  MenuOutlined,
+  SettingOutlined,
+} from '@ant-design/icons'
 import { Button, Select, Tooltip } from 'antd'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { navTour } from '../utils/tutorialView'
 import { navByRole, roles, type Role, type NavGroup } from '../config/navigation'
@@ -79,11 +85,19 @@ function Header() {
   )
 }
 
-function Sidebar({ groups, demo = false }: { groups: NavGroup[]; demo?: boolean }) {
+interface SidebarProps {
+  groups: NavGroup[]
+  demo?: boolean
+  // 좁은 화면에서 ☰로 연 상태
+  open?: boolean
+  onNavigate?: () => void
+}
+
+function Sidebar({ groups, demo = false, open = false, onNavigate }: SidebarProps) {
   const location = useLocation()
 
   return (
-    <aside className="dw-sidebar" aria-label="주 메뉴">
+    <aside id="dw-sidebar" className={`dw-sidebar${open ? ' is-open' : ''}`} aria-label="주 메뉴">
       <nav>
         {groups.map((group) => (
           <div className="dw-nav-group" key={group.title}>
@@ -93,6 +107,7 @@ function Sidebar({ groups, demo = false }: { groups: NavGroup[]; demo?: boolean 
                 key={item.path}
                 to={item.path}
                 data-tour={navTour(item.path)}
+                onClick={onNavigate}
                 className={({ isActive }) =>
                   `dw-nav-link${isActive || location.pathname.startsWith(item.path + '/') ? ' active' : ''}`
                 }
@@ -146,6 +161,8 @@ export function ManagementLayout({
   children?: ReactNode
 }) {
   const location = useLocation()
+  // 1024px 미만에서는 메뉴가 ☰ 버튼 속으로 들어간다 (넓은 화면에서는 이 값과 상관없이 늘 보임)
+  const [menuOpen, setMenuOpen] = useState(false)
   // 다른 화면으로 가면 맨 위부터 보이게 (이전 화면의 스크롤 위치가 남지 않게)
   // 데이터가 늦게 와서 화면이 길어져도 밀리지 않게, 그린 뒤에도 한 번 더
   useEffect(() => {
@@ -160,7 +177,19 @@ export function ManagementLayout({
   return (
     <div className="admin-viewport">
       {header}
-      <Sidebar groups={groups} demo={demo} />
+      <Button
+        className="dw-menu-toggle"
+        type="text"
+        icon={<MenuOutlined />}
+        aria-label={menuOpen ? '메뉴 닫기' : '메뉴 열기'}
+        aria-expanded={menuOpen}
+        aria-controls="dw-sidebar"
+        onClick={() => setMenuOpen((v) => !v)}
+      />
+      <Sidebar groups={groups} demo={demo} open={menuOpen} onNavigate={() => setMenuOpen(false)} />
+      {menuOpen && (
+        <div className="dw-menu-backdrop" aria-hidden onClick={() => setMenuOpen(false)} />
+      )}
       <main className="dw-main" id="main">
         <div className="dw-container">
           {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}

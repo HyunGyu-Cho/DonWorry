@@ -15,9 +15,14 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     ...devices['Desktop Chrome'],
-    viewport: { width: 1440, height: 900 },
     trace: 'retain-on-failure',
   },
+  // 넓은 화면 · 노트북 · 반 화면(1-14). 1024px 미만은 메뉴가 ☰ 속으로 들어간다
+  projects: [
+    { name: 'wide-1440', use: { viewport: { width: 1440, height: 900 } } },
+    { name: 'laptop-1024', use: { viewport: { width: 1024, height: 768 } } },
+    { name: 'narrow-800', use: { viewport: { width: 800, height: 800 } } },
+  ],
   webServer: {
     command: `npx vite --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,

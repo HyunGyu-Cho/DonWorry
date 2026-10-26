@@ -43,6 +43,11 @@ function useTourHighlight(target: string | undefined, cardHeight: number) {
         if (!names(el).some((n) => wanted.includes(n))) el.classList.remove('dw-tour-on')
       })
       const found = wanted.flatMap((w) => [...document.querySelectorAll(`[data-tour~="${w}"]`)])
+      // 좁은 화면에서 메뉴가 ☰ 속에 닫혀 있으면 메뉴 대신 ☰ 버튼에 테두리
+      const toggle = document.querySelector('.dw-menu-toggle')
+      const hiddenNav = found.some((el) => el.closest('.dw-sidebar:not(.is-open)'))
+      if (toggle && hiddenNav && getComputedStyle(toggle).display !== 'none') found.push(toggle)
+      else toggle?.classList.remove('dw-tour-on')
       found.forEach((el) => el.classList.add('dw-tour-on'))
       // 카드 안의 버튼(tutorial-actions)은 피할 필요가 없다. 좁은 화면은 카드가 화면 폭이라 그대로
       const targets = found.filter((el) => !el.closest('.dw-tut'))

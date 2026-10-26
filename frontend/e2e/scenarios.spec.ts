@@ -29,6 +29,17 @@ async function nextStep(page: Page) {
   )
 }
 
+// 왼쪽 메뉴 누르기. 좁은 화면(1024px 미만)에서는 ☰를 먼저 연다
+async function nav(page: Page, name: string) {
+  // 닫힌 메뉴는 화면 밖으로 밀려 있을 뿐 "보이는" 요소라, ☰ 버튼이 보이는지로 판단한다
+  const toggle = page.locator('.dw-menu-toggle')
+  if (await toggle.isVisible()) {
+    await toggle.click()
+    await expect(page.locator('.dw-sidebar.is-open')).toBeVisible()
+  }
+  await tour(page, name).click()
+}
+
 // 랜딩에서 시나리오를 고른 것과 같은 주소로 로그인 화면을 연다
 async function login(page: Page, scenario: number, password = '1234') {
   await page.goto(`/login?scenario=${scenario}`)
@@ -93,7 +104,7 @@ test('① 결제 사기 의심 — 경보 → 사건 → AI 재조사 → 판정
   await expectStep(page, 9, 9)
   await expect(page.getByText('종료', { exact: true }).first()).toBeVisible({ timeout: 20_000 })
 
-  await tour(page, 'nav-security-actions').click()
+  await nav(page, 'nav-security-actions')
   await expect(page).toHaveURL(/\/security\/actions$/)
   await expect(page.getByText('단체 행사용 케이크 세트').first()).toBeVisible()
 })
@@ -124,7 +135,7 @@ test('② 직원 계정 분산 공격 — 사건 → AI 실패 · 재시도 → 
   await page.getByRole('tab', { name: 'AI가 조사한 과정' }).click()
   await expect(page.locator('.dw-trace-meta').getByText('다시 시도').first()).toBeVisible()
 
-  await page.getByRole('link', { name: '로그인 모니터링' }).click()
+  await nav(page, 'nav-manager-access')
   await expect(page).toHaveURL(/\/manager\/access$/)
   await expectStep(page, 6, 6)
   await tour(page, 'access-by-account').click()
@@ -142,7 +153,7 @@ test('③ 정산 자금 부족 — 이메일 확인 → 정산 캘린더 → 자
   await tour(page, 'home-checking').click()
   await expect(page).toHaveURL(/\/owner\/results/)
   await expectStep(page, 2, 5)
-  await tour(page, 'nav-owner-settlements').click()
+  await nav(page, 'nav-owner-settlements')
   await expect(page).toHaveURL(/\/owner\/settlements$/)
   await expectStep(page, 3, 5)
 
@@ -154,7 +165,7 @@ test('③ 정산 자금 부족 — 이메일 확인 → 정산 캘린더 → 자
   await drawer.getByRole('button', { name: /전체 페이지로 보기/ }).click()
   await expect(page).toHaveURL(/\/owner\/settlements\/\d{4}-\d{2}-\d{2}$/)
 
-  await page.getByRole('link', { name: '자금 현황' }).click()
+  await nav(page, 'nav-owner-funds')
   await expect(page).toHaveURL(/\/owner\/funds$/)
   await expectStep(page, 4, 5)
   await expect(page.getByText(/모자라요/).first()).toBeVisible()
@@ -182,7 +193,7 @@ test('④ 직원 계정 탈취 — 위험 요청 거절 → 세션 종료 → �
   await modal.getByRole('button', { name: '거절' }).click()
   await expectStep(page, 3, 5)
 
-  await tour(page, 'nav-manager-access').click()
+  await nav(page, 'nav-manager-access')
   await expect(page).toHaveURL(/\/manager\/access$/)
   await page.getByRole('tab', { name: /세션/ }).click()
   await page.locator('button[data-tour~="session-kill"]').click()
@@ -193,13 +204,13 @@ test('④ 직원 계정 탈취 — 위험 요청 거절 → 세션 종료 → �
   await expect(page.getByText('강제 종료').first()).toBeVisible()
   await expectStep(page, 4, 5)
 
-  await page.getByRole('link', { name: '사건 목록' }).click()
+  await nav(page, 'nav-manager-cases')
   await page.locator('.ant-table-row', { hasText: '보안 직원 박지원 계정' }).first().click()
   await expect(page).toHaveURL(/\/manager\/cases\/101$/)
   // 다른 화면에서 한 거절 · 세션 종료가 사건 기록에 남는다
   await expect(page.getByText(/세션 강제 종료/).first()).toBeVisible()
 
-  await tour(page, 'nav-manager-audit').click()
+  await nav(page, 'nav-manager-audit')
   await expect(page).toHaveURL(/\/manager\/audit$/)
   await expectStep(page, 5, 5)
 })
@@ -210,7 +221,7 @@ test('⑤ 카드 테스팅 → 자동 차단 — 거절된 경보 → 차단 목
   await expect(page).toHaveURL(/\/security\/home$/)
   await expectStep(page, 1, 4)
 
-  await tour(page, 'nav-security-alerts').click()
+  await nav(page, 'nav-security-alerts')
   await expectStep(page, 2, 4)
   await tour(page, 'alert-106').click()
   await expect(page).toHaveURL(/\/security\/alerts\/106$/)
@@ -228,7 +239,7 @@ test('⑤ 카드 테스팅 → 자동 차단 — 거절된 경보 → 차단 목
   await expect(page.getByText('차단 3건 등록됨 ✓')).toBeVisible()
   await expectStep(page, 4, 4)
 
-  await tour(page, 'nav-security-blocklist').click()
+  await nav(page, 'nav-security-blocklist')
   await expect(page).toHaveURL(/\/security\/blocklist$/)
   await expect(tour(page, 'blocklist-table').getByText('방금 등록')).toHaveCount(3)
 })
