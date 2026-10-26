@@ -26,6 +26,14 @@ test('reportPageState_onlyAfterReportExists', () => {
   assert.equal(reportPageState(r201, null), 'READY')
 })
 
+// 조사가 최종 실패하면 직접 판정 안내, 이전 완료본이 있으면 그 보고서 + 실패 띠 (2-17b)
+test('reportPageState_failedRun', () => {
+  const v = r201.reportVersion
+  assert.equal(reportPageState(null, run('FAILED', 1)), 'FAILED')
+  assert.equal(reportPageState(r201, run('FAILED', v + 1)), 'LATEST_FAILED')
+  assert.equal(reportPageState(r201, run('FAILED', v)), 'READY')
+})
+
 test('similarSummary_countsFraudAndStrongMatch', () => {
   assert.equal(
     similarSummary(r201.similarCases),

@@ -1,4 +1,4 @@
-import { Button, Card, Steps, Tag } from 'antd'
+import { Alert, Button, Card, Steps, Tag } from 'antd'
 import { Link } from 'react-router-dom'
 import { TracePanel } from '../../../components/report/TracePanel'
 import { riskLevelLabel } from '../../../config/reportLevel'
@@ -7,6 +7,7 @@ import type { ConclusionReport, ReportRun } from '../../../types/report'
 import { relativeTime } from '../../../utils/humanize'
 import { autoFlow, caseStage, caseStages, type FlowCard } from '../../../utils/caseView'
 import { caseStatusLabel, caseTypeLabel } from './caseLabels'
+import { REPORT_FAILED_DETAIL, REPORT_FAILED_TITLE } from '../../../utils/reportView'
 
 // 상태 띠: 유형 · 상태 태그 + 자동 흐름 한 줄 + 단계 5칸
 export function CaseStatusStrip(props: {
@@ -56,9 +57,11 @@ export function CaseFlow(props: {
   subjectLabel: string
   groupingBasis: string
   report: ConclusionReport | null
+  // AI 조사가 최종 실패해 보고서가 없음 — 위험도 대신 "직접 판정" (2-17b)
+  aiFailed?: boolean
   now: Date
 }) {
-  const { cards, caseType, subjectLabel, groupingBasis, report, now } = props
+  const { cards, caseType, subjectLabel, groupingBasis, report, aiFailed, now } = props
   return (
     <Card
       title="흩어진 경보를 하나의 사건으로"
@@ -95,7 +98,12 @@ export function CaseFlow(props: {
         </div>
         <div className="dw-casecard">
           <div className="dw-casecard-top">
-            {subjectLabel} · 위험도 {report ? riskLevelLabel(report.riskScore) : '분석 중'}
+            {subjectLabel} ·{' '}
+            {report
+              ? `위험도 ${riskLevelLabel(report.riskScore)}`
+              : aiFailed
+                ? 'AI 조사 실패 · 직접 판정'
+                : '위험도 분석 중'}
           </div>
           <div className="dw-casecard-title">{caseTypeLabel[caseType].label}</div>
           <div className="dw-casecard-basis">
@@ -149,6 +157,19 @@ export function AiSummaryCard(props: {
     )
   }
   if (!report) {
+    // 조사가 최종 실패했으면 직원이 직접 판정한다 — 실패 이유는 보여 주지 않는다 (2-17b)
+    if (run?.status === 'FAILED') {
+      return (
+        <Card title="AI 조사 요약">
+          <Alert
+            type="warning"
+            showIcon
+            message={REPORT_FAILED_TITLE}
+            description={REPORT_FAILED_DETAIL}
+          />
+        </Card>
+      )
+    }
     return (
       <Card title="AI 조사 요약">
         <p className="dw-muted">아직 보고서가 없습니다. 조사가 끝나면 여기에 결론이 나와요.</p>

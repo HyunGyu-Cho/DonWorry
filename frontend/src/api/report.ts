@@ -5,12 +5,17 @@ import { api, ApiError } from './client.ts'
 import { isMock } from './mockMode.ts'
 import { mockGetCaseReport, mockGetReportRun, mockStartBuyerRerun } from './mock/report.ts'
 import { StaffReportForbiddenError } from './reportErrors.ts'
+import { asConclusionReport } from './reportConvert.ts'
+import type { ReportBody } from '../types/case.ts'
 import type { ConclusionReport, ReportRun } from '../types/report.ts'
 
 // RPT_010: 직원 계정 사건 보고서 열람 권한 없음 (2-12에서 백엔드 추가)
 async function realGetCaseReport(caseId: string): Promise<ConclusionReport | null> {
   try {
-    return await api<ConclusionReport>(`/investigation/cases/${caseId}/report`)
+    // 백엔드는 저장된 본문을 그대로 준다 — 결론 카드(schemaVersion 2) 또는 옛 8개 절 형식 (2-17b)
+    return asConclusionReport(
+      await api<ReportBody | ConclusionReport>(`/investigation/cases/${caseId}/report`),
+    )
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null
     if (error instanceof ApiError && error.code === 'RPT_010') throw new StaffReportForbiddenError()
@@ -21,7 +26,7 @@ async function realGetCaseReport(caseId: string): Promise<ConclusionReport | nul
 // 사건의 최신 보고서. 아직 없으면 null
 export const getCaseReport = isMock('report') ? mockGetCaseReport : realGetCaseReport
 
-// 2-19b에서 백엔드 추가. 조사 기록이 없으면 404
+// 2-17b에서 백엔드 추가 (단계 steps는 2-19b). 조사 기록이 없으면 404
 async function realGetReportRun(caseId: string): Promise<ReportRun | null> {
   try {
     return await api<ReportRun>(`/investigation/cases/${caseId}/report/run`)
