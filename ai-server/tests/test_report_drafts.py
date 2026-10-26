@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import json
 from collections.abc import Callable
@@ -27,6 +28,8 @@ def request(case_type: str) -> InvestigationRequest:
             "caseId": 201,
             "caseType": case_type,
             "evidenceVersion": 1,
+            # 시연 답의 예시 결제 번호 "31"이 이 사건 결제라고 둔다
+            "paymentIds": [31] if case_type == "PAYMENT_FRAUD" else [],
         }
     )
 
@@ -53,6 +56,33 @@ def test_parse_eachCaseType_passes(case_type: str) -> None:
     draft = parse(case_type)
     assert draft.report_type == case_type
     assert draft.checks
+
+
+# 사건에 없는 결제 번호로 권고하면 형식 실패 — 다시 묻기로 이어진다 (#64 실제 실행에서 발견)
+def test_parse_adviceForUnknownPayment_fails() -> None:
+    def other_payment(draft: dict[str, Any]) -> None:
+        draft["paymentAdvice"][0]["paymentId"] = "999"
+
+    assert reason_of("PAYMENT_FRAUD", other_payment) == "사건에 없는 결제 번호 999"
+
+
+# 결제 사기 질문에는 쓸 수 있는 결제 번호가 적히고, 직원 사건 질문에는 없다
+def test_firstMessages_listsCasePaymentsOnlyForPaymentFraud() -> None:
+    fraud = request("PAYMENT_FRAUD").model_copy(update={"payment_ids": [57, 58]})
+    question = AGENT.first_messages(fraud)[-1].content
+    assert "이 사건의 결제 번호: 57, 58" in question
+
+    staff = AGENT.first_messages(request("STAFF_TAKEOVER"))[-1].content
+    assert "이 사건의 결제 번호" not in staff
+
+
+# 가짜 AI는 예시 번호 대신 질문에 적힌 결제마다 권고를 쓰고, 그 답은 검사를 통과한다
+def test_mockLlm_usesCasePaymentIds() -> None:
+    fraud = request("PAYMENT_FRAUD").model_copy(update={"payment_ids": [57, 58]})
+    raw = asyncio.run(AGENT.ask(AGENT.first_messages(fraud)))
+
+    draft = AGENT.parse(raw, fraud)
+    assert [a.payment_id for a in draft.payment_advice] == ["57", "58"]  # type: ignore[union-attr]
 
 
 # 결제 사기인데 결제별 권고가 없거나 비면 형식 실패

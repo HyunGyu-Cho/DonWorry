@@ -2,7 +2,7 @@ from pydantic import ValidationError
 
 from app.agent.llm import LlmClient, LlmMessage
 from app.schemas.investigation import InvestigationRequest
-from app.schemas.report import REPORT_DRAFT, ReportDraft
+from app.schemas.report import REPORT_DRAFT, PaymentFraudDraft, ReportDraft
 
 # 형식 실패 이유를 사람이 읽는 이름으로 (화면 "조사 과정"에 그대로 쓰인다)
 FIELD_NAMES = {
@@ -67,7 +67,7 @@ class InvestigationAgent:
             f"사건 종류: {request.case_type}\n"
             f"사건 {request.case_id} (증거 버전 {request.evidence_version})을 조사해 "
             "보고서 초안을 JSON으로 써 주세요.\n"
-            f"{TYPE_GUIDES[request.case_type]}\n{ANSWER_FORMAT}"
+            f"{TYPE_GUIDES[request.case_type]}\n{_payment_line(request)}{ANSWER_FORMAT}"
         )
         return [
             LlmMessage(role="system", content=SYSTEM_PROMPT),
@@ -86,6 +86,12 @@ class InvestigationAgent:
         if draft.report_type != request.case_type:
             reason = f"사건 종류가 다름 (요청 {request.case_type}, 답 {draft.report_type})"
             raise InvalidAnswer(reason, raw)
+        # 결제별 권고는 사건에 묶인 결제만 — 지어낸 번호면 다시 묻는다 (Spring도 한 번 더 본다)
+        if isinstance(draft, PaymentFraudDraft):
+            known = {str(payment_id) for payment_id in request.payment_ids}
+            unknown = [a.payment_id for a in draft.payment_advice if a.payment_id not in known]
+            if unknown:
+                raise InvalidAnswer(f"사건에 없는 결제 번호 {', '.join(unknown)}", raw)
         return draft
 
     # 틀린 답과 이유를 대화에 붙여 다시 묻는다
@@ -98,6 +104,17 @@ class InvestigationAgent:
                 content=f"형식 검사 실패: {invalid.reason}. 같은 JSON 형식으로 다시 써 주세요.",
             ),
         ]
+
+
+# 결제 사기면 쓸 수 있는 결제 번호를 질문에 적는다. 가짜 AI도 이 줄을 읽는다 (llm.py)
+PAYMENT_LINE = "이 사건의 결제 번호: "
+
+
+def _payment_line(request: InvestigationRequest) -> str:
+    if request.case_type != "PAYMENT_FRAUD":
+        return ""
+    numbers = ", ".join(str(payment_id) for payment_id in request.payment_ids)
+    return f"{PAYMENT_LINE}{numbers} — paymentAdvice의 paymentId는 이 번호만 씁니다.\n"
 
 
 # 판별 유니온의 오류 위치는 ("PAYMENT_FRAUD", "checks", ...)처럼 종류 이름이 앞에 붙는다

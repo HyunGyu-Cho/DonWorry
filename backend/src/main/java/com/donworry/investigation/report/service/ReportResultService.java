@@ -1,8 +1,6 @@
 package com.donworry.investigation.report.service;
 
-import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.report.dto.InvestigationResultRequest;
-import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.service.CaseStatusService;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
@@ -11,10 +9,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -32,7 +28,6 @@ public class ReportResultService {
     private final AiServerReportWriter aiServerReportWriter;
     private final ReportService reportService;
     private final CaseStatusService caseStatusService;
-    private final CasePaymentRepository casePaymentRepository;
     private final PaymentInfoReader paymentInfoReader;
     // 다시 요청은 쉬는 시간이 있어 결과를 보낸 ai-server를 기다리게 하지 않도록 따로 돌린다
     private final Executor retryExecutor;
@@ -44,7 +39,6 @@ public class ReportResultService {
             AiServerReportWriter aiServerReportWriter,
             ReportService reportService,
             CaseStatusService caseStatusService,
-            CasePaymentRepository casePaymentRepository,
             PaymentInfoReader paymentInfoReader) {
         this(
                 reportTransitions,
@@ -52,7 +46,6 @@ public class ReportResultService {
                 aiServerReportWriter,
                 reportService,
                 caseStatusService,
-                casePaymentRepository,
                 paymentInfoReader,
                 Executors.newVirtualThreadPerTaskExecutor());
     }
@@ -63,7 +56,6 @@ public class ReportResultService {
             AiServerReportWriter aiServerReportWriter,
             ReportService reportService,
             CaseStatusService caseStatusService,
-            CasePaymentRepository casePaymentRepository,
             PaymentInfoReader paymentInfoReader,
             Executor retryExecutor) {
         this.reportTransitions = reportTransitions;
@@ -71,7 +63,6 @@ public class ReportResultService {
         this.aiServerReportWriter = aiServerReportWriter;
         this.reportService = reportService;
         this.caseStatusService = caseStatusService;
-        this.casePaymentRepository = casePaymentRepository;
         this.paymentInfoReader = paymentInfoReader;
         this.retryExecutor = retryExecutor;
     }
@@ -129,11 +120,8 @@ public class ReportResultService {
     }
 
     private Map<Long, PaymentInfo> payments(Long caseId) {
-        Set<Long> ids = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
-                .map(CasePayment::getPaymentId)
-                .collect(Collectors.toSet());
         Map<Long, PaymentInfo> payments = new LinkedHashMap<>();
-        for (Long id : ids) {
+        for (Long id : reportTransitions.casePaymentIds(caseId)) {
             // 결제 정보를 못 찾아도 사건 소속 번호로는 인정한다 — 금액만 비운다
             payments.put(id, paymentInfoReader.find(id).orElse(null));
         }

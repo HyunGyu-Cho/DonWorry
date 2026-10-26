@@ -20,6 +20,7 @@ def request_body(report_id: int = 5) -> dict[str, object]:
         "caseId": 201,
         "caseType": "PAYMENT_FRAUD",
         "evidenceVersion": 1,
+        "paymentIds": [31],
     }
 
 

@@ -54,11 +54,12 @@ class AiServerReportWriter implements ReportWriter {
     public void write(ReportTarget target) {
         Long reportId = target.reportId();
         Outcome last = null;
+        List<Long> paymentIds = reportTransitions.casePaymentIds(target.caseId());
         while (attemptRegistry.attempts(reportId) < MAX_ATTEMPTS) {
             UUID attemptId = attemptRegistry.next(reportId);
             int attempt = attemptRegistry.attempts(reportId);
             last = aiServerClient.requestInvestigation(
-                    reportId, attemptId, target.caseId(), target.caseType(), target.evidenceVersion());
+                    reportId, attemptId, target.caseId(), target.caseType(), target.evidenceVersion(), paymentIds);
             if (last.kind() == Kind.ACCEPTED) {
                 // 결과가 접수 응답보다 먼저 와서 이미 끝났으면 false — 덮지 않는다 (#54)
                 reportTransitions.running(reportId);

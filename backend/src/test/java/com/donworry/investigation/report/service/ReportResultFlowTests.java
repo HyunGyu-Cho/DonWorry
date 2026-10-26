@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -86,7 +88,7 @@ class ReportResultFlowTests {
 
     @BeforeEach
     void setUp() {
-        when(aiServerClient.requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt()))
+        when(aiServerClient.requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt(), anyList()))
                 .thenReturn(new Outcome(Kind.ACCEPTED, null));
         securityCase = securityCaseRepository.save(
                 SecurityCase.open(1L, "customer-" + UUID.randomUUID(), CaseType.PAYMENT_FRAUD, Instant.now()));
@@ -107,7 +109,8 @@ class ReportResultFlowTests {
         ArgumentCaptor<Long> reportId = ArgumentCaptor.forClass(Long.class);
         ArgumentCaptor<UUID> attemptId = ArgumentCaptor.forClass(UUID.class);
         verify(aiServerClient, org.mockito.Mockito.atLeastOnce())
-                .requestInvestigation(reportId.capture(), attemptId.capture(), anyLong(), anyString(), anyInt());
+                .requestInvestigation(
+                        reportId.capture(), attemptId.capture(), anyLong(), anyString(), anyInt(), anyList());
         return new Sent(reportId.getValue(), attemptId.getValue());
     }
 
@@ -196,6 +199,16 @@ class ReportResultFlowTests {
                 .isEqualTo(CaseStatus.DECISION_PENDING);
     }
 
+    // 조사 요청에 사건의 결제 번호가 실린다 — AI가 결제별 권고에 쓸 수 있는 번호 (#64 실제 실행에서 발견)
+    @Test
+    void request_sendsCasePaymentIds() {
+        requestInvestigation();
+
+        verify(aiServerClient)
+                .requestInvestigation(
+                        anyLong(), any(), eq(securityCase.getId()), eq("PAYMENT_FRAUD"), eq(1), eq(List.of(paymentId)));
+    }
+
     // 서비스 키가 없거나 틀리면 401, 보고서는 그대로
     @Test
     void result_wrongKey_rejected() throws Exception {
@@ -227,7 +240,7 @@ class ReportResultFlowTests {
 
         await().atMost(Duration.ofSeconds(10))
                 .untilAsserted(() -> verify(aiServerClient, times(2))
-                        .requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt()));
+                        .requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt(), anyList()));
         Sent second = lastSent();
         assertThat(second.attemptId()).isNotEqualTo(first.attemptId());
         assertThat(report(first.reportId()).getStatus()).isEqualTo(ReportStatus.RUNNING);
@@ -247,7 +260,7 @@ class ReportResultFlowTests {
                 int calls = attempt + 1;
                 await().atMost(Duration.ofSeconds(10))
                         .untilAsserted(() -> verify(aiServerClient, times(calls))
-                                .requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt()));
+                                .requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt(), anyList()));
                 sent = lastSent();
             }
         }

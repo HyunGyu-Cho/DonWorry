@@ -1,6 +1,7 @@
 package com.donworry.investigation.report.client;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatusCode;
@@ -23,13 +24,15 @@ public class AiServerClient {
     }
 
     public Outcome requestInvestigation(
-            Long reportId, UUID attemptId, Long caseId, String caseType, int evidenceVersion) {
+            Long reportId, UUID attemptId, Long caseId, String caseType, int evidenceVersion, List<Long> paymentIds) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("reportId", reportId);
         body.put("attemptId", attemptId.toString());
         body.put("caseId", caseId);
         body.put("caseType", caseType);
         body.put("evidenceVersion", evidenceVersion);
+        // 사건에 묶인 결제 번호 — AI가 결제별 권고에 이 번호만 쓴다 (직원 사건은 빈 목록)
+        body.put("paymentIds", paymentIds);
         try {
             HttpStatusCode status = restClient
                     .post()
