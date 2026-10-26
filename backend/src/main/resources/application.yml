@@ -48,3 +48,8 @@ fds:
   mock:
     # P5 요청이 아직 없는 로컬 화면용 Mock. P5 실연동 환경에서는 false로 끈다.
     seed-enabled: ${FDS_MOCK_SEED_ENABLED:true}
+
+donworry:
+  report:
+    # 보고서 내용을 채우는 쪽. fake = Spring 안의 템플릿으로 바로 완료 (2-16 전까지), 2-16에서 ai-server 추가
+    writer: ${DONWORRY_REPORT_WRITER:fake}

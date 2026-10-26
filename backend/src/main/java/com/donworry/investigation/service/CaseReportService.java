@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 // 현재 증거 버전의 보고서가 없을 때 직원이 다시 요청한다
-// 예: 목 보고서가 서버 재시작으로 비었거나, 커밋 뒤 보고서 요청이 실패해 EVENT_PUBLICATION에 미완료로 남은 경우
+// 예: 커밋 뒤 보고서 요청이 실패해 EVENT_PUBLICATION에 미완료로 남은 경우
 // 보고서 요청은 외부 호출이라 트랜잭션 밖에서 한다 (02-code 4절)
 @Service
 @RequiredArgsConstructor

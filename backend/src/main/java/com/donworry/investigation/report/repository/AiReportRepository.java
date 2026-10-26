@@ -1,7 +1,10 @@
 package com.donworry.investigation.report.repository;
 
 import com.donworry.investigation.report.entity.AiReport;
+import com.donworry.investigation.report.entity.ReportStatus;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Modifying;
@@ -17,6 +20,14 @@ public interface AiReportRepository extends Repository<AiReport, Long> {
     AiReport save(AiReport report);
 
     Optional<AiReport> findById(Long reportId);
+
+    List<AiReport> findByCaseIdOrderByReportVersionAsc(Long caseId);
+
+    // 같은 Case에 아직 끝나지 않은 보고서가 있는지 (ADR-0009 결정 3 — 있으면 새로 만들지 않음)
+    boolean existsByCaseIdAndStatusIn(Long caseId, Collection<ReportStatus> statuses);
+
+    // 요청한 증거 버전 이상을 이미 조사했는지 — 상태 무관, FAILED여도 다시 만들지 않는다 (3회 제한 유지)
+    boolean existsByCaseIdAndEvidenceVersionGreaterThanEqual(Long caseId, int evidenceVersion);
 
     // 다음 report_version 계산용 — 해당 Case에 보고서가 없으면 빈 값
     @Query("SELECT MAX(r.reportVersion) FROM AiReport r WHERE r.caseId = :caseId")
