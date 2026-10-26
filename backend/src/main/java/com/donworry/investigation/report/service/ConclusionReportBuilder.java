@@ -2,8 +2,11 @@ package com.donworry.investigation.report.service;
 
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +24,17 @@ final class ConclusionReportBuilder {
             ReportTarget target,
             Map<String, Object> draft,
             List<Map<String, Object>> steps,
+            Map<Long, PaymentInfo> payments,
+            Instant generatedAt) {
+        return build(target, draft, steps, List.of(), payments, generatedAt);
+    }
+
+    // toolRows = 이 시도에서 AI가 부른 증거 조회 기록 (ReportToolService.traceRows, 2-19)
+    static Map<String, Object> build(
+            ReportTarget target,
+            Map<String, Object> draft,
+            List<Map<String, Object>> steps,
+            List<Map<String, Object>> toolRows,
             Map<Long, PaymentInfo> payments,
             Instant generatedAt) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -45,7 +59,7 @@ final class ConclusionReportBuilder {
         body.put("paymentRecommendations", paymentRecommendations(target, draft, payments));
         body.put("evidence", List.of());
         body.put("similarCases", List.of());
-        body.put("trace", trace(steps));
+        body.put("trace", trace(steps, toolRows));
         body.put("limitations", LIMITATIONS);
         body.put("model", "ai-server");
         return body;
@@ -76,7 +90,34 @@ final class ConclusionReportBuilder {
     }
 
     // ai-server 조사 과정 → 화면 ReportStep. 형식 검사에 떨어진 단계는 LLM_FAILED (다시 쓰는 단계)
-    private static List<Map<String, Object>> trace(List<Map<String, Object>> steps) {
+    // 증거 조회(TOOL)와 AI 판단 · 형식 검사를 시작 시각 순으로 섞고 번호를 다시 매긴다
+    private static List<Map<String, Object>> trace(
+            List<Map<String, Object>> steps, List<Map<String, Object>> toolRows) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map<String, Object> tool : toolRows) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("stepNo", 0);
+            row.putAll(tool);
+            rows.add(row);
+        }
+        rows.addAll(aiServerTrace(steps));
+        rows.sort(Comparator.comparing(row -> startedAt(row.get("startedAt"))));
+        for (int i = 0; i < rows.size(); i++) {
+            rows.get(i).put("stepNo", i + 1);
+        }
+        return rows;
+    }
+
+    // ai-server는 +00:00, Spring은 Z로 시각을 쓴다 — 둘 다 읽고 못 읽으면 맨 뒤로
+    private static Instant startedAt(Object value) {
+        try {
+            return OffsetDateTime.parse(String.valueOf(value)).toInstant();
+        } catch (DateTimeParseException e) {
+            return Instant.MAX;
+        }
+    }
+
+    private static List<Map<String, Object>> aiServerTrace(List<Map<String, Object>> steps) {
         List<Map<String, Object>> rows = new ArrayList<>();
         if (steps == null) {
             return rows;

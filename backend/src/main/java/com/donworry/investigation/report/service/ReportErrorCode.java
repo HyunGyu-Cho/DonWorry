@@ -8,7 +8,11 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum ReportErrorCode {
-    REPORT_NOT_FOUND("RPT_001", "보고서가 없습니다.", HttpStatus.NOT_FOUND);
+    REPORT_NOT_FOUND("RPT_001", "보고서가 없습니다.", HttpStatus.NOT_FOUND),
+    // 증거 조회 창구 (2-19)
+    TOOL_NOT_FOUND("RPT_002", "없는 조사 도구입니다.", HttpStatus.NOT_FOUND),
+    NOT_CURRENT_ATTEMPT("RPT_003", "조사 중인 현재 시도가 아닙니다.", HttpStatus.CONFLICT),
+    PAYMENT_NOT_IN_CASE("RPT_004", "이 사건의 결제가 아닙니다.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;
