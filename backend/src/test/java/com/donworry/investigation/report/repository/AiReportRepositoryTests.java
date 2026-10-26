@@ -11,6 +11,7 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.Map;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +20,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
-// 실제 MariaDB에서 ai_reports 저장 · 버전 제약 · 최대 버전 조회를 확인한다
+// 실제 MariaDB에서 ai_reports 저장 · 버전 제약 · 최대 버전 조회 · 조건부 상태 변경을 확인한다
 // 각 테스트는 트랜잭션 안에서 돌고 끝나면 롤백된다
 @Tag("mariadb")
 @SpringBootTest
@@ -86,5 +87,126 @@ class AiReportRepositoryTests {
         assertThat(Arrays.asList(AiReportRepository.class.getMethods()))
                 .extracting(Method::getName)
                 .noneMatch(name -> name.startsWith("delete"));
+    }
+
+    static final Map<String, Object> BODY = Map.of("summary", "카드 도용 가능성이 있어 본인 확인이 필요합니다");
+    static final Map<String, Object> ERROR = Map.of("error", Map.of("code", "LLM_TIMEOUT", "attempts", 3));
+
+    // 저장 뒤 DB에서 다시 읽는다 (조건부 UPDATE는 영속성 컨텍스트를 거치지 않으므로)
+    private AiReport reload(Long reportId) {
+        entityManager.flush();
+        entityManager.clear();
+        return aiReportRepository.findById(reportId).orElseThrow();
+    }
+
+    private Long pending(Long caseId, int reportVersion) {
+        Long id = aiReportRepository
+                .save(AiReport.pending(caseId, reportVersion, 1, NOW))
+                .getId();
+        entityManager.flush();
+        return id;
+    }
+
+    // 원하는 상태의 보고서를 만든다 (정상 경로로만 옮긴다)
+    private Long reportIn(ReportStatus status, Long caseId, int reportVersion) {
+        Long id = pending(caseId, reportVersion);
+        switch (status) {
+            case PENDING -> {}
+            case RUNNING -> aiReportRepository.markRunning(id);
+            case SUCCEEDED -> aiReportRepository.markSucceeded(id, BODY, NOW);
+            case FAILED -> aiReportRepository.markFailed(id, ERROR, NOW);
+        }
+        assertThat(reload(id).getStatus()).isEqualTo(status);
+        return id;
+    }
+
+    private int move(Long reportId, ReportStatus next) {
+        return switch (next) {
+            case PENDING -> 0;
+            case RUNNING -> aiReportRepository.markRunning(reportId);
+            case SUCCEEDED -> aiReportRepository.markSucceeded(reportId, BODY, NOW.plusSeconds(1));
+            case FAILED -> aiReportRepository.markFailed(reportId, ERROR, NOW.plusSeconds(1));
+        };
+    }
+
+    // 정상 흐름: 생성 대기 → 생성 중 → 완료, 완료 때 본문 · 완료 시각이 함께 저장된다
+    @Test
+    void markStatus_normalFlow_savesBodyAndCompletedAt() {
+        Long id = pending(1L, 1);
+
+        assertThat(aiReportRepository.markRunning(id)).isEqualTo(1);
+        assertThat(reload(id).getStatus()).isEqualTo(ReportStatus.RUNNING);
+        assertThat(aiReportRepository.markSucceeded(id, BODY, NOW)).isEqualTo(1);
+
+        AiReport done = reload(id);
+        assertThat(done.getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
+        assertThat(done.getReportBody()).isEqualTo(BODY);
+        assertThat(done.getCompletedAt()).isEqualTo(NOW);
+    }
+
+    // 결과가 접수 응답보다 먼저 와서 완료되면, 뒤이은 생성 중 변경은 0건이고 완료가 유지된다
+    @Test
+    void markRunning_afterSucceeded_changesNothing() {
+        Long id = pending(1L, 1);
+        aiReportRepository.markSucceeded(id, BODY, NOW);
+
+        assertThat(aiReportRepository.markRunning(id)).isZero();
+        assertThat(reload(id).getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
+    }
+
+    // 실패로 끝난 뒤 늦게 온 성공 결과는 뒤집지 않는다 — 본문 · 완료 시각도 그대로
+    @Test
+    void markSucceeded_afterFailed_keepsFailure() {
+        Long id = reportIn(ReportStatus.FAILED, 1L, 1);
+
+        assertThat(aiReportRepository.markSucceeded(id, BODY, NOW.plusSeconds(30)))
+                .isZero();
+
+        AiReport kept = reload(id);
+        assertThat(kept.getStatus()).isEqualTo(ReportStatus.FAILED);
+        assertThat(kept.getReportBody()).isEqualTo(ERROR);
+        assertThat(kept.getCompletedAt()).isEqualTo(NOW);
+    }
+
+    // 한 보고서를 바꿔도 같은 Case의 다른 버전 보고서는 영향이 없다
+    @Test
+    void markStatus_otherVersion_untouched() {
+        Long v1 = reportIn(ReportStatus.SUCCEEDED, 1L, 1);
+        Long v2 = pending(1L, 2);
+
+        aiReportRepository.markFailed(v2, ERROR, NOW);
+
+        assertThat(reload(v1).getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
+        assertThat(reload(v1).getReportBody()).isEqualTo(BODY);
+        assertThat(reload(v2).getStatus()).isEqualTo(ReportStatus.FAILED);
+    }
+
+    // 없는 보고서를 바꾸려 하면 오류 없이 0건이다
+    @Test
+    void markStatus_unknownReport_changesNothing() {
+        assertThat(aiReportRepository.markRunning(999_999L)).isZero();
+        assertThat(aiReportRepository.markSucceeded(999_999L, BODY, NOW)).isZero();
+        assertThat(aiReportRepository.markFailed(999_999L, ERROR, NOW)).isZero();
+    }
+
+    // 모든 (이전 상태 → 다음 상태) 조합에서 DB 조건부 UPDATE 결과가 ReportStatus 규칙과 같다
+    @Test
+    void markStatus_everyTransition_matchesReportStatusRule() {
+        int version = 1;
+        for (ReportStatus from : ReportStatus.values()) {
+            for (ReportStatus next : ReportStatus.values()) {
+                if (next == ReportStatus.PENDING) {
+                    // 생성 대기로 되돌리는 경로는 저장소에 없다 (새 보고서는 pending()으로만 만든다)
+                    assertThat(from.canBecome(next)).isFalse();
+                    continue;
+                }
+                Long id = reportIn(from, 1L, version++);
+                int changed = move(id, next);
+                ReportStatus after = reload(id).getStatus();
+
+                assertThat(changed == 1).as("%s → %s 변경 건수", from, next).isEqualTo(from.canBecome(next));
+                assertThat(after).as("%s → %s 뒤 상태", from, next).isEqualTo(from.canBecome(next) ? next : from);
+            }
+        }
     }
 }
