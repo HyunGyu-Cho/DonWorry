@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 
 // P3 → P4 보고서 요청 · 조회 경계. ai_reports는 P4 소유라 P3는 이 경계로만 읽는다
-// 지금은 목 구현(MockReportGateway)을 쓴다. P4 보고서 서비스가 생기면 구현만 바꾼다
+// 구현은 P4 ReportService (ai_reports에 버전별로 저장, 2-13). P3는 이 인터페이스만 쓴다
 public interface ReportGateway {
 
     // 커밋 뒤에만 부른다 — 실제 구현은 FastAPI를 호출한다 (02-code 4절)

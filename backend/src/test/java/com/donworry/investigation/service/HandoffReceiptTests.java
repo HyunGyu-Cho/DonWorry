@@ -112,7 +112,7 @@ class HandoffReceiptTests {
                 .isEqualTo(1);
     }
 
-    // 결제 정보가 있어야 목 보고서가 SUCCEEDED로 만들어진다 (없으면 FAILED)
+    // 결제 정보가 있어야 가짜 작성기 보고서가 SUCCEEDED로 만들어진다 (없으면 FAILED)
     private Long receiveHeld() {
         Long paymentId = mockPaymentInfoStore
                 .registerHeld(100_000L, 65, List.of("NEW_CARD"), Instant.now())
