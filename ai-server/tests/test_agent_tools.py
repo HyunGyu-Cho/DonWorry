@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import httpx
@@ -9,8 +10,8 @@ from app.agent.investigator import InvestigationAgent
 from app.agent.llm import LlmMessage, LlmReply, MockLlmClient, ToolCall
 from app.agent.mock_answers import TOOL_PLAN
 from app.agent.tools import AttemptOutdated, ToolSpec
-from app.client.spring import SpringToolClient
-from app.schemas.investigation import InvestigationRequest, InvestigationStatus
+from app.client.spring import SpringStepReporter, SpringToolClient
+from app.schemas.investigation import InvestigationRequest, InvestigationStatus, TraceStep
 from app.service.investigations import InvestigationService
 
 PAYMENT = "9001"
@@ -78,8 +79,11 @@ def test_mockAgent_callsToolsInOrder_andWritesFromEvidence() -> None:
     assert [a.payment_id for a in report.payment_advice] == [PAYMENT]
     assert report.payment_advice[0].recommendation == "NEEDS_CHECK"
     assert "이 고객의 과거 결제 패턴 (데이터 준비 전)" in report.unknowns
-    # 창구 호출 기록은 Spring이 정본 — ai-server 과정에는 AI 판단 · 형식 검사만
-    assert [s.kind for s in result.steps] == ["LLM_ANSWER", "VALIDATION"]
+    # 창구 호출 기록은 Spring이 정본 — ai-server 과정에는 AI 판단(물을 때마다) · 형식 검사만
+    assert [s.kind for s in result.steps] == ["LLM_ANSWER"] * 5 + ["VALIDATION"]
+    assert [s.detail for s in result.steps[:5]] == ["AI 판단 — 다음에 볼 증거 고르기"] * 4 + [
+        "AI 판단 — 보고서 작성 (1차)"
+    ]
 
 
 # 위험 점수가 높으면 승인 취소 검토를 권한다
@@ -184,3 +188,53 @@ def test_springToolClient_statuses() -> None:
     assert first.headers["X-Service-Key"] == "key"
     assert json.loads(first.content) == {"reportId": 1, "attemptId": "a", "args": {}}
     assert json.loads(seen[1].content)["args"] == {"paymentIds": ["9001"]}
+
+
+# 단계가 끝날 때마다 Spring에 순서대로 알린다 — 화면이 조사 중에 한 줄씩 그린다 (2-19b)
+def test_steps_reportedAsTheyFinish() -> None:
+    class Collect:
+        def __init__(self) -> None:
+            self.details: list[str] = []
+
+        async def report(self, report_id: int, attempt_id: str, step: object) -> None:
+            self.details.append(step.detail)
+
+    reporter = Collect()
+    service = InvestigationService(
+        InvestigationAgent(MockLlmClient(invalid_answers=1)), tools=FakeTools(), reporter=reporter
+    )
+    result = asyncio.run(service._investigate(request()))
+
+    assert result.status == InvestigationStatus.SUCCEEDED
+    assert reporter.details == [s.detail for s in result.steps]
+    assert reporter.details[-3:] == [
+        "구조 검증 실패: 필수 항목 '확인할 것' 누락 → 다시 시도",
+        "AI 판단 — 보고서 작성 (2차)",
+        "구조 검증 통과",
+    ]
+
+
+# 단계 알리기: 시도 · 단계 칸을 싣고, 409는 멈춤, 다른 오류 · 연결 실패는 무시하고 계속
+def test_springStepReporter_statuses() -> None:
+    seen: list[httpx.Request] = []
+    replies = iter([httpx.Response(204), httpx.Response(500), httpx.Response(409)])
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return next(replies)
+
+    reporter = SpringStepReporter("http://spring", "key", transport=httpx.MockTransport(handler))
+    step = TraceStep(
+        kind="LLM_ANSWER", ok=True, detail="AI 판단", started_at=datetime.now(UTC), duration_ms=5
+    )
+
+    async def scenario() -> None:
+        await reporter.report(3, "a", step)
+        await reporter.report(3, "a", step)
+        with pytest.raises(AttemptOutdated):
+            await reporter.report(3, "a", step)
+
+    asyncio.run(scenario())
+    assert str(seen[0].url) == "http://spring/internal/ai/reports/3/steps"
+    body = json.loads(seen[0].content)
+    assert body["attemptId"] == "a" and body["kind"] == "LLM_ANSWER" and body["durationMs"] == 5

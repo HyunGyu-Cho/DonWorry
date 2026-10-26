@@ -69,6 +69,19 @@ public class AiReportStep {
         this.durationMs = durationMs;
     }
 
+    // 증거 조회 외 단계 — REQUEST(접수) · LLM(AI 판단) · LLM_FAILED · VALIDATE(형식 검사) · SAVE(저장), 2-19b
+    public static AiReportStep of(
+            Long reportId,
+            String attemptId,
+            int stepNo,
+            String kind,
+            boolean ok,
+            String summary,
+            Instant startedAt,
+            int durationMs) {
+        return new AiReportStep(reportId, attemptId, stepNo, kind, null, ok, summary, startedAt, durationMs);
+    }
+
     public static AiReportStep tool(
             Long reportId,
             String attemptId,

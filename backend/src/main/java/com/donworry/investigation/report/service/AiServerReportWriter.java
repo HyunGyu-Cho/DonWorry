@@ -29,12 +29,21 @@ class AiServerReportWriter implements ReportWriter {
     private final AiServerClient aiServerClient;
     private final ReportTransitions reportTransitions;
     private final AttemptRegistry attemptRegistry;
+    private final ReportStepRecorder reportStepRecorder;
     private final Pause pause;
 
     @Autowired
     AiServerReportWriter(
-            AiServerClient aiServerClient, ReportTransitions reportTransitions, AttemptRegistry attemptRegistry) {
-        this(aiServerClient, reportTransitions, attemptRegistry, duration -> Thread.sleep(duration));
+            AiServerClient aiServerClient,
+            ReportTransitions reportTransitions,
+            AttemptRegistry attemptRegistry,
+            ReportStepRecorder reportStepRecorder) {
+        this(
+                aiServerClient,
+                reportTransitions,
+                attemptRegistry,
+                reportStepRecorder,
+                duration -> Thread.sleep(duration));
     }
 
     // 테스트는 실제로 기다리지 않도록 쉬는 방법을 바꿔 끼운다
@@ -42,10 +51,12 @@ class AiServerReportWriter implements ReportWriter {
             AiServerClient aiServerClient,
             ReportTransitions reportTransitions,
             AttemptRegistry attemptRegistry,
+            ReportStepRecorder reportStepRecorder,
             Pause pause) {
         this.aiServerClient = aiServerClient;
         this.reportTransitions = reportTransitions;
         this.attemptRegistry = attemptRegistry;
+        this.reportStepRecorder = reportStepRecorder;
         this.pause = pause;
     }
 
@@ -63,9 +74,16 @@ class AiServerReportWriter implements ReportWriter {
             }
             UUID attemptId = attemptRegistry.next(reportId);
             int attempt = attemptRegistry.attempts(reportId);
+            Instant sentAt = Instant.now();
+            long clock = System.nanoTime();
             last = aiServerClient.requestInvestigation(
                     reportId, attemptId, target.caseId(), target.caseType(), target.evidenceVersion(), paymentIds);
             if (last.kind() == Kind.ACCEPTED) {
+                // 조사 과정 첫 단계 — 화면이 조사 중에 바로 보여 준다 (2-19b)
+                String summary = attempt == 1 ? "ai-server가 조사를 접수함" : "ai-server가 조사를 접수함 (" + attempt + "번째 시도)";
+                int durationMs = (int) ((System.nanoTime() - clock) / 1_000_000);
+                reportStepRecorder.step(
+                        reportId, attemptId, ReportStepRecorder.REQUEST, true, summary, sentAt, durationMs);
                 // 결과가 접수 응답보다 먼저 와서 이미 끝났으면 false — 덮지 않는다 (#54)
                 reportTransitions.running(reportId);
                 return;

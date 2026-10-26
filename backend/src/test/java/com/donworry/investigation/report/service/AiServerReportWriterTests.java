@@ -2,7 +2,9 @@ package com.donworry.investigation.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -48,6 +50,7 @@ class AiServerReportWriterTests {
     List<String> sentBodies;
     AiServerReportWriter writer;
     AiServerClient client;
+    ReportStepRecorder stepRecorder;
 
     @BeforeEach
     void setUp() {
@@ -60,7 +63,8 @@ class AiServerReportWriterTests {
         pauses = new ArrayList<>();
         sentBodies = new ArrayList<>();
         client = new AiServerClient(builder.build(), KEY);
-        writer = new AiServerReportWriter(client, reportTransitions, attemptRegistry, pauses::add);
+        stepRecorder = mock(ReportStepRecorder.class);
+        writer = new AiServerReportWriter(client, reportTransitions, attemptRegistry, stepRecorder, pauses::add);
     }
 
     // 조사 요청 한 번을 기대하고, 보낸 본문을 기록해 둔다
@@ -97,6 +101,9 @@ class AiServerReportWriterTests {
         verify(reportTransitions).running(7L);
         verify(reportTransitions, never()).fail(anyLong(), any(), any());
         assertThat(pauses).isEmpty();
+        // 조사 과정 첫 단계 "조사 요청 접수"가 기록된다 (2-19b)
+        verify(stepRecorder)
+                .step(eq(7L), any(), eq(ReportStepRecorder.REQUEST), eq(true), anyString(), any(), anyInt());
     }
 
     // 접수된 시도 번호가 "현재 시도"로 남는다 — 결과 수신(2-17)이 이 번호의 결과만 반영한다

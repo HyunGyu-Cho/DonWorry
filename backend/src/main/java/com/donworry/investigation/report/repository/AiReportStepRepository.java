@@ -1,6 +1,7 @@
 package com.donworry.investigation.report.repository;
 
 import com.donworry.investigation.report.entity.AiReportStep;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.repository.Repository;
 
@@ -11,5 +12,8 @@ public interface AiReportStepRepository extends Repository<AiReportStep, Long> {
 
     int countByReportId(Long reportId);
 
-    List<AiReportStep> findByReportIdAndAttemptIdOrderByStepNoAsc(Long reportId, String attemptId);
+    // 한 보고서의 모든 시도 기록 — 다시 시도한 과정도 화면에 남긴다 (2-19b)
+    List<AiReportStep> findByReportIdOrderByStepNoAsc(Long reportId);
+
+    boolean existsByReportIdAndKindIn(Long reportId, Collection<String> kinds);
 }
