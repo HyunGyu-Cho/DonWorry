@@ -30,7 +30,7 @@ class InvestigationState(TypedDict, total=False):
     error: FailureInfo
 
 
-# AI 조사 흐름 (ADR-0021) — 노드 = 할 일, 화살표 = 다음에 어디로
+# AI 조사 흐름 (ADR-0021) — 노드 = 할 일, 화살표 = 다음에 어디로 (화살표 이름은 그림에도 나온다)
 #   ask_ai ─창구 요청─▶ call_tools ─▶ ask_ai          (한 시도 최대 max_tool_calls번)
 #   ask_ai ─너무 많이─▶ too_many_tools ─▶ ask_ai | give_up   (한 번 알리고, 그래도면 형식 실패)
 #   ask_ai ─보고서─▶ validate ─통과─▶ 끝 | ─틀림─▶ ask_ai | give_up   (최대 max_llm_attempts번)
@@ -60,10 +60,27 @@ class InvestigationGraph:
         builder.add_node("validate", self._validate)
         builder.add_node("give_up", self._give_up)
         builder.add_edge(START, "ask_ai")
-        builder.add_conditional_edges("ask_ai", self._after_ask)
+        builder.add_conditional_edges(
+            "ask_ai",
+            self._after_ask,
+            {
+                "창구_요청": "call_tools",
+                "창구_너무_많음": "too_many_tools",
+                "보고서_작성": "validate",
+                "AI_호출_실패": END,
+            },
+        )
         builder.add_edge("call_tools", "ask_ai")
-        builder.add_conditional_edges("too_many_tools", self._after_retryable)
-        builder.add_conditional_edges("validate", self._after_validate)
+        builder.add_conditional_edges(
+            "too_many_tools",
+            self._after_too_many,
+            {"다시_묻기": "ask_ai", "3번_모두_실패": "give_up"},
+        )
+        builder.add_conditional_edges(
+            "validate",
+            self._after_validate,
+            {"통과": END, "형식_틀림_다시": "ask_ai", "3번_모두_실패": "give_up"},
+        )
         builder.add_edge("give_up", END)
         return builder.compile()
 
@@ -164,23 +181,25 @@ class InvestigationGraph:
 
     def _after_ask(
         self, state: InvestigationState
-    ) -> Literal["call_tools", "too_many_tools", "validate", "__end__"]:
+    ) -> Literal["창구_요청", "창구_너무_많음", "보고서_작성", "AI_호출_실패"]:
         if "error" in state:
-            return END
+            return "AI_호출_실패"
         reply = state["reply"]
         if reply.tool_calls and self.specs:
             within = state["tool_calls"] + len(reply.tool_calls) <= self.max_tool_calls
-            return "call_tools" if within else "too_many_tools"
-        return "validate"
+            return "창구_요청" if within else "창구_너무_많음"
+        return "보고서_작성"
 
-    # 형식 실패로 셌으면 다시 묻거나(시도가 남음) 포기, 알리기만 했으면 다시 묻기
-    def _after_retryable(self, state: InvestigationState) -> Literal["ask_ai", "give_up"]:
-        return "give_up" if state["attempt"] >= self.max_llm_attempts else "ask_ai"
+    # 알리기만 했거나 형식 실패로 셌어도 시도가 남았으면 다시 묻고, 다 썼으면 포기
+    def _after_too_many(self, state: InvestigationState) -> Literal["다시_묻기", "3번_모두_실패"]:
+        return "3번_모두_실패" if state["attempt"] >= self.max_llm_attempts else "다시_묻기"
 
-    def _after_validate(self, state: InvestigationState) -> Literal["ask_ai", "give_up", "__end__"]:
+    def _after_validate(
+        self, state: InvestigationState
+    ) -> Literal["통과", "형식_틀림_다시", "3번_모두_실패"]:
         if "report" in state:
-            return END
-        return self._after_retryable(state)
+            return "통과"
+        return "3번_모두_실패" if state["attempt"] >= self.max_llm_attempts else "형식_틀림_다시"
 
     # ── 도움 ──
 

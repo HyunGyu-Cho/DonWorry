@@ -29,16 +29,16 @@ graph TD;
 	give_up(give_up)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> ask_ai;
-	ask_ai -.-> __end__;
-	ask_ai -.-> call_tools;
-	ask_ai -.-> too_many_tools;
-	ask_ai -.-> validate;
+	ask_ai -. &nbsp;AI_호출_실패&nbsp; .-> __end__;
+	ask_ai -. &nbsp;창구_요청&nbsp; .-> call_tools;
+	ask_ai -. &nbsp;창구_너무_많음&nbsp; .-> too_many_tools;
+	ask_ai -. &nbsp;보고서_작성&nbsp; .-> validate;
 	call_tools --> ask_ai;
-	too_many_tools -.-> ask_ai;
-	too_many_tools -.-> give_up;
-	validate -.-> __end__;
-	validate -.-> ask_ai;
-	validate -.-> give_up;
+	too_many_tools -. &nbsp;다시_묻기&nbsp; .-> ask_ai;
+	too_many_tools -. &nbsp;3번_모두_실패&nbsp; .-> give_up;
+	validate -. &nbsp;통과&nbsp; .-> __end__;
+	validate -. &nbsp;형식_틀림_다시&nbsp; .-> ask_ai;
+	validate -. &nbsp;3번_모두_실패&nbsp; .-> give_up;
 	give_up --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
