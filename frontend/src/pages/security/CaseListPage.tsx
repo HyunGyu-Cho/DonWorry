@@ -130,7 +130,7 @@ export function CaseListPage({ scope = 'payment' }: { scope?: Scope }) {
 
   const columns: ColumnsType<Row> = [
     {
-      title: '누구 · 무슨 사건',
+      title: '대상 · 사건 유형',
       key: 'who',
       render: (_, r) => (
         <div>
@@ -177,7 +177,7 @@ export function CaseListPage({ scope = 'payment' }: { scope?: Scope }) {
         ),
     },
     {
-      title: '생성',
+      title: '생성 시각',
       dataIndex: 'createdAt',
       width: 110,
       render: (v: string) => relativeTime(v, now),

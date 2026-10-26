@@ -36,15 +36,14 @@ function useTourHighlight(target: string | undefined, cardHeight: number) {
       )
     }
     const mark = () => {
-      // 한 요소에 이름표가 여러 개일 수 있다 (띄어쓰기로 구분)
+      // 한 요소에 이름표가 여러 개일 수 있고, 단계도 대상 여러 개를 가리킬 수 있다 (둘 다 띄어쓰기로 구분)
+      const wanted = target.split(' ')
       const names = (el: Element) => (el.getAttribute('data-tour') ?? '').split(' ')
       document.querySelectorAll('.dw-tour-on').forEach((el) => {
-        if (!names(el).includes(target)) el.classList.remove('dw-tour-on')
+        if (!names(el).some((n) => wanted.includes(n))) el.classList.remove('dw-tour-on')
       })
-      document
-        .querySelectorAll(`[data-tour~="${target}"]`)
-        .forEach((el) => el.classList.add('dw-tour-on'))
-      const found = [...document.querySelectorAll(`[data-tour~="${target}"]`)]
+      const found = wanted.flatMap((w) => [...document.querySelectorAll(`[data-tour~="${w}"]`)])
+      found.forEach((el) => el.classList.add('dw-tour-on'))
       // 카드 안의 버튼(tutorial-actions)은 피할 필요가 없다. 좁은 화면은 카드가 화면 폭이라 그대로
       const targets = found.filter((el) => !el.closest('.dw-tut'))
       if (window.innerWidth <= 600 || targets.length === 0) return setPlace('right')

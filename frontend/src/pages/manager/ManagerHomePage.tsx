@@ -81,7 +81,7 @@ function ManagerHomeBody({
       </div>
       <div className="dw-home-grid">
         <HomeList
-          title="승인을 기다리는 요청"
+          title="승인 대기"
           more={{ to: '/manager/approvals', label: '관리자 승인함' }}
           empty="기다리는 요청이 없어요."
         >
@@ -103,7 +103,7 @@ function ManagerHomeBody({
           ))}
         </HomeList>
         <HomeList
-          title="직원 계정 사건"
+          title="의심 사건 (직원 계정)"
           more={{ to: '/manager/cases', label: '사건 목록' }}
           empty="끝나지 않은 직원 사건이 없어요."
         >
@@ -123,7 +123,7 @@ function ManagerHomeBody({
           ))}
         </HomeList>
         <HomeList
-          title="의심 세션에서 한 행동"
+          title="감사 로그 · 확인 필요"
           more={{ to: '/manager/audit', label: '감사 로그' }}
           empty="의심 세션에서 남은 기록이 없어요."
         >

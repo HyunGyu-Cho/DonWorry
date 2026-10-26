@@ -1,6 +1,6 @@
 // 튜토리얼 패널(1-12) 시나리오별 단계 — 1-13 E2E가 같은 단계 · 같은 data-tour 이름표를 쓴다
 // path = 이 단계 화면 주소 (그 화면에 들어오면 이 단계로 넘어간다), target = 노란 테두리를 붙일 data-tour 이름
-// 한 요소에 이름표를 여러 개 달 수 있다 (띄어쓰기로 구분, 예: "report-tabs report-open")
+// 한 요소에 이름표를 여러 개 달 수 있고(예: "report-tabs report-open"), target도 여러 개를 띄어쓰기로 적을 수 있다
 
 // RERUN = 구매자 화면 · Mailpit 열기 + 구매자 답변 도착(시연) 버튼, WAIT = AI 조사 지켜보기
 export type TutorialSpecial = 'RERUN' | 'WAIT'
@@ -14,8 +14,9 @@ export type TutorialStep = {
   path: string
   target?: string
   special?: TutorialSpecial
-  // 이 일이 일어나면 다음 단계로 (화면이 TUTORIAL_EVENT로 알린다, 예: DECIDED = 판정 확정)
-  doneOn?: 'DECIDED'
+  // 이 일이 일어나면 다음 단계로 (화면이 TUTORIAL_EVENT로 알린다)
+  // DECIDED = 판정 확정, APPROVAL_DECIDED = 관리자 승인 · 거절, SESSION_ENDED = 세션 강제 종료
+  doneOn?: 'DECIDED' | 'APPROVAL_DECIDED' | 'SESSION_ENDED'
 }
 
 export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
@@ -39,7 +40,7 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
     },
     {
       title: '왜 걸렸는지 보기',
-      todo: '걸린 Rule을 읽고 [사건 보기]를 눌러 보세요.',
+      todo: '적중한 Rule을 읽고 [사건 보기]를 눌러 보세요.',
       look: [
         '처음 쓰는 카드 · 평소(4만 원)의 16배 금액 · 고액 결제가 함께 걸렸어요',
         'Rule 하나만 걸렸다면 어떻게 읽는지도 적혀 있어요',
@@ -210,13 +211,19 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
       ],
       path: '/manager/approvals',
       target: 'approvals-list',
+      doneOn: 'APPROVAL_DECIDED',
     },
     {
       title: '의심 세션 끊기',
-      todo: '[로그인 모니터링]에서 낯선 기기의 세션을 강제 종료해 보세요.',
-      look: ['사내 세션과 동시에 쓰이는 세션이 표시돼요'],
+      todo: '[로그인 모니터링]의 [세션] 탭에서 "탈취 의심" 세션(독일 Tor)을 [종료]해 보세요.',
+      look: [
+        '세션 = 로그인한 뒤 받은 접속 열쇠예요. 살아 있으면 비밀번호 없이도 계속 쓸 수 있어요',
+        '같은 시간에 회사 PC와 해외 익명 접속에서 함께 쓰이고 있어요',
+      ],
       path: '/manager/access',
-      target: 'nav-manager-access',
+      // 다른 화면에서 넘어와도 길을 알게 메뉴도 같이
+      target: 'session-kill nav-manager-access',
+      doneOn: 'SESSION_ENDED',
     },
     {
       title: '계정 탈취 사건',
@@ -250,7 +257,7 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
     },
     {
       title: '카드 테스팅 흔적',
-      todo: '걸린 Rule을 보고 [차단 목록에 등록]을 눌러 값을 골라 보세요.',
+      todo: '적중한 Rule을 보고 [차단 목록에 등록]을 눌러 값을 골라 보세요.',
       look: [
         '짧은 시간에 여러 카드를 시도했어요',
         '공용 IP는 다른 손님도 막힐 수 있어 값을 골라서 등록해요',

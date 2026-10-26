@@ -118,13 +118,13 @@ export function AlertListPage() {
 
   const columns: ColumnsType<FdsEvaluationSummary> = [
     {
-      title: '시각',
+      title: '발생 시각',
       dataIndex: 'evaluatedAt',
       width: 110,
       render: (v: string) => relativeTime(v, now),
     },
     {
-      title: '무슨 결제인가',
+      title: '결제 정보',
       key: 'payment',
       render: (_, e) => (
         <div>
@@ -136,7 +136,7 @@ export function AlertListPage() {
       ),
     },
     {
-      title: '걸린 Rule',
+      title: '적중 Rule',
       key: 'rules',
       render: (_, e) =>
         e.hitRuleCodes.length === 0 ? (

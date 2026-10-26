@@ -15,6 +15,7 @@ import {
 import { getStaffCases } from '../../api/investigation'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useFeedback } from '../../components/common/Feedback'
+import { TUTORIAL_EVENT } from '../../components/tutorial/tutorialStore'
 import { RawDetails } from '../../components/explain/RawDetails'
 import { TermTip } from '../../components/explain/TermTip'
 import type { StaffAccount, StaffLoginEvent, StaffSession } from '../../types/auth'
@@ -117,7 +118,7 @@ async function fetchAccessData(): Promise<Data | null> {
 }
 
 export function StaffAccessPage() {
-  const { toast } = useFeedback()
+  const { toast, confirmDanger } = useFeedback()
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState(false)
   const [tab, setTab] = useState<TabKey>('alerts')
@@ -211,13 +212,13 @@ export function StaffAccessPage() {
 
   const alertColumns: ColumnsType<StaffAlert> = [
     {
-      title: '언제',
+      title: '발생 시각',
       dataIndex: 'detectedAt',
       width: 120,
       render: (v: string) => relativeTime(v, now),
     },
-    { title: '걸린 규칙', dataIndex: 'ruleCode', width: 190, render: (v: string) => ruleName(v) },
-    { title: '무슨 일', dataIndex: 'summary' },
+    { title: '적중 Rule', dataIndex: 'ruleCode', width: 190, render: (v: string) => ruleName(v) },
+    { title: '내용', dataIndex: 'summary' },
     {
       title: '위험도',
       dataIndex: 'severity',
@@ -238,7 +239,7 @@ export function StaffAccessPage() {
   const sessionColumns: ColumnsType<StaffSession> = [
     { title: '직원', dataIndex: 'displayName', width: 110 },
     {
-      title: '어디서 · 기기',
+      title: '접속 위치 · 기기',
       render: (_, s) => (
         <div>
           <Place ip={s.ip} />
@@ -247,7 +248,7 @@ export function StaffAccessPage() {
       ),
     },
     {
-      title: '시작',
+      title: '시작 시각',
       dataIndex: 'startedAt',
       width: 120,
       render: (v: string) => relativeTime(v, now),
@@ -274,13 +275,22 @@ export function StaffAccessPage() {
           <Button
             size="small"
             danger={suspicious.has(s.staffSessionId)}
+            data-tour={suspicious.has(s.staffSessionId) ? 'session-kill' : undefined}
             loading={busy === `s${s.staffSessionId}`}
+            // 되돌릴 수 없는 동작이라 어느 세션인지 확인하고 끊는다
             onClick={() =>
-              void act(
-                `s${s.staffSessionId}`,
-                () => terminateStaffSession(s.staffSessionId),
-                `${s.displayName} 세션을 종료했습니다. 이 기기는 다시 로그인해야 합니다.`,
-              )
+              confirmDanger({
+                title: `${s.displayName} 님의 세션을 끊을까요?`,
+                content: `${placeName(s.ip.label)} · ${s.deviceLabel ?? '기기 정보 없음'} 세션이에요. 끊으면 이 기기는 비밀번호와 OTP로 다시 로그인해야 해요.`,
+                onConfirm: async () => {
+                  await act(
+                    `s${s.staffSessionId}`,
+                    () => terminateStaffSession(s.staffSessionId),
+                    `${s.displayName} 세션을 종료했습니다. 이 기기는 다시 로그인해야 합니다.`,
+                  )
+                  window.dispatchEvent(new CustomEvent(TUTORIAL_EVENT, { detail: 'SESSION_ENDED' }))
+                },
+              })
             }
           >
             종료
@@ -291,7 +301,7 @@ export function StaffAccessPage() {
 
   const loginColumns: ColumnsType<StaffLoginEvent> = [
     {
-      title: '언제',
+      title: '발생 시각',
       dataIndex: 'occurredAt',
       width: 120,
       render: (v: string) => relativeTime(v, now),
@@ -302,7 +312,7 @@ export function StaffAccessPage() {
       render: (_, e) =>
         data.accounts.find((a) => a.userId === e.userId)?.displayName ?? `없는 아이디`,
     },
-    { title: '어디서', render: (_, e) => <Place ip={e.ip} /> },
+    { title: '접속 위치', render: (_, e) => <Place ip={e.ip} /> },
     {
       title: '결과',
       dataIndex: 'result',
@@ -452,7 +462,7 @@ export function StaffAccessPage() {
           {attackView === 'ip' ? (
             <>
               <p className="dw-attack-lead">
-                최근 10분, 사내망 밖 IP <b>{attack.ips.length}개</b>가 1~
+                마지막 시도 전 10분 동안 사내망 밖 IP <b>{attack.ips.length}개</b>가 1~
                 {Math.max(...attack.ips.map((i) => i.failures))}번씩 실패했어요.{' '}
                 {attack.belowPerIpThreshold &&
                   `IP 하나씩 보면 모두 "10분 ${PER_IP_THRESHOLD}회" 기준 아래라 기존 규칙으로는 경보가 없어요.`}
@@ -514,7 +524,7 @@ export function StaffAccessPage() {
           },
           {
             key: 'sessions',
-            label: `세션 ${active.length}`,
+            label: <span data-tour="session-kill">세션 {active.length}</span>,
             children: (
               <Card
                 className="dw-table-card"

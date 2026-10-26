@@ -8,7 +8,7 @@ import {
   StaffActionForbiddenError,
 } from '../auth.ts'
 import { ApiError } from '../client.ts'
-import { getMockActor, setMockActor } from './investigation.ts'
+import { getMockActor, mockRecordStaffAction, setMockActor } from './investigation.ts'
 import { mockEpoch, mockRespond } from './respond.ts'
 import type {
   AuthUser,
@@ -414,6 +414,7 @@ export async function mockTerminateStaffSession(staffSessionId: number): Promise
   const found = sessionsNow().find((s) => s.staffSessionId === staffSessionId)
   if (!found || found.endedAt !== null) throw new StaffActionDoneError()
   terminated.set(staffSessionId, new Date().toISOString())
+  mockRecordStaffAction(found.userId, 'KILL_SESSIONS')
   return mockRespond(sessionsNow().find((s) => s.staffSessionId === staffSessionId)!)
 }
 

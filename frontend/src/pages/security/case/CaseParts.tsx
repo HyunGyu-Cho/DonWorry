@@ -122,8 +122,10 @@ export function AiSummaryCard(props: {
   run: ReportRun | null
   reportPath: string
   now: Date
+  // 이미 한 조치와 같은 권고인지 (✓ 완료 표시)
+  doneOf?: (label: string) => boolean
 }) {
-  const { report, run, reportPath, now } = props
+  const { report, run, reportPath, now, doneOf } = props
   // 조사 중이면 결론 대신 과정을 실시간으로 (보고서 화면은 끝난 뒤에 생긴다)
   if (run?.status === 'RUNNING') {
     return (
@@ -176,14 +178,20 @@ export function AiSummaryCard(props: {
         </div>
       </div>
       <div className="dw-pa-chips">
-        {report.recommendations.map((r) => (
-          <Tag
-            key={r.label}
-            color={r.kind === 'NEGATIVE' ? 'red' : r.kind === 'POSITIVE' ? 'green' : 'blue'}
-          >
-            {r.label}
-          </Tag>
-        ))}
+        {report.recommendations.map((r) =>
+          doneOf?.(r.label) ? (
+            <Tag key={r.label} color="green" title="이미 했어요">
+              ✓ {r.label}
+            </Tag>
+          ) : (
+            <Tag
+              key={r.label}
+              color={r.kind === 'NEGATIVE' ? 'red' : r.kind === 'POSITIVE' ? 'green' : 'blue'}
+            >
+              {r.label}
+            </Tag>
+          ),
+        )}
       </div>
       {/* 끝난 조사도 사건 화면에서 바로 다시 볼 수 있게 (자세한 건 [AI 보고서]의 과정 탭) */}
       {report.trace.length > 0 && (

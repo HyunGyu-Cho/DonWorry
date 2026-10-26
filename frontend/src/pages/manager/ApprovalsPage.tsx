@@ -1,3 +1,4 @@
+import { TUTORIAL_EVENT } from '../../components/tutorial/tutorialStore'
 import { Alert, Button, Card, Input, Modal, Spin, Table, Tabs, Tag, Tooltip } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useCallback, useEffect, useState } from 'react'
@@ -96,6 +97,8 @@ export function ApprovalsPage() {
       )
       close()
       await load()
+      // 튜토리얼이 "승인 · 거절" 단계를 마친 것으로 알게
+      window.dispatchEvent(new CustomEvent(TUTORIAL_EVENT, { detail: 'APPROVAL_DECIDED' }))
     } catch (e) {
       void toast.error(
         e instanceof SelfApprovalError ||
@@ -146,7 +149,7 @@ export function ApprovalsPage() {
 
   const columns: ColumnsType<ApprovalRequest> = [
     {
-      title: '무엇을',
+      title: '요청 대상',
       key: 'what',
       render: (_, a) => (
         <div>
@@ -181,7 +184,7 @@ export function ApprovalsPage() {
       ),
     },
     {
-      title: '누가 · 왜',
+      title: '요청자 · 사유',
       key: 'who',
       render: (_, a) => (
         <div>
@@ -192,7 +195,7 @@ export function ApprovalsPage() {
       ),
     },
     {
-      title: '상태',
+      title: '처리 상태',
       key: 'status',
       width: 170,
       render: (_, a) => (

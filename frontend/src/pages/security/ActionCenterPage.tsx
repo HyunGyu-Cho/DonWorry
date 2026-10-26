@@ -100,7 +100,7 @@ export function ActionCenterPage() {
 
   const columns: ColumnsType<HandoffRow> = [
     {
-      title: '조치',
+      title: '조치 유형',
       key: 'action',
       width: 130,
       render: (_, r) => (
@@ -135,7 +135,7 @@ export function ActionCenterPage() {
       ),
     },
     {
-      title: '진행',
+      title: '처리 단계',
       key: 'stage',
       width: 300,
       render: (_, r) => {
@@ -156,7 +156,7 @@ export function ActionCenterPage() {
       },
     },
     {
-      title: '요청',
+      title: '요청 시각',
       dataIndex: 'requestedAt',
       width: 110,
       render: (v: string) => relativeTime(v, now),

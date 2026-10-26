@@ -136,7 +136,7 @@ export function BlocklistPage() {
       render: (t: BlocklistType) => <Tag>{typeLabel(t)}</Tag>,
     },
     {
-      title: '값 · 사유',
+      title: '차단 값 · 등록 사유',
       key: 'value',
       render: (_, b) => {
         const label = blocklistValueLabel(b)
@@ -150,7 +150,7 @@ export function BlocklistPage() {
       },
     },
     {
-      title: '등록',
+      title: '등록 시각',
       key: 'created',
       width: 150,
       render: (_, b) => (

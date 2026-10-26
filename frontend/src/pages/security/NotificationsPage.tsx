@@ -90,7 +90,7 @@ export function NotificationsPage() {
   const shown = tab === 'ALL' ? rows : rows.filter((r) => r.recipientType === tab)
   const columns: ColumnsType<Notification> = [
     {
-      title: '시각',
+      title: '발송 시각',
       dataIndex: 'createdAt',
       width: 110,
       render: (v: string) => relativeTime(v, now),
@@ -109,7 +109,7 @@ export function NotificationsPage() {
       ),
     },
     {
-      title: '종류 · 제목',
+      title: '메일 유형 · 제목',
       key: 'subject',
       render: (_, n) => (
         <div>

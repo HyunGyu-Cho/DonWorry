@@ -6,7 +6,7 @@ import type { ReportRun, ReportStep, ReportStepKind, ReportToolName } from '../.
 export type StepDef = [ReportStepKind, string, ReportToolName | null, number, string, string]
 
 const TOOL_LABEL: Record<ReportToolName, string> = {
-  get_fds_evidence: 'FDS 점수 · 걸린 Rule 조회',
+  get_fds_evidence: 'FDS 점수 · 적중 Rule 조회',
   get_case_payments: '사건에 묶인 결제 조회',
   get_payment_history: '고객 과거 결제 조회',
   get_payment_authentication: '카드 인증 · 승인 정보 조회',
