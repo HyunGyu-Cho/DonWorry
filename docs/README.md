@@ -16,6 +16,7 @@
 | 현재 코드와 화면 | 저장소 소스, [프로젝트 README](../README.md#현재-상태), [프론트 README](../frontend/README.md#개발) |
 | 화면 원칙 · 공통 부품 | [화면 원칙](frontend/screen-principles.md) — ID 대신 사람 말, 결론 먼저, 평소와 비교, 원본 값은 펼치기 |
 | 시연 시나리오 흐름 | [흐름 기록](frontend/e2e-scenarios.md) — 시나리오 5개를 누르는 순서와 고친 것, 자동 테스트 `npm run e2e` |
+| AI 조사 흐름 | [조사 흐름 그림](ai-server/investigation-graph.md) — LangGraph 그래프에서 자동 생성 ([ADR-0021](decisions/0021-ai-investigation-langgraph.md)) |
 | 1차 CakeShop 연동 | [cakeshop_refactoring](https://github.com/team-sweethan/cakeshop_refactoring) (DonWorry 연동에 맞게 수정 중) |
 | 작업 규칙·자동 검사 | [AGENTS](../AGENTS.md), [규칙 지도](conventions/README.md), [CI](ci/README.md) |
 
