@@ -52,7 +52,14 @@ npm run build
 npm run test
 ```
 
-`npm run test`는 Node 22.6 이상에서 기본 TypeScript 실행 기능과 `node:test`를 사용합니다. 별도 테스트 라이브러리는 추가하지 않습니다.
+`npm run test`는 Node 22.6 이상에서 기본 TypeScript 실행 기능과 `node:test`를 사용합니다. 단위 테스트에는 별도 라이브러리를 추가하지 않습니다.
+
+시연 시나리오 5개를 브라우저로 끝까지 눌러 보는 테스트는 Playwright로 돌립니다. Mock 모드 개발 서버(5174번 포트)를 알아서 띄웁니다. 흐름은 [docs/frontend/e2e-scenarios.md](../docs/frontend/e2e-scenarios.md)에 있습니다.
+
+```bash
+npx playwright install chromium   # 처음 한 번
+npm run e2e                       # 약 1분 30초
+```
 
 실제 사용자 정보는 메모리에만 두고 새로고침·경로 이동 시 `/api/auth/me`로 확인합니다. 확인 중에는 보호 본문을 표시하지 않으며, 401은 비로그인/세션 만료로 처리하고 연결 실패·5xx는 관리자 화면에서 오류·재시도로 구분합니다. 로그인 화면은 보호 본문이 없으므로 경고와 함께 로그인 폼을 그대로 보여줍니다. 로그아웃은 서버 204 응답 후 완료합니다.
 

@@ -33,7 +33,7 @@ export const SCENARIOS: Scenario[] = [
     roleLabel: '보안 관리자',
     loginId: 'yunseo',
     summary: 'IP 30곳에서 1~3번씩 로그인을 시도해 직원 계정들을 노려요.',
-    sees: ['로그인 모니터링', '계정 기준으로 묶은 사건', 'AI 조사 실패 → 재시도', '계정 조치'],
+    sees: ['계정 기준으로 묶은 사건', 'AI 조사 실패 → 재시도', '로그인 모니터링 계정별 보기'],
     minutes: 5,
   },
   {
@@ -58,8 +58,8 @@ export const SCENARIOS: Scenario[] = [
     title: '직원 계정 탈취',
     roleLabel: '보안 관리자',
     loginId: 'yunseo',
-    summary: '낯선 기기에서 직원 계정으로 로그인한 뒤 차단 해제를 요청해요.',
-    sees: ['의심 세션', '관리자 승인함의 위험 표시', '세션 종료 · 계정 잠금', '감사 로그'],
+    summary: '낯선 기기에서 직원 계정으로 로그인한 뒤 탐지 Rule을 끄려고 해요.',
+    sees: ['관리자 승인함의 위험 표시', '의심 세션 종료', '계정 탈취 사건', '감사 로그'],
     minutes: 4,
   },
   {
@@ -69,7 +69,7 @@ export const SCENARIOS: Scenario[] = [
     roleLabel: '보안 직원',
     loginId: 'jiwon',
     summary: '짧은 시간에 여러 카드로 결제를 시도해 쓸 수 있는 카드를 찾아요.',
-    sees: ['자동 거절된 경보', '차단 목록 등록', '같은 기기의 재시도 차단'],
+    sees: ['자동 거절된 경보', '차단 목록 등록', '차단 목록 확인'],
     minutes: 3,
   },
 ]
