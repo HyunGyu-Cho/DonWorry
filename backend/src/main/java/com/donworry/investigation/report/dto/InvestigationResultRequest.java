@@ -20,4 +20,9 @@ public record InvestigationResultRequest(
     public boolean isSucceeded() {
         return "SUCCEEDED".equals(status);
     }
+
+    // ai-server 조사가 끝났는지 — 조회(2-18)에서 아직 조사 중이면 false
+    public boolean isFinished() {
+        return "SUCCEEDED".equals(status) || "FAILED".equals(status);
+    }
 }

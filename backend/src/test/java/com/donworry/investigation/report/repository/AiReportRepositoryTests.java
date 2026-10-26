@@ -132,6 +132,7 @@ class AiReportRepositoryTests {
             case RUNNING -> aiReportRepository.markRunning(id);
             case SUCCEEDED -> aiReportRepository.markSucceeded(id, BODY, NOW);
             case FAILED -> aiReportRepository.markFailed(id, ERROR, NOW);
+            case SUPERSEDED -> aiReportRepository.markSuperseded(id, NOW);
         }
         assertThat(reload(id).getStatus()).isEqualTo(status);
         return id;
@@ -143,6 +144,7 @@ class AiReportRepositoryTests {
             case RUNNING -> aiReportRepository.markRunning(reportId);
             case SUCCEEDED -> aiReportRepository.markSucceeded(reportId, BODY, NOW.plusSeconds(1));
             case FAILED -> aiReportRepository.markFailed(reportId, ERROR, NOW.plusSeconds(1));
+            case SUPERSEDED -> aiReportRepository.markSuperseded(reportId, NOW.plusSeconds(1));
         };
     }
 

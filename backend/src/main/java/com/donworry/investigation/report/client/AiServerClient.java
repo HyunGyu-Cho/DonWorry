@@ -1,15 +1,18 @@
 package com.donworry.investigation.report.client;
 
+import com.donworry.investigation.report.dto.InvestigationResultRequest;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
-// ai-server 조사 접수 호출 (ADR-0009 결정 1). 트랜잭션 밖에서만 부른다 (02-code 4절)
+// ai-server 조사 접수 · 결과 조회 호출 (ADR-0009 결정 1 · 2). 트랜잭션 밖에서만 부른다 (02-code 4절)
 // 결과는 부른 쪽이 판단하도록 접수 · 다시 해 볼 실패 · 다시 해도 같은 실패로만 나눠 돌려준다
 public class AiServerClient {
 
@@ -51,6 +54,23 @@ public class AiServerClient {
         } catch (ResourceAccessException e) {
             // 연결 실패 · 응답 시간 초과
             return Outcome.retryable("ai-server 연결 실패 · 시간 초과");
+        }
+    }
+
+    // 결과가 제때 오지 않을 때 직접 물어본다 (2-18). ai-server는 끝난 조사 결과를 잠시 들고 있다
+    // 없음(404) · 연결 실패 · 형식 오류는 모두 빈 값 — 부른 쪽이 시간 초과 1회로 센다
+    public Optional<InvestigationResultRequest> findResult(Long reportId, UUID attemptId) {
+        try {
+            InvestigationResultRequest result = restClient
+                    .get()
+                    .uri("/investigations/{reportId}?attemptId={attemptId}", reportId, attemptId)
+                    .header(SERVICE_KEY_HEADER, serviceKey)
+                    .exchange((request, response) -> response.getStatusCode().is2xxSuccessful()
+                            ? response.bodyTo(InvestigationResultRequest.class)
+                            : null);
+            return Optional.ofNullable(result);
+        } catch (RestClientException e) {
+            return Optional.empty();
         }
     }
 

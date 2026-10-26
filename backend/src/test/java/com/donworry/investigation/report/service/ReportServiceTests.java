@@ -97,9 +97,23 @@ class ReportServiceTests {
         assertThat(reportsOf(securityCase.getId())).hasSize(1);
     }
 
-    // 같은 Case에 끝나지 않은 보고서가 있으면 새로 만들지 않는다
+    // 같은 증거 버전으로 조사 중이면 새로 만들지 않는다
     @Test
-    void request_whilePending_createsNothing() {
+    void request_whilePendingSameEvidence_createsNothing() {
+        SecurityCase securityCase = caseWithPayment();
+        aiReportRepository.save(AiReport.pending(securityCase.getId(), 1, 1, Instant.now()));
+
+        reportService.request(securityCase.getId(), 1);
+
+        assertThat(reportsOf(securityCase.getId()))
+                .singleElement()
+                .extracting(AiReport::getStatus)
+                .isEqualTo(ReportStatus.PENDING);
+    }
+
+    // 낡은 증거로 조사 중일 때 새 증거 버전이 오면 그 조사는 대체됨, 바로 다음 버전을 만든다 (2-18, ADR-0009 결정 3 개정)
+    @Test
+    void request_whilePendingOlderEvidence_supersedesAndCreatesNext() {
         SecurityCase securityCase = caseWithPayment();
         aiReportRepository.save(AiReport.pending(securityCase.getId(), 1, 1, Instant.now()));
         securityCase.increaseEvidenceVersion();
@@ -108,9 +122,8 @@ class ReportServiceTests {
         reportService.request(securityCase.getId(), 2);
 
         assertThat(reportsOf(securityCase.getId()))
-                .singleElement()
-                .extracting(AiReport::getStatus)
-                .isEqualTo(ReportStatus.PENDING);
+                .extracting(AiReport::getReportVersion, AiReport::getEvidenceVersion, AiReport::getStatus)
+                .containsExactly(tuple(1, 1, ReportStatus.SUPERSEDED), tuple(2, 2, ReportStatus.SUCCEEDED));
     }
 
     // 결제 정보를 못 찾으면 FAILED로 남기고, DB에는 실패 이유가 있지만 P3에는 본문을 넘기지 않는다

@@ -56,6 +56,11 @@ class AiServerReportWriter implements ReportWriter {
         Outcome last = null;
         List<Long> paymentIds = reportTransitions.casePaymentIds(target.caseId());
         while (attemptRegistry.attempts(reportId) < MAX_ATTEMPTS) {
+            // 쉬는 사이 새 정보로 대체됐으면 더 요청하지 않는다 (2-18)
+            if (reportTransitions.isFinished(reportId)) {
+                attemptRegistry.forget(reportId);
+                return;
+            }
             UUID attemptId = attemptRegistry.next(reportId);
             int attempt = attemptRegistry.attempts(reportId);
             last = aiServerClient.requestInvestigation(

@@ -21,7 +21,8 @@ export type CaseStatus =
   | 'CLOSED'
 // 결제 사기 + 직원 계정 사건 2종 (새 기획, security_cases.case_type)
 export type CaseType = 'PAYMENT_FRAUD' | 'STAFF_TAKEOVER' | 'STAFF_SPRAY'
-export type ReportStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+// SUPERSEDED = 조사 중 새 정보가 와서 새 버전이 이어받음 (2-18) — 최신 버전은 늘 새 버전이라 화면 흐름은 그대로
+export type ReportStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'SUPERSEDED'
 export type Decision = 'ACCEPT' | 'REJECT'
 export type ActionType = 'CAPTURE' | 'VOID'
 export type HandoffStatus = 'REQUESTED' | 'ACCEPTED' | 'FAILED'

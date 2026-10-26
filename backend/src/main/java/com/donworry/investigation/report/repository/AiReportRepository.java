@@ -74,4 +74,21 @@ public interface AiReportRepository extends Repository<AiReport, Long> {
             @Param("reportId") Long reportId,
             @Param("errorBody") Map<String, Object> errorBody,
             @Param("completedAt") Instant completedAt);
+
+    // 조사 중 새 정보가 와서 새 버전이 이어받을 때. PENDING · RUNNING일 때만 — 본문은 비워 둔다 (2-18)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE AiReport r
+               SET r.status = com.donworry.investigation.report.entity.ReportStatus.SUPERSEDED,
+                   r.completedAt = :completedAt
+             WHERE r.id = :reportId
+               AND r.status IN (com.donworry.investigation.report.entity.ReportStatus.PENDING,
+                                com.donworry.investigation.report.entity.ReportStatus.RUNNING)
+            """)
+    int markSuperseded(@Param("reportId") Long reportId, @Param("completedAt") Instant completedAt);
+
+    // 아직 끝나지 않은 보고서 — 대체할 진행 중 조사(2-18), 재시작 때 남은 조사(2-18)
+    List<AiReport> findByCaseIdAndStatusIn(Long caseId, Collection<ReportStatus> statuses);
+
+    List<AiReport> findByStatusIn(Collection<ReportStatus> statuses);
 }

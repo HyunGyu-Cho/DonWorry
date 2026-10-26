@@ -23,6 +23,7 @@ import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.client.AiServerClient;
 import com.donworry.investigation.report.client.AiServerClient.Kind;
 import com.donworry.investigation.report.client.AiServerClient.Outcome;
+import com.donworry.investigation.report.dto.InvestigationResultRequest;
 import com.donworry.investigation.report.entity.AiReport;
 import com.donworry.investigation.report.entity.ReportStatus;
 import com.donworry.investigation.report.repository.AiReportRepository;
@@ -35,6 +36,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -52,7 +54,13 @@ import tools.jackson.databind.json.JsonMapper;
 // ai-server 모드에서 사건 → 조사 요청 → 결과 수신 → 완료 · 다시 시도 · 실패를 실제 MariaDB로 확인한다
 // ai-server 호출 도구만 가짜로 바꾸고, 결과는 ai-server처럼 HTTP로 보낸다
 @Tag("mariadb")
-@SpringBootTest(properties = {"donworry.report.writer=ai-server", "donworry.ai-server.service-key=test-key"})
+// 주기 검사가 다른 테스트의 남은 시도를 건드리지 않게 대기 시간을 길게 두고, 시간 초과는 check()로 직접 부른다
+@SpringBootTest(
+        properties = {
+            "donworry.report.writer=ai-server",
+            "donworry.ai-server.service-key=test-key",
+            "donworry.report.result-timeout=PT1H"
+        })
 @AutoConfigureMockMvc
 @Import(MariaDbTestContainerConfig.class)
 class ReportResultFlowTests {
@@ -82,6 +90,12 @@ class ReportResultFlowTests {
 
     @MockitoBean
     AiServerClient aiServerClient;
+
+    @Autowired
+    ReportTimeoutChecker timeoutChecker;
+
+    @Autowired
+    ReportRestartRecovery restartRecovery;
 
     SecurityCase securityCase;
     Long paymentId;
@@ -290,5 +304,83 @@ class ReportResultFlowTests {
         send(sent.reportId(), result(sent, "SUCCEEDED", String.valueOf(paymentId)), KEY, 204);
 
         assertThat(report(sent.reportId()).getCompletedAt()).isEqualTo(completedAt);
+    }
+
+    private Map<String, Object> errorOf(Long reportId) {
+        return report(reportId).getReportBody();
+    }
+
+    // 2분 안에 결과가 안 오고 ai-server에도 없으면 시도 1번 실패 — 3번째에 FAILED (2-18)
+    @Test
+    void timeout_noResult_retriesThenFails() {
+        Sent sent = requestInvestigation();
+        Long reportId = sent.reportId();
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            timeoutChecker.check(reportId, sent.attemptId());
+            if (attempt < 3) {
+                int calls = attempt + 1;
+                await().atMost(Duration.ofSeconds(10))
+                        .untilAsserted(() -> verify(aiServerClient, times(calls))
+                                .requestInvestigation(
+                                        eq(reportId), any(), anyLong(), anyString(), anyInt(), anyList()));
+                sent = lastSent();
+            }
+        }
+
+        assertThat(report(sent.reportId()).getStatus()).isEqualTo(ReportStatus.FAILED);
+        assertThat(errorOf(sent.reportId()).get("error").toString()).contains("AI_RESULT_TIMEOUT", "attempts=3");
+    }
+
+    // 결과 보내기만 실패하고 ai-server가 결과를 들고 있으면 직접 가져와 완료 (2-18)
+    @Test
+    void timeout_resultHeldByAiServer_completes() {
+        Sent sent = requestInvestigation();
+        InvestigationResultRequest held = mapper.convertValue(
+                result(sent, "SUCCEEDED", String.valueOf(paymentId)), InvestigationResultRequest.class);
+        when(aiServerClient.findResult(sent.reportId(), sent.attemptId())).thenReturn(Optional.of(held));
+
+        timeoutChecker.check(sent.reportId(), sent.attemptId());
+
+        assertThat(report(sent.reportId()).getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
+    }
+
+    // 조사 중 새 정보(증거 버전 2)가 오면 v1은 대체됨, v2를 바로 조사 — v1의 늦은 결과는 무시 (2-18)
+    @Test
+    void newEvidence_supersedesRunningAndIgnoresLateResult() throws Exception {
+        Sent first = requestInvestigation();
+        SecurityCase merged =
+                securityCaseRepository.findById(securityCase.getId()).orElseThrow();
+        merged.increaseEvidenceVersion();
+        securityCaseRepository.save(merged);
+
+        clearInvocations(aiServerClient);
+        reportService.request(securityCase.getId(), 2);
+        Sent second = lastSent();
+
+        assertThat(second.reportId()).isNotEqualTo(first.reportId());
+        assertThat(report(first.reportId()).getStatus()).isEqualTo(ReportStatus.SUPERSEDED);
+        assertThat(report(second.reportId()).getStatus()).isEqualTo(ReportStatus.RUNNING);
+        assertThat(report(second.reportId()).getReportVersion()).isEqualTo(2);
+
+        send(first.reportId(), result(first, "SUCCEEDED", String.valueOf(paymentId)), KEY, 204);
+
+        assertThat(report(first.reportId()).getStatus()).isEqualTo(ReportStatus.SUPERSEDED);
+        assertThat(report(first.reportId()).getReportBody()).isNull();
+    }
+
+    // Spring이 다시 켜지면 조사 중으로 남은 보고서는 실패로 닫고, 사건은 직원 직접 판정으로 (2-18 결정 (가))
+    @Test
+    void restart_closesUnfinishedAsFailed() {
+        Sent sent = requestInvestigation();
+
+        restartRecovery.closeUnfinished();
+
+        assertThat(report(sent.reportId()).getStatus()).isEqualTo(ReportStatus.FAILED);
+        assertThat(errorOf(sent.reportId()).get("error").toString()).contains("SERVER_RESTARTED");
+        assertThat(securityCaseRepository
+                        .findById(securityCase.getId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(CaseStatus.DECISION_PENDING);
     }
 }
