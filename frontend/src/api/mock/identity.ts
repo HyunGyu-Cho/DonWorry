@@ -219,23 +219,51 @@ function signIn(user: AuthUser): AuthUser {
   return copy
 }
 
-// 진행 중인 2단계 인증 요청: challengeId → 사용자 · 틀린 횟수
-const challenges = new Map<string, { user: AuthUser; failures: number }>()
+// 진행 중인 2단계 인증 요청: challengeId → 사용자 · 틀린 횟수 · 확인 방법
+const challenges = new Map<string, { user: AuthUser; failures: number; method: 'OTP' | 'EMAIL' }>()
+
+// 사장님 위험 기반 확인 (1-13, 현규 결정 B): 처음 보는 기기이거나 비밀번호를 5번 이상 틀린 뒤면 이메일 6자리
+export const DEMO_EMAIL_CODE = '135790'
+export const OWNER_STEP_UP_FAILURES = 5
+// 사장님 가입 이메일 (가린 값만 화면에 보낸다)
+const OWNER_EMAIL: Record<string, string> = { boss: 'o****@cakeshop.kr' }
+// 비밀번호를 연달아 틀린 횟수 (아이디별) · 이번 화면에서 확인을 마친 기기 (새로 고침하면 다시 새 기기)
+const passwordFailures = new Map<string, number>()
+const knownDevices = new Set<string>()
 // OTP를 이만큼 틀리면 계정을 잠근다 (Mock은 이번 요청만 끝냄)
 export const MAX_OTP_FAILURES = 5
 
 export async function mockStartLogin(loginId: string, password: string): Promise<LoginStep> {
   await mockRespond(null)
-  const found = MOCK_USERS.find((u) => u.loginId === loginId.trim().toLowerCase())
-  if (!found || password !== DEMO_PASSWORD) throw new InvalidCredentialsError()
+  const id = loginId.trim().toLowerCase()
+  const found = MOCK_USERS.find((u) => u.loginId === id)
+  if (!found || password !== DEMO_PASSWORD) {
+    if (found) passwordFailures.set(id, (passwordFailures.get(id) ?? 0) + 1)
+    throw new InvalidCredentialsError()
+  }
   if (lockedUsers.has(found.userId)) throw new AccountLockedError()
-  if (!needsOtp(found)) return { status: 'SUCCESS', user: signIn(found) }
   const challengeId = `mock-${found.loginId}-${Date.now()}`
-  challenges.set(challengeId, { user: found, failures: 0 })
+  const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString()
+  if (needsOtp(found)) {
+    challenges.set(challengeId, { user: found, failures: 0, method: 'OTP' })
+    return { status: 'OTP_REQUIRED', challengeId, expiresAt, method: 'OTP' }
+  }
+  // 사장님: 평소엔 바로 끝, 위험할 때만 이메일 확인
+  const reason =
+    (passwordFailures.get(id) ?? 0) >= OWNER_STEP_UP_FAILURES
+      ? 'FAILED_ATTEMPTS'
+      : !knownDevices.has(id)
+        ? 'NEW_DEVICE'
+        : null
+  if (!reason) return { status: 'SUCCESS', user: signIn(found) }
+  challenges.set(challengeId, { user: found, failures: 0, method: 'EMAIL' })
   return {
     status: 'OTP_REQUIRED',
     challengeId,
-    expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    expiresAt,
+    method: 'EMAIL',
+    sentTo: OWNER_EMAIL[id] ?? '가입한 이메일',
+    reason,
   }
 }
 
@@ -253,11 +281,20 @@ async function finishChallenge(challengeId: string, ok: boolean): Promise<AuthUs
     throw new InvalidOtpError()
   }
   challenges.delete(challengeId)
+  // 확인을 마치면 실패 횟수를 지우고 이 기기를 기억한다
+  passwordFailures.delete(found.user.loginId)
+  knownDevices.add(found.user.loginId)
   return signIn(found.user)
 }
 
-export const mockVerifyOtp = (challengeId: string, code: string) =>
-  finishChallenge(challengeId, code.trim() === DEMO_OTP)
+// 6자리 확인 — 인증 앱(OTP) 또는 이메일 코드
+export const mockVerifyOtp = (challengeId: string, code: string) => {
+  const method = challenges.get(challengeId)?.method
+  return finishChallenge(
+    challengeId,
+    code.trim() === (method === 'EMAIL' ? DEMO_EMAIL_CODE : DEMO_OTP),
+  )
+}
 
 export const mockSubmitRecoveryCode = (challengeId: string, recoveryCode: string) =>
   finishChallenge(challengeId, recoveryCode.trim().toUpperCase() === DEMO_RECOVERY_CODE)
@@ -325,6 +362,8 @@ export function resetMockIdentity() {
   lockedUsers.clear()
   for (const [userId, reason] of INITIAL_LOCKS) lockedUsers.set(userId, reason)
   challenges.clear()
+  passwordFailures.clear()
+  knownDevices.clear()
   saveSession(null)
 }
 

@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
-import { AccountLockedError, InvalidOtpError } from '../src/api/auth.ts'
+import { beforeEach, test } from 'node:test'
+import { AccountLockedError, InvalidCredentialsError, InvalidOtpError } from '../src/api/auth.ts'
 import {
   buildMockLoginEvents,
+  DEMO_EMAIL_CODE,
   DEMO_OTP,
   mockStartLogin,
   mockVerifyOtp,
+  resetMockIdentity,
 } from '../src/api/mock/identity.ts'
+
+beforeEach(() => resetMockIdentity())
 
 const challengeOf = async (loginId: string) => {
   const step = await mockStartLogin(loginId, '1234')
@@ -25,8 +29,9 @@ test('mockVerifyOtp_whenWrongCode_rejects', async () => {
   await assert.rejects(mockVerifyOtp(challengeId, DEMO_OTP), InvalidOtpError)
 })
 
-// 직원은 OTP를 거쳐야 하고, 사장님은 비밀번호만으로 끝난다
+// 직원은 OTP를 거쳐야 하고, 사장님은 평소엔 비밀번호만으로 끝난다 (처음 보는 기기면 이메일 확인 — 아래 테스트)
 test('mockStartLogin_whenStaff_requiresOtp_whenOwner_succeeds', async () => {
+  await passEmailStep('boss')
   for (const loginId of ['jiwon', 'yunseo']) {
     assert.equal((await mockStartLogin(loginId, '1234')).status, 'OTP_REQUIRED')
   }
@@ -35,6 +40,33 @@ test('mockStartLogin_whenStaff_requiresOtp_whenOwner_succeeds', async () => {
   const owner = await mockStartLogin('boss', '1234')
   assert.equal(owner.status, 'SUCCESS')
   assert.equal(owner.status === 'SUCCESS' && owner.user.role, 'OPERATOR')
+})
+
+// 사장님 첫 로그인(새 기기)을 이메일 코드로 마쳐 이 기기를 기억하게 한다
+async function passEmailStep(loginId: string) {
+  const step = await mockStartLogin(loginId, '1234')
+  if (step.status === 'OTP_REQUIRED') await mockVerifyOtp(step.challengeId, DEMO_EMAIL_CODE)
+}
+
+// 사장님은 위험할 때만 이메일 확인: 처음 보는 기기 · 비밀번호 5번 이상 틀린 뒤 (비밀번호가 새도 이메일까지 있어야)
+test('ownerLogin_stepUpByEmail_onNewDeviceOrRepeatedFailures', async () => {
+  const first = await mockStartLogin('boss', '1234')
+  assert.equal(first.status, 'OTP_REQUIRED')
+  assert.equal(first.status === 'OTP_REQUIRED' && first.method, 'EMAIL')
+  assert.equal(first.status === 'OTP_REQUIRED' && first.reason, 'NEW_DEVICE')
+  assert.match((first.status === 'OTP_REQUIRED' && first.sentTo) || '', /\*/)
+  if (first.status !== 'OTP_REQUIRED') return
+  // 인증 앱 코드(직원용)로는 통과하지 못한다
+  await assert.rejects(mockVerifyOtp(first.challengeId, '246810'), InvalidOtpError)
+  await mockVerifyOtp(first.challengeId, DEMO_EMAIL_CODE)
+  // 확인한 기기는 다음부터 묻지 않는다
+  assert.equal((await mockStartLogin('boss', '1234')).status, 'SUCCESS')
+  // 비밀번호를 5번 틀린 뒤에는 기억한 기기라도 다시 묻는다
+  for (let i = 0; i < 5; i += 1) {
+    await assert.rejects(mockStartLogin('boss', 'wrong'), InvalidCredentialsError)
+  }
+  const after = await mockStartLogin('boss', '1234')
+  assert.equal(after.status === 'OTP_REQUIRED' && after.reason, 'FAILED_ATTEMPTS')
 })
 
 // 분산 공격 데이터가 직원 Rule 6 · 7 기준(10분)에 맞아야 시연이 성립한다

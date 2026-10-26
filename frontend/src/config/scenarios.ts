@@ -10,7 +10,7 @@ export type Scenario = {
   roleLabel: string
   loginId: string
   summary: string
-  // 보게 되는 장면 (2~4개)
+  // 보게 되는 장면 (2~5개)
   sees: string[]
   minutes: number
 }
@@ -43,7 +43,13 @@ export const SCENARIOS: Scenario[] = [
     roleLabel: '사장님',
     loginId: 'boss',
     summary: '보안 확인 중인 주문 때문에 정산이 늦어져 임대료 날 잔액이 모자라요.',
-    sees: ['보안 확인 결과', '정산 캘린더', '14일 자금 예측', '연계 대출 상품'],
+    sees: [
+      '새 기기 로그인 이메일 확인',
+      '보안 확인 결과',
+      '정산 캘린더',
+      '14일 자금 예측',
+      '연계 대출 상품',
+    ],
     minutes: 3,
   },
   {

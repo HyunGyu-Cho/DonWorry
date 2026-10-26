@@ -1,5 +1,5 @@
 import { advanceApiSession, ApiError } from '../api/client.ts'
-import type { AuthUser, LoginStep } from '../types/auth.ts'
+import type { AuthUser, ChallengeMethod, ChallengeReason, LoginStep } from '../types/auth.ts'
 
 // 화면은 api/identity.ts를 넘긴다 (Mock · 실제 전환). 테스트는 가짜를 넘긴다
 export type AuthApi = {
@@ -11,7 +11,16 @@ export type AuthApi = {
 }
 
 // 로그인 1단계 결과: 끝났거나, OTP가 남았거나
-export type LoginProgress = { done: true } | { done: false; challengeId: string; expiresAt: string }
+export type LoginProgress =
+  | { done: true }
+  | {
+      done: false
+      challengeId: string
+      expiresAt: string
+      method: ChallengeMethod
+      sentTo: string | null
+      reason: ChallengeReason | null
+    }
 export type AuthState = {
   user: AuthUser | null
   status: 'loading' | 'authenticated' | 'anonymous'
@@ -111,7 +120,14 @@ export function createAuthStore(api: AuthApi) {
       const currentGeneration = generation
       const step = await api.startLogin(loginId, password)
       if (step.status === 'OTP_REQUIRED') {
-        return { done: false, challengeId: step.challengeId, expiresAt: step.expiresAt }
+        return {
+          done: false,
+          challengeId: step.challengeId,
+          expiresAt: step.expiresAt,
+          method: step.method ?? 'OTP',
+          sentTo: step.sentTo ?? null,
+          reason: step.reason ?? null,
+        }
       }
       complete(step.user, currentGeneration)
       return { done: true }

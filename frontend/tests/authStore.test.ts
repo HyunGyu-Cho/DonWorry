@@ -248,10 +248,14 @@ test('login_whenOtpRequired_staysAnonymousUntilVerified', async () => {
     },
   })
   const progress = await store.login('jiwon', '1234')
+  // 방법이 없으면 인증 앱(OTP)으로 본다 (method · sentTo · reason은 1-13 보강)
   assert.deepEqual(progress, {
     done: false,
     challengeId: 'c-1',
     expiresAt: '2026-10-24T10:05:00Z',
+    method: 'OTP',
+    sentTo: null,
+    reason: null,
   })
   assert.equal(store.getSnapshot().user, null)
   await store.verifyOtp('c-1', '246810')
