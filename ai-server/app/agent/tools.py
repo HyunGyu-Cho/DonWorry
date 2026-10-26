@@ -2,6 +2,8 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
+from app.schemas.investigation import TraceStep
+
 
 # AI가 고를 수 있는 증거 조회 창구 — Spring /internal/ai/tools/{name} (ADR-0009 Tool 표, #70)
 # 모두 읽기 전용. 사건 범위 검증은 Spring이 한다
@@ -75,3 +77,9 @@ class ToolRunner(Protocol):
     async def call(
         self, report_id: int, attempt_id: str, name: str, args: dict[str, object]
     ) -> str: ...
+
+
+# 조사 단계 알림 경계 — AI 판단 · 형식 검사 한 번이 끝날 때마다 Spring에 알린다 (2-19b)
+# 실패해도 조사는 계속한다. Spring이 "현재 시도 아님"이면 AttemptOutdated로 멈춘다
+class StepReporter(Protocol):
+    async def report(self, report_id: int, attempt_id: str, step: TraceStep) -> None: ...

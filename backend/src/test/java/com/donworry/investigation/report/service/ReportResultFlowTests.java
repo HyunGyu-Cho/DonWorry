@@ -12,6 +12,7 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -424,11 +425,14 @@ class ReportResultFlowTests {
         send(sent.reportId(), result(sent, "SUCCEEDED", String.valueOf(paymentId)), KEY, 204);
 
         List<?> trace = (List<?>) report(sent.reportId()).getReportBody().get("trace");
-        assertThat(trace).hasSize(4);
-        assertThat(trace.get(0).toString()).contains("kind=TOOL", "toolName=get_case_payments", "합계 650,000원");
-        assertThat(trace.get(1).toString()).contains("toolName=get_fds_evidence", "최고 55점", "HIGH_AMOUNT");
-        assertThat(trace.get(2).toString()).contains("toolName=get_security_events", "데이터 준비 전");
-        assertThat(trace.get(3).toString()).contains("kind=VALIDATE", "stepNo=4");
+        // 접수(Spring) → 창구 3개(Spring 기록) → 형식 검사(단계 알림이 없어 결과에 실린 과정) → 저장(Spring)
+        assertThat(trace).hasSize(6);
+        assertThat(trace.get(0).toString()).contains("kind=REQUEST", "조사 요청 접수");
+        assertThat(trace.get(1).toString()).contains("kind=TOOL", "toolName=get_case_payments", "합계 650,000원");
+        assertThat(trace.get(2).toString()).contains("toolName=get_fds_evidence", "최고 55점", "HIGH_AMOUNT");
+        assertThat(trace.get(3).toString()).contains("toolName=get_security_events", "데이터 준비 전");
+        assertThat(trace.get(4).toString()).contains("kind=VALIDATE");
+        assertThat(trace.get(5).toString()).contains("kind=SAVE", "stepNo=6");
     }
 
     // 키 없음 · 틀림 401, 없는 창구 404, 옛 시도 409, 다른 사건 결제 400, 끝난 보고서 409
@@ -457,5 +461,73 @@ class ReportResultFlowTests {
         tool("get_case_payments", second, Map.of(), KEY)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RPT_003"));
+    }
+
+    // ai-server가 AI 판단 · 형식 검사 한 번이 끝날 때마다 알리는 것처럼 (2-19b)
+    private ResultActions step(Sent sent, String kind, boolean ok, String detail) throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("attemptId", sent.attemptId().toString());
+        body.put("kind", kind);
+        body.put("ok", ok);
+        body.put("detail", detail);
+        body.put("startedAt", Instant.now().toString());
+        body.put("durationMs", 1200);
+        return mvc.perform(post("/internal/ai/reports/{reportId}/steps", sent.reportId())
+                .header(AiServerClient.SERVICE_KEY_HEADER, KEY)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(body)));
+    }
+
+    // 조사 중에는 지금까지의 단계 + "지금 하는 단계"가 보이고, 끝나면 같은 기록이 보고서 과정이 된다 (중복 없이)
+    @Test
+    void steps_shownWhileRunningAndBecomeTrace() throws Exception {
+        Sent sent = requestInvestigation();
+        tool("get_fds_evidence", sent, Map.of(), KEY).andExpect(status().isOk());
+        step(sent, "LLM_ANSWER", true, "AI 판단 — 다음에 볼 증거 고르기").andExpect(status().isNoContent());
+
+        String runUrl = "/api/investigation/cases/" + securityCase.getId() + "/report/run";
+        mvc.perform(get(runUrl))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RUNNING"))
+                .andExpect(jsonPath("$.steps.length()").value(4))
+                .andExpect(jsonPath("$.steps[0].kind").value("REQUEST"))
+                .andExpect(jsonPath("$.steps[2].label").value("AI 판단 — 다음에 볼 증거 고르기"))
+                .andExpect(jsonPath("$.steps[3].status").value("RUNNING"))
+                .andExpect(jsonPath("$.steps[3].durationMs").doesNotExist())
+                .andExpect(jsonPath("$.currentStepNo").value(4));
+
+        step(sent, "LLM_ANSWER", true, "AI 판단 — 보고서 작성 (1차)").andExpect(status().isNoContent());
+        step(sent, "VALIDATION", true, "구조 검증 통과").andExpect(status().isNoContent());
+        send(sent.reportId(), result(sent, "SUCCEEDED", String.valueOf(paymentId)), KEY, 204);
+
+        List<?> trace = (List<?>) report(sent.reportId()).getReportBody().get("trace");
+        // 접수 · 창구 · AI 판단 2번 · 검사 · 저장 — 결과에 실려 온 과정은 이미 기록돼 있어 다시 넣지 않는다
+        assertThat(trace).hasSize(6);
+        assertThat(trace.get(4).toString()).contains("kind=VALIDATE", "구조 검증 통과");
+        mvc.perform(get(runUrl))
+                .andExpect(jsonPath("$.status").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.steps.length()").value(6))
+                .andExpect(jsonPath("$.currentStepNo").doesNotExist());
+    }
+
+    // 형식 실패도 단계로 남고, 옛 시도의 단계 알림은 409 — ai-server는 조사를 멈춘다
+    @Test
+    void steps_failedValidationRecordedAndStaleAttemptRejected() throws Exception {
+        Sent first = requestInvestigation();
+        step(first, "VALIDATION", false, "구조 검증 실패: 필수 항목 '확인할 것' 누락 → 다시 시도").andExpect(status().isNoContent());
+        send(first.reportId(), result(first, "FAILED", null), KEY, 204);
+        await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> verify(aiServerClient, times(2))
+                        .requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt(), anyList()));
+
+        step(first, "LLM_ANSWER", true, "늦은 단계")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RPT_003"));
+        String runUrl = "/api/investigation/cases/" + securityCase.getId() + "/report/run";
+        mvc.perform(get(runUrl))
+                .andExpect(jsonPath("$.steps[1].kind").value("LLM_FAILED"))
+                .andExpect(jsonPath("$.steps[1].status").value("FAILED"))
+                .andExpect(jsonPath("$.steps[2].kind").value("REQUEST"))
+                .andExpect(jsonPath("$.steps[2].got").value("ai-server가 조사를 접수함 (2번째 시도)"));
     }
 }

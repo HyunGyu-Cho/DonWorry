@@ -29,12 +29,13 @@ final class ConclusionReportBuilder {
         return build(target, draft, steps, List.of(), payments, generatedAt);
     }
 
-    // toolRows = 이 시도에서 AI가 부른 증거 조회 기록 (ReportToolService.traceRows, 2-19)
+    // recordedRows = 조사 과정 기록 전체 (ReportStepRecorder.rows — 접수 · 증거 조회 · AI 판단 · 검사 · 저장, 2-19b)
+    // steps = ai-server 결과에 실려 온 과정 — 단계 알림이 하나도 기록되지 않았을 때만 넘긴다 (아니면 null)
     static Map<String, Object> build(
             ReportTarget target,
             Map<String, Object> draft,
             List<Map<String, Object>> steps,
-            List<Map<String, Object>> toolRows,
+            List<Map<String, Object>> recordedRows,
             Map<Long, PaymentInfo> payments,
             Instant generatedAt) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -59,7 +60,7 @@ final class ConclusionReportBuilder {
         body.put("paymentRecommendations", paymentRecommendations(target, draft, payments));
         body.put("evidence", List.of());
         body.put("similarCases", List.of());
-        body.put("trace", trace(steps, toolRows));
+        body.put("trace", trace(steps, recordedRows));
         body.put("limitations", LIMITATIONS);
         body.put("model", "ai-server");
         return body;
@@ -90,11 +91,11 @@ final class ConclusionReportBuilder {
     }
 
     // ai-server 조사 과정 → 화면 ReportStep. 형식 검사에 떨어진 단계는 LLM_FAILED (다시 쓰는 단계)
-    // 증거 조회(TOOL)와 AI 판단 · 형식 검사를 시작 시각 순으로 섞고 번호를 다시 매긴다
+    // 기록된 단계와 (있으면) ai-server 과정을 시작 시각 순으로 섞고 번호를 다시 매긴다
     private static List<Map<String, Object>> trace(
-            List<Map<String, Object>> steps, List<Map<String, Object>> toolRows) {
+            List<Map<String, Object>> steps, List<Map<String, Object>> recordedRows) {
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (Map<String, Object> tool : toolRows) {
+        for (Map<String, Object> tool : recordedRows) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("stepNo", 0);
             row.putAll(tool);

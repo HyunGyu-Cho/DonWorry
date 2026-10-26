@@ -6,7 +6,7 @@ from uuid import UUID
 
 from app.agent.graph import InvestigationGraph
 from app.agent.investigator import InvestigationAgent
-from app.agent.tools import AttemptOutdated, ToolRunner
+from app.agent.tools import AttemptOutdated, StepReporter, ToolRunner
 from app.client.spring import ResultNotifier
 from app.schemas.investigation import (
     AcceptedResponse,
@@ -36,6 +36,7 @@ class InvestigationService:
         notifier: ResultNotifier | None = None,
         tools: ToolRunner | None = None,
         max_tool_calls: int = 8,
+        reporter: StepReporter | None = None,
     ) -> None:
         self.agent = agent
         # Spring 증거 조회 창구 (#72). 없으면 AI가 창구 없이 바로 답한다
@@ -47,7 +48,9 @@ class InvestigationService:
         self.now = now
         # reportId → 현재 시도 하나만 (ADR-0009: 현재 attemptId만 반영)
         self.jobs: dict[int, _Job] = {}
-        self.graph = InvestigationGraph(agent, tools, max_llm_attempts, max_tool_calls, now)
+        self.graph = InvestigationGraph(
+            agent, tools, reporter, max_llm_attempts, max_tool_calls, now
+        )
 
     # 같은 시도가 다시 오면 새로 돌리지 않는다. 새 attemptId면 이전 시도를 버리고 새로 시작한다
     def accept(self, request: InvestigationRequest) -> tuple[AcceptedResponse, bool]:

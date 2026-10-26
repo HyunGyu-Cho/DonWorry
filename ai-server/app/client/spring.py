@@ -5,7 +5,7 @@ from typing import Protocol
 import httpx
 
 from app.agent.tools import AttemptOutdated
-from app.schemas.investigation import InvestigationResult
+from app.schemas.investigation import InvestigationResult, TraceStep
 
 log = logging.getLogger(__name__)
 
@@ -97,3 +97,39 @@ def _lookup_failed(name: str) -> str:
     return json.dumps(
         {"tool": name, "ready": False, "note": "조회 실패", "data": []}, ensure_ascii=False
     )
+
+
+# Spring /internal/ai/reports/{reportId}/steps — AI 판단 · 형식 검사가 끝날 때마다 알린다 (2-19b)
+# 단계는 보여 주기용이라 실패해도 기록만 하고 조사를 이어 간다. 409(현재 시도 아님)면 조사를 멈춘다
+class SpringStepReporter:
+    def __init__(
+        self,
+        base_url: str,
+        service_key: str,
+        timeout_seconds: float = 3.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.service_key = service_key
+        self.timeout_seconds = timeout_seconds
+        self.transport = transport
+
+    async def report(self, report_id: int, attempt_id: str, step: TraceStep) -> None:
+        url = f"{self.base_url}/internal/ai/reports/{report_id}/steps"
+        body = {"attemptId": attempt_id, **step.model_dump(by_alias=True, mode="json")}
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.timeout_seconds, transport=self.transport
+            ) as client:
+                response = await client.post(
+                    url, json=body, headers={"X-Service-Key": self.service_key}
+                )
+        except httpx.HTTPError as e:
+            log.warning("단계 알리기 실패 reportId=%s: %s", report_id, e)
+            return
+        if response.status_code == 409:
+            raise AttemptOutdated(f"reportId={report_id} attemptId={attempt_id}")
+        if response.status_code >= 300:
+            log.warning(
+                "Spring이 단계를 받지 않음 reportId=%s status=%s", report_id, response.status_code
+            )

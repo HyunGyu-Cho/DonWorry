@@ -2,8 +2,13 @@ from fastapi import FastAPI
 
 from app.agent.investigator import InvestigationAgent
 from app.agent.llm import LlmClient, create_llm_client
-from app.agent.tools import ToolRunner
-from app.client.spring import ResultNotifier, SpringResultNotifier, SpringToolClient
+from app.agent.tools import StepReporter, ToolRunner
+from app.client.spring import (
+    ResultNotifier,
+    SpringResultNotifier,
+    SpringStepReporter,
+    SpringToolClient,
+)
 from app.config import Settings
 from app.config import settings as default_settings
 from app.controller.investigations import router as investigations_router
@@ -16,14 +21,17 @@ def create_app(
     llm: LlmClient | None = None,
     notifier: ResultNotifier | None = None,
     tools: ToolRunner | None = None,
+    reporter: StepReporter | None = None,
 ) -> FastAPI:
     app = FastAPI(title="DonWorry AI Server")
     agent = InvestigationAgent(llm or create_llm_client(settings))
     if notifier is None and settings.spring_base_url:
         notifier = SpringResultNotifier(settings.spring_base_url, settings.service_key)
-    # Spring 주소가 있으면 AI가 증거 조회 창구를 쓴다 (#72). 없으면 창구 없이 답한다
+    # Spring 주소가 있으면 AI가 증거 조회 창구를 쓰고(#72), 조사 단계를 알린다(2-19b)
     if tools is None and settings.spring_base_url:
         tools = SpringToolClient(settings.spring_base_url, settings.service_key)
+    if reporter is None and settings.spring_base_url:
+        reporter = SpringStepReporter(settings.spring_base_url, settings.service_key)
     app.state.settings = settings
     app.state.investigation_service = InvestigationService(
         agent,
@@ -31,6 +39,7 @@ def create_app(
         notifier=notifier,
         tools=tools,
         max_tool_calls=settings.max_tool_calls,
+        reporter=reporter,
     )
     app.include_router(investigations_router)
 

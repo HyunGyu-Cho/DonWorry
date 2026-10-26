@@ -2,8 +2,6 @@ package com.donworry.investigation.report.service;
 
 import com.donworry.investigation.report.dto.ToolCallRequest;
 import com.donworry.investigation.report.dto.ToolResponse;
-import com.donworry.investigation.report.entity.AiReportStep;
-import com.donworry.investigation.report.repository.AiReportStepRepository;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import java.text.NumberFormat;
@@ -16,12 +14,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 // AI 증거 조회 창구 (2-19, ADR-0009 Tool 표) — 조사 중인 보고서의 현재 시도만, 그 사건 범위의 데이터만 준다
-// 부를 때마다 조회 기록(ai_report_steps)을 한 줄 남기고, 보고서가 끝나면 trace로 요약해 넣는다
+// 부를 때마다 조회 기록(ReportStepRecorder)을 한 줄 남긴다 — 조사 중 화면 · 보고서 trace에 쓰인다
 @Service
 @RequiredArgsConstructor
 public class ReportToolService {
@@ -31,7 +28,7 @@ public class ReportToolService {
     private final ReportTransitions reportTransitions;
     private final AttemptRegistry attemptRegistry;
     private final PaymentInfoReader paymentInfoReader;
-    private final AiReportStepRepository aiReportStepRepository;
+    private final ReportStepRecorder reportStepRecorder;
 
     public ToolResponse call(String toolName, ToolCallRequest request) {
         ReportTool tool =
@@ -41,29 +38,9 @@ public class ReportToolService {
         long clock = System.nanoTime();
         Answer answer = answer(tool, target, request.args() == null ? Map.of() : request.args());
         int durationMs = (int) ((System.nanoTime() - clock) / 1_000_000);
-        record(target.reportId(), request.attemptId(), tool, answer.summary(), startedAt, durationMs);
+        reportStepRecorder.tool(target.reportId(), request.attemptId(), tool, answer.summary(), startedAt, durationMs);
         String note = tool.ready() ? null : NOT_READY_NOTE;
         return new ToolResponse(tool.toolName(), tool.ready(), note, answer.data());
-    }
-
-    // 이 시도의 조회 기록 → 화면 ReportStep 모양 (보고서 trace에 앞부분으로 들어간다)
-    public List<Map<String, Object>> traceRows(Long reportId, UUID attemptId) {
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (AiReportStep step :
-                aiReportStepRepository.findByReportIdAndAttemptIdOrderByStepNoAsc(reportId, attemptId.toString())) {
-            ReportTool tool = ReportTool.of(step.getToolName()).orElse(null);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("kind", AiReportStep.KIND_TOOL);
-            row.put("label", tool != null ? tool.label() : step.getToolName());
-            row.put("toolName", step.getToolName());
-            row.put("startedAt", step.getStartedAt().toString());
-            row.put("durationMs", step.getDurationMs());
-            row.put("asked", tool != null ? tool.label() : step.getToolName());
-            row.put("got", step.getSummary());
-            row.put("status", step.isOk() ? "DONE" : "FAILED");
-            rows.add(row);
-        }
-        return rows;
     }
 
     // 조사 중(PENDING · RUNNING)이고 현재 시도일 때만 — 끝났거나 대체된 보고서 · 옛 시도는 거절
@@ -147,13 +124,6 @@ public class ReportToolService {
             }
         }
         return Optional.of(ids);
-    }
-
-    private void record(
-            Long reportId, UUID attemptId, ReportTool tool, String summary, Instant startedAt, int durationMs) {
-        int stepNo = aiReportStepRepository.countByReportId(reportId) + 1;
-        aiReportStepRepository.save(AiReportStep.tool(
-                reportId, attemptId.toString(), stepNo, tool.toolName(), true, summary, startedAt, durationMs));
     }
 
     private static String won(long amount) {

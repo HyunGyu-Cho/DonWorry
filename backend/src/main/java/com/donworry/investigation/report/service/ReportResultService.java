@@ -1,12 +1,14 @@
 package com.donworry.investigation.report.service;
 
 import com.donworry.investigation.report.dto.InvestigationResultRequest;
+import com.donworry.investigation.report.dto.StepReportRequest;
 import com.donworry.investigation.service.CaseStatusService;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,8 +32,8 @@ public class ReportResultService {
     private final ReportService reportService;
     private final CaseStatusService caseStatusService;
     private final PaymentInfoReader paymentInfoReader;
-    // 증거 조회 기록을 보고서 trace에 넣는다 (2-19)
-    private final ReportToolService reportToolService;
+    // 조사 과정 기록 — 단계 알림을 저장하고 보고서 trace로 쓴다 (2-19 · 2-19b)
+    private final ReportStepRecorder reportStepRecorder;
     // 다시 요청은 쉬는 시간이 있어 결과를 보낸 ai-server를 기다리게 하지 않도록 따로 돌린다
     private final Executor retryExecutor;
 
@@ -43,7 +45,7 @@ public class ReportResultService {
             ReportService reportService,
             CaseStatusService caseStatusService,
             PaymentInfoReader paymentInfoReader,
-            ReportToolService reportToolService) {
+            ReportStepRecorder reportStepRecorder) {
         this(
                 reportTransitions,
                 attemptRegistry,
@@ -51,7 +53,7 @@ public class ReportResultService {
                 reportService,
                 caseStatusService,
                 paymentInfoReader,
-                reportToolService,
+                reportStepRecorder,
                 Executors.newVirtualThreadPerTaskExecutor());
     }
 
@@ -62,7 +64,7 @@ public class ReportResultService {
             ReportService reportService,
             CaseStatusService caseStatusService,
             PaymentInfoReader paymentInfoReader,
-            ReportToolService reportToolService,
+            ReportStepRecorder reportStepRecorder,
             Executor retryExecutor) {
         this.reportTransitions = reportTransitions;
         this.attemptRegistry = attemptRegistry;
@@ -70,7 +72,7 @@ public class ReportResultService {
         this.reportService = reportService;
         this.caseStatusService = caseStatusService;
         this.paymentInfoReader = paymentInfoReader;
-        this.reportToolService = reportToolService;
+        this.reportStepRecorder = reportStepRecorder;
         this.retryExecutor = retryExecutor;
     }
 
@@ -93,13 +95,12 @@ public class ReportResultService {
                 : Optional.of(failureReason(result));
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         if (problem.isEmpty()) {
+            reportStepRecorder.step(reportId, result.attemptId(), ReportStepRecorder.SAVE, true, "결론 카드로 저장", now, 0);
+            // 과정 = 지금까지의 기록 전체 (2-19b). ai-server가 단계를 하나도 못 알렸으면 결과에 실려 온 steps로 채운다
+            List<Map<String, Object>> aiServerSteps =
+                    reportStepRecorder.hasAiServerSteps(reportId) ? null : result.steps();
             Map<String, Object> body = ConclusionReportBuilder.build(
-                    target,
-                    result.report(),
-                    result.steps(),
-                    reportToolService.traceRows(reportId, result.attemptId()),
-                    payments,
-                    now);
+                    target, result.report(), aiServerSteps, reportStepRecorder.rows(reportId), payments, now);
             // 이미 끝난 보고서면 false — 덮지 않고 할 일도 없다 (#54)
             if (reportTransitions.succeed(reportId, body, now)) {
                 finish(target);
@@ -107,6 +108,22 @@ public class ReportResultService {
             return;
         }
         failAttempt(target, result.isSucceeded() ? "AI_RESULT_INVALID" : "AI_RESULT_FAILED", problem.get(), now);
+    }
+
+    // ai-server가 AI 판단 · 형식 검사 한 번을 끝낼 때마다 알린다 (2-19b) — 현재 시도만 기록, 아니면 409
+    public void recordStep(Long reportId, StepReportRequest step) {
+        if (!attemptRegistry.isCurrent(reportId, step.attemptId()) || reportTransitions.isFinished(reportId)) {
+            throw new ReportException(ReportErrorCode.NOT_CURRENT_ATTEMPT);
+        }
+        boolean ok = Boolean.TRUE.equals(step.ok());
+        boolean validation = "VALIDATION".equals(step.kind());
+        String kind = validation
+                ? (ok ? ReportStepRecorder.VALIDATE : ReportStepRecorder.LLM_FAILED)
+                : ReportStepRecorder.LLM;
+        String detail = step.detail() == null || step.detail().isBlank() ? kind : step.detail();
+        Instant startedAt = step.startedAt() != null ? step.startedAt().toInstant() : Instant.now();
+        int durationMs = step.durationMs() != null ? Math.max(step.durationMs(), 0) : 0;
+        reportStepRecorder.step(reportId, step.attemptId(), kind, ok, detail, startedAt, durationMs);
     }
 
     // 결과가 제때 오지 않았고 ai-server에 물어도 끝난 결과가 없을 때 — 시도 1번 실패로 센다 (2-18)

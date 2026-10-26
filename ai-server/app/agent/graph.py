@@ -9,7 +9,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.agent.investigator import InvalidAnswer, InvestigationAgent
 from app.agent.llm import LlmError, LlmMessage, LlmReply
-from app.agent.tools import TOOL_NAMES, TOOL_SPECS, ToolRunner
+from app.agent.tools import TOOL_NAMES, TOOL_SPECS, StepReporter, ToolRunner
 from app.schemas.investigation import FailureInfo, InvestigationRequest, TraceStep
 from app.schemas.report import ReportDraft
 
@@ -24,8 +24,6 @@ class InvestigationState(TypedDict, total=False):
     nudged: bool
     attempt: int
     last_reason: str
-    asked_at: datetime
-    asked_clock: float
     report: ReportDraft
     error: FailureInfo
 
@@ -40,12 +38,15 @@ class InvestigationGraph:
         self,
         agent: InvestigationAgent,
         tools: ToolRunner | None,
+        reporter: StepReporter | None,
         max_llm_attempts: int,
         max_tool_calls: int,
         now: Callable[[], datetime],
     ) -> None:
         self.agent = agent
         self.tools = tools
+        # 조사 단계 알림 (2-19b) — 화면이 조사 중에 단계를 그린다
+        self.reporter = reporter
         self.specs = TOOL_SPECS if tools is not None else []
         self.max_llm_attempts = max_llm_attempts
         self.max_tool_calls = max_tool_calls
@@ -104,15 +105,23 @@ class InvestigationGraph:
 
     # ── 노드 ──
 
+    # AI에게 한 번 물을 때마다 단계 하나 — 창구를 고른 판단도 보고서를 쓴 판단도 보인다 (2-19b)
     async def _ask_ai(self, state: InvestigationState) -> InvestigationState:
         asked_at, clock = self.now(), time.monotonic()
         try:
             reply = await self.agent.ask(state["messages"], self.specs)
         except LlmError as e:
             step = self._step("LLM_ANSWER", False, f"AI 호출 실패: {e}", asked_at, clock)
+            await self._report(state, step)
             error = FailureInfo(code="LLM_ERROR", reason=str(e), llm_attempts=state["attempt"] + 1)
             return {"steps": [*state["steps"], step], "error": error}
-        return {"reply": reply, "asked_at": asked_at, "asked_clock": clock}
+        if reply.tool_calls and self.specs:
+            detail = "AI 판단 — 다음에 볼 증거 고르기"
+        else:
+            detail = f"AI 판단 — 보고서 작성 ({state['attempt'] + 1}차)"
+        step = self._step("LLM_ANSWER", True, detail, asked_at, clock)
+        await self._report(state, step)
+        return {"reply": reply, "steps": [*state["steps"], step]}
 
     # 창구 하나씩 부른다. 없는 창구 이름은 Spring에 묻지 않는다
     # 409(현재 시도 아님)는 AttemptOutdated로 그래프 밖까지 올라가 조사를 멈춘다
@@ -142,7 +151,8 @@ class InvestigationGraph:
         attempt = state["attempt"] + 1
         reason = f"창구를 {self.max_tool_calls}번 넘게 부름"
         detail = self._invalid_detail(reason, attempt)
-        step = self._step("VALIDATION", False, detail, state["asked_at"], state["asked_clock"])
+        step = self._step("VALIDATION", False, detail, self.now(), time.monotonic())
+        await self._report(state, step)
         return {
             "messages": messages,
             "attempt": attempt,
@@ -152,23 +162,22 @@ class InvestigationGraph:
 
     async def _validate(self, state: InvestigationState) -> InvestigationState:
         attempt = state["attempt"] + 1
-        answered = self._step(
-            "LLM_ANSWER", True, f"AI 판단 ({attempt}차)", state["asked_at"], state["asked_clock"]
-        )
         checked_at, clock = self.now(), time.monotonic()
         try:
             report = self.agent.parse(state["reply"].content, state["request"])
         except InvalidAnswer as invalid:
             detail = self._invalid_detail(invalid.reason, attempt)
             failed = self._step("VALIDATION", False, detail, checked_at, clock)
+            await self._report(state, failed)
             return {
                 "attempt": attempt,
                 "last_reason": invalid.reason,
-                "steps": [*state["steps"], answered, failed],
+                "steps": [*state["steps"], failed],
                 "messages": self.agent.correction(state["messages"], invalid),
             }
         passed = self._step("VALIDATION", True, "구조 검증 통과", checked_at, clock)
-        return {"attempt": attempt, "report": report, "steps": [*state["steps"], answered, passed]}
+        await self._report(state, passed)
+        return {"attempt": attempt, "report": report, "steps": [*state["steps"], passed]}
 
     async def _give_up(self, state: InvestigationState) -> InvestigationState:
         reason = f"{self.max_llm_attempts}번 모두 형식이 맞지 않음 (마지막: {state['last_reason']})"
@@ -202,6 +211,13 @@ class InvestigationGraph:
         return "3번_모두_실패" if state["attempt"] >= self.max_llm_attempts else "형식_틀림_다시"
 
     # ── 도움 ──
+
+    # 끝난 단계를 Spring에 알린다 — 알릴 곳이 없으면(Spring 주소 없음) 건너뛴다
+    async def _report(self, state: InvestigationState, step: TraceStep) -> None:
+        if self.reporter is None:
+            return
+        request = state["request"]
+        await self.reporter.report(request.report_id, str(request.attempt_id), step)
 
     def _invalid_detail(self, reason: str, attempt: int) -> str:
         retry = attempt < self.max_llm_attempts

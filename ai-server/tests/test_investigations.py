@@ -99,7 +99,7 @@ def test_find_afterAccepted_returnsSucceededReport() -> None:
     assert data["caseType"] == "PAYMENT_FRAUD"
     assert data["report"]["checks"] == ["구매자 본인 확인 응답"]
     assert data["error"] is None
-    assert [s["detail"] for s in data["steps"]] == ["AI 판단 (1차)", "구조 검증 통과"]
+    assert [s["detail"] for s in data["steps"]] == ["AI 판단 — 보고서 작성 (1차)", "구조 검증 통과"]
 
 
 # 같은 시도가 두 번 와도 AI에게는 한 번만 묻는다
@@ -144,9 +144,9 @@ def test_investigate_invalidOnce_retriesAndSucceeds() -> None:
 
     assert data["status"] == "SUCCEEDED"
     assert [s["detail"] for s in data["steps"]] == [
-        "AI 판단 (1차)",
+        "AI 판단 — 보고서 작성 (1차)",
         "구조 검증 실패: 필수 항목 '확인할 것' 누락 → 다시 시도",
-        "AI 판단 (2차)",
+        "AI 판단 — 보고서 작성 (2차)",
         "구조 검증 통과",
     ]
 

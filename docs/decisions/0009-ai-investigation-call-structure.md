@@ -70,7 +70,7 @@ sequenceDiagram
 - **주소:** `POST /internal/ai/tools/{toolName}`, 본문 `{ reportId, attemptId, args }`, 서비스 키(`X-Service-Key`)로 지킨다 (결과 수신과 같은 키)
 - **응답:** `{ tool, ready, note, data[] }`. 원천 데이터가 아직 없으면 `ready: false`, `note: "데이터 준비 전"`, `data: []` — AI는 모르는 것으로 적는다. 데이터가 생기면 응답만 채운다 (ai-server는 그대로)
 - **범위:** 조사 중(`PENDING` · `RUNNING`)인 보고서의 **현재 시도**만 부를 수 있다. 끝났거나 대체된 보고서 · 옛 시도는 `409 RPT_003`, 없는 창구는 `404 RPT_002`, 다른 Case 결제 ID는 `400 RPT_004`
-- **기록:** 부를 때마다 `ai_report_steps`에 한 줄(창구 · 성공 여부 · 200자 이내 요약 · 시작 시각 · 걸린 시간)을 남기고, 보고서가 완료되면 그 시도의 기록을 `report_body.trace`에 시각 순으로 섞어 넣는다. 원본 증거 · 질문 전문은 남기지 않는다
+- **기록:** 부를 때마다 `ai_report_steps`에 한 줄(창구 · 성공 여부 · 200자 이내 요약 · 시작 시각 · 걸린 시간)을 남긴다. 원본 증거 · 질문 전문은 남기지 않는다. 조사 과정 전체를 이 표에 모으는 방식은 아래 "조사 단계 실시간 기록"(#78)
 - **"`get_fds_evidence` 먼저":** Spring이 강제하지 않고 AI 지시문과 가짜 AI 순서로 지킨다 (강제하면 진짜 AI가 순서를 어길 때마다 조사가 실패한다, #70)
 
 입력에 `caseId`가 있다고 다른 모듈 데이터를 마음대로 읽는 것은 아니다. 각 Tool 구현이 Case 소속 결제 · 가맹점 범위를 검증하고, 소유 모듈의 공개 api로 필요한 정보만 모은다 (설계 3.6 주의).
@@ -187,6 +187,23 @@ sequenceDiagram
 
 보고서 JSON(`report_body`) 구조는 결정 4를 따른다 (기획 2.7 순서와 같다).
 
+## 조사 단계 실시간 기록 (#78, 2-19b)
+
+**조사 과정의 모든 단계를 `ai_report_steps` 한 곳에 쌓는다. 화면은 조사 중에도, 끝난 뒤에도 이 표를 읽는다.**
+
+- **누가 남기나:**
+  - Spring — 접수 `REQUEST`("ai-server가 조사를 접수함", 재시도면 "(N번째 시도)"), 창구 `TOOL`, 저장 `SAVE`("결론 카드로 저장")
+  - ai-server — AI 판단 · 형식 검사가 하나 끝날 때마다 알린다
+- **ai-server → Spring 주소:** `POST /internal/ai/reports/{reportId}/steps`, 서비스 키
+  - 본문 `{ attemptId, kind, ok, detail, startedAt, durationMs }`. `kind`는 결과 콜백의 `steps`와 같은 `LLM_ANSWER` · `VALIDATION`
+  - Spring 저장 이름: `LLM_ANSWER` → `LLM`(실패면 `LLM_FAILED`), `VALIDATION` 통과 → `VALIDATE`, 실패 → `LLM_FAILED`
+  - 응답 `204`. 현재 시도가 아니거나 끝난 보고서면 `409 RPT_003` — ai-server는 조사를 멈춘다 (창구와 같은 규칙)
+  - 다른 오류 · 연결 실패는 기록만 빠지고 조사는 계속한다 (화면에 한 줄 덜 보일 뿐)
+- **AI 판단 단계 이름:** 창구를 고른 판단은 "AI 판단 — 다음에 볼 증거 고르기", 보고서를 쓴 판단은 "AI 판단 — 보고서 작성 (N차)"
+- **화면 조사 상태(`GET /api/investigation/cases/{caseId}/report/run`):** 모든 시도의 기록을 시각 순으로 번호를 다시 매겨 준다. 조사 중이면 맨 끝에 "AI가 조사하는 중…"(`RUNNING`) 한 줄을 붙이고 `currentStepNo`가 그 줄을 가리킨다. 시작 시각은 마지막 기록이 끝난 때
+- **보고서 `trace`:** 완료 때 같은 기록으로 만든다. 결과 콜백의 `steps`는 ai-server 단계 기록이 하나도 없을 때(옛 ai-server · 알림이 모두 실패)만 쓴다 — 같은 단계가 두 번 들어가지 않는다
+- 버린 안: 결과 콜백의 `steps`만으로 과정을 보여 주기(지금까지) — 끝나야 보여서 조사 중 화면이 비어 있다. 화면이 ai-server를 직접 부르기 — 화면은 Spring만 안다 (결정 1)
+
 ## 패키지 구성
 
 `investigation/report/` 아래를 다른 모듈과 같은 계층으로 나눈다. `ArchitectureTests`의 `..controller..` · `..entity..` 규칙이 그대로 적용된다.
@@ -222,7 +239,7 @@ investigation/report/
 
 ## 영향
 
-- API: Spring `/internal/ai/tools/*`(GET 6종) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`
+- API: Spring `/internal/ai/tools/*`(GET 6종) · `/internal/ai/reports/{reportId}/result`(POST) · `/internal/ai/reports/{reportId}/steps`(POST, #78), FastAPI `POST /investigations` · `GET /investigations/{reportId}`
 - DB: `ai_reports`는 설계 3.9⑤ 8개 컬럼 그대로. `UNIQUE(case_id, report_version)`. `case_id`는 `security_cases`에 대한 논리 참조
 - 보안: `identity/security/SecurityConfig`에서 `/internal/ai/**`를 서비스 키 인증으로 분리해야 한다 — P1과 협의
 - P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)

@@ -37,6 +37,6 @@ class _NoTools(ToolRunner):
 
 def render() -> str:
     graph = InvestigationGraph(
-        InvestigationAgent(MockLlmClient()), _NoTools(), 3, 8, lambda: datetime.now(UTC)
+        InvestigationAgent(MockLlmClient()), _NoTools(), None, 3, 8, lambda: datetime.now(UTC)
     )
     return f"{HEADER}```mermaid\n{graph.mermaid().strip()}\n```\n"
