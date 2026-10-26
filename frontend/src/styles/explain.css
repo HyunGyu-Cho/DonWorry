@@ -1780,3 +1780,7 @@ i.dw-stl-chip {
   gap: 8px;
   margin-bottom: 12px;
 }
+/* 좁은 화면에서도 목록 창이 화면 밖으로 나가지 않게 */
+.dw-stl-drawer .ant-drawer-content-wrapper {
+  max-width: calc(100vw - 24px);
+}

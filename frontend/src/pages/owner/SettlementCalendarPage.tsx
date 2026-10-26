@@ -240,6 +240,7 @@ export function SettlementCalendarPage() {
         open={listOpen}
         onClose={() => setListOpen(false)}
         width={760}
+        rootClassName="dw-stl-drawer"
         title={`${monthDay(selected)} 정산 · 출금 목록`}
         extra={
           <Button onClick={() => navigate(`/owner/settlements/${selected}`)}>
