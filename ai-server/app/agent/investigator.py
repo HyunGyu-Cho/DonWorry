@@ -1,6 +1,7 @@
 from pydantic import ValidationError
 
-from app.agent.llm import LlmClient, LlmMessage
+from app.agent.llm import LlmClient, LlmMessage, LlmReply
+from app.agent.tools import ToolSpec
 from app.schemas.investigation import InvestigationRequest
 from app.schemas.report import REPORT_DRAFT, PaymentFraudDraft, ReportDraft
 
@@ -50,6 +51,17 @@ ANSWER_FORMAT = (
 )
 
 
+# 창구를 쓸 수 있을 때 붙이는 안내 — AI가 스스로 고르되 FDS 증거부터, 받지 못한 것은 지어내지 않기
+TOOL_GUIDE = (
+    "증거는 창구(tool)를 불러 직접 확인하세요. get_fds_evidence를 먼저 부르세요. "
+    "창구가 ready=false(데이터 준비 전 · 조회 실패)를 주면 "
+    "그 내용은 지어내지 말고 unknowns에 적으세요. "
+    "필요한 증거를 다 봤으면 창구를 더 부르지 말고 보고서 JSON을 쓰세요.\n"
+)
+
+ENOUGH_TOOLS = "창구는 충분히 불렀습니다. 이제 지금까지 받은 증거로 보고서 JSON을 쓰세요."
+
+
 class InvalidAnswer(Exception):
     def __init__(self, reason: str, raw: str) -> None:
         super().__init__(reason)
@@ -62,20 +74,37 @@ class InvestigationAgent:
     def __init__(self, llm: LlmClient) -> None:
         self.llm = llm
 
-    def first_messages(self, request: InvestigationRequest) -> list[LlmMessage]:
+    def first_messages(
+        self, request: InvestigationRequest, with_tools: bool = False
+    ) -> list[LlmMessage]:
         question = (
             f"사건 종류: {request.case_type}\n"
             f"사건 {request.case_id} (증거 버전 {request.evidence_version})을 조사해 "
             "보고서 초안을 JSON으로 써 주세요.\n"
-            f"{TYPE_GUIDES[request.case_type]}\n{_payment_line(request)}{ANSWER_FORMAT}"
+            f"{TYPE_GUIDES[request.case_type]}\n{_payment_line(request)}"
+            f"{TOOL_GUIDE if with_tools else ''}{ANSWER_FORMAT}"
         )
         return [
             LlmMessage(role="system", content=SYSTEM_PROMPT),
             LlmMessage(role="user", content=question),
         ]
 
-    async def ask(self, messages: list[LlmMessage]) -> str:
-        return await self.llm.complete(messages)
+    async def ask(self, messages: list[LlmMessage], tools: list[ToolSpec]) -> LlmReply:
+        return await self.llm.complete(messages, tools)
+
+    # AI가 창구를 부르겠다는 답과 각 창구 결과를 대화에 붙인다 (다음 질문에 같이 보낸다)
+    def with_tool_results(
+        self, messages: list[LlmMessage], reply: LlmReply, results: list[tuple[str, str]]
+    ) -> list[LlmMessage]:
+        return [
+            *messages,
+            LlmMessage(role="assistant", tool_calls=reply.tool_calls),
+            *(LlmMessage(role="tool", tool_name=name, content=text) for name, text in results),
+        ]
+
+    # 창구를 너무 많이 불렀을 때 한 번 알린다
+    def stop_calling(self, messages: list[LlmMessage]) -> list[LlmMessage]:
+        return [*messages, LlmMessage(role="user", content=ENOUGH_TOOLS)]
 
     # 형식 검사 + 요청한 사건 종류와 같은 형식인지까지 본다
     def parse(self, raw: str, request: InvestigationRequest) -> ReportDraft:
