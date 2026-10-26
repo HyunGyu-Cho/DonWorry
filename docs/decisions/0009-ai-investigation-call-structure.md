@@ -1,7 +1,7 @@
 # 0009. AI 조사 호출 구조 (Spring ↔ FastAPI)
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-26 개정: 조사 요청에 사건 종류 · AI가 쓰는 칸 3유형 (#60) · 결과 수신 · 완료 통지(임시) (#64) · 시간 초과 · 재시작 · 새 정보 대체 (#68)
+- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-26 개정: 조사 요청에 사건 종류 · AI가 쓰는 칸 3유형 (#60) · 결과 수신 · 완료 통지(임시) (#64) · 시간 초과 · 재시작 · 새 정보 대체 (#68) · 증거 조회 Tool 7종 (#70)
 - **관련:** Notion fds 정본 — 02 기획 2.5 · 2.6 · 2.7, 03 설계 3.5 · 3.6 · 3.7 · 3.9⑤ · 3.11, 공통 페이지 §5.3 · §5.4, [ADR-0012](0012-payment-settlement-dependency.md) (ADR-0001 대체), 화면 타입 `frontend/src/types/case.ts`
 - **영향 받는 담당:** P4 현규, P3 수민(조사 요청 · 판정 검증), P1 주환(인증 설정 · 보안 이벤트 조회), P2 · P5(Tool이 읽는 공개 api 제공), CakeShop(주문 정보), 화면 담당(보고서 응답 형식)
 
@@ -55,16 +55,23 @@ sequenceDiagram
 | 결과 수신 | FastAPI 콜백이 기본. 콜백이 정해진 시간 안에 오지 않으면 Spring이 `GET /investigations/{reportId}`로 조회해 복구. 요청 · 콜백 · 조회에는 시도 토큰 `attemptId`를 함께 싣는다 (결정 2). 이전 시도 취소 API는 두지 않는다 |
 | 주문 정보 Tool | `get_order_context`는 Spring이 CakeShop을 HTTP로 조회해 전달 (CakeShop 제공 범위는 §5.7 미결) |
 
-### Tool 6종 (Notion 설계 3.6)
+### Tool 7종 (Notion 설계 3.6, #70 구현)
 
-| Tool | 입력 | 하는 일 | 데이터 주인 |
-| --- | --- | --- | --- |
-| `get_case_payments` | `caseId` | Case 소속 결제 목록 | P3 + P5 |
-| `get_fds_evidence` | `caseId` 또는 허용된 결제 ID | 결제별 FDS 점수 · 적중 규칙 | P2 |
-| `get_payment_history` | `caseId`, `lookbackDays` | 고객 과거 결제 패턴 | P5 |
-| `get_security_events` | `caseId`, 조회 기간 | 로그인 · 기기 · 계정 이벤트 | P1 또는 CakeShop |
-| `get_order_context` | `caseId` | 주문 · 배송 정보 | CakeShop |
-| `get_payment_authentication` | `caseId` 또는 허용된 결제 ID | 카드 인증 · 승인 정보 | P5 |
+| Tool | 입력 (`args`) | 하는 일 | 데이터 주인 | 지금 |
+| --- | --- | --- | --- | --- |
+| `get_case_payments` | — | Case 소속 결제 목록 (금액 · 상태 · 요청 시각) | P3 + P5 | 있음 |
+| `get_fds_evidence` | `paymentIds` (없으면 Case 결제 전부) | 결제별 FDS 점수 · 적중 규칙 | P2 | 있음 |
+| `get_payment_history` | — | 고객 과거 결제 패턴 | P5 | 준비 전 (2-22) |
+| `get_payment_authentication` | — | 카드 인증 · 승인 정보 | P5 | 준비 전 (2-29) |
+| `get_security_events` | — | 로그인 · 기기 · 계정 이벤트 (직원 사건에도) | P1 | 준비 전 (2-3) |
+| `get_order_context` | — | 주문 · 배송 · 구매자 연동 정보 | P5 (CakeShop) | 준비 전 (2-22) |
+| `find_similar_cases` | — | 비슷한 과거 사건과 판정 결과 (근거로만, 자동 판정 금지) | P3 | 준비 전 (2-9) |
+
+- **주소:** `POST /internal/ai/tools/{toolName}`, 본문 `{ reportId, attemptId, args }`, 서비스 키(`X-Service-Key`)로 지킨다 (결과 수신과 같은 키)
+- **응답:** `{ tool, ready, note, data[] }`. 원천 데이터가 아직 없으면 `ready: false`, `note: "데이터 준비 전"`, `data: []` — AI는 모르는 것으로 적는다. 데이터가 생기면 응답만 채운다 (ai-server는 그대로)
+- **범위:** 조사 중(`PENDING` · `RUNNING`)인 보고서의 **현재 시도**만 부를 수 있다. 끝났거나 대체된 보고서 · 옛 시도는 `409 RPT_003`, 없는 창구는 `404 RPT_002`, 다른 Case 결제 ID는 `400 RPT_004`
+- **기록:** 부를 때마다 `ai_report_steps`에 한 줄(창구 · 성공 여부 · 200자 이내 요약 · 시작 시각 · 걸린 시간)을 남기고, 보고서가 완료되면 그 시도의 기록을 `report_body.trace`에 시각 순으로 섞어 넣는다. 원본 증거 · 질문 전문은 남기지 않는다
+- **"`get_fds_evidence` 먼저":** Spring이 강제하지 않고 AI 지시문과 가짜 AI 순서로 지킨다 (강제하면 진짜 AI가 순서를 어길 때마다 조사가 실패한다, #70)
 
 입력에 `caseId`가 있다고 다른 모듈 데이터를 마음대로 읽는 것은 아니다. 각 Tool 구현이 Case 소속 결제 · 가맹점 범위를 검증하고, 소유 모듈의 공개 api로 필요한 정보만 모은다 (설계 3.6 주의).
 

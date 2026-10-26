@@ -13,6 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.donworry.MariaDbTestContainerConfig;
@@ -49,6 +50,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
 
 // ai-server 모드에서 사건 → 조사 요청 → 결과 수신 → 완료 · 다시 시도 · 실패를 실제 MariaDB로 확인한다
@@ -382,5 +384,78 @@ class ReportResultFlowTests {
                         .orElseThrow()
                         .getStatus())
                 .isEqualTo(CaseStatus.DECISION_PENDING);
+    }
+
+    // ai-server가 증거 조회 창구를 부르는 것처럼 — 서비스 키 · 보고서 번호 · 시도 번호를 싣는다 (2-19)
+    private ResultActions tool(String name, Sent sent, Map<String, Object> args, String key) throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("reportId", sent.reportId());
+        body.put("attemptId", sent.attemptId().toString());
+        body.put("args", args);
+        var request = post("/internal/ai/tools/{toolName}", name)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(body));
+        if (key != null) {
+            request.header(AiServerClient.SERVICE_KEY_HEADER, key);
+        }
+        return mvc.perform(request);
+    }
+
+    // 조사 중인 현재 시도는 그 사건의 결제 · 적중 Rule을 받고, 준비 전 창구는 빈 결과 — 부른 기록은 보고서 trace 앞에 들어간다
+    @Test
+    void tools_currentAttempt_returnCaseEvidenceAndAppearInTrace() throws Exception {
+        Sent sent = requestInvestigation();
+
+        tool("get_case_payments", sent, Map.of(), KEY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ready").value(true))
+                .andExpect(jsonPath("$.data[0].paymentId").value(String.valueOf(paymentId)))
+                .andExpect(jsonPath("$.data[0].amount").value(650_000));
+        tool("get_fds_evidence", sent, Map.of("paymentIds", List.of(String.valueOf(paymentId))), KEY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].riskScore").value(55))
+                .andExpect(jsonPath("$.data[0].ruleHits[0]").value("HIGH_AMOUNT"));
+        tool("get_security_events", sent, Map.of(), KEY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ready").value(false))
+                .andExpect(jsonPath("$.note").value("데이터 준비 전"))
+                .andExpect(jsonPath("$.data").isEmpty());
+
+        send(sent.reportId(), result(sent, "SUCCEEDED", String.valueOf(paymentId)), KEY, 204);
+
+        List<?> trace = (List<?>) report(sent.reportId()).getReportBody().get("trace");
+        assertThat(trace).hasSize(4);
+        assertThat(trace.get(0).toString()).contains("kind=TOOL", "toolName=get_case_payments", "합계 650,000원");
+        assertThat(trace.get(1).toString()).contains("toolName=get_fds_evidence", "최고 55점", "HIGH_AMOUNT");
+        assertThat(trace.get(2).toString()).contains("toolName=get_security_events", "데이터 준비 전");
+        assertThat(trace.get(3).toString()).contains("kind=VALIDATE", "stepNo=4");
+    }
+
+    // 키 없음 · 틀림 401, 없는 창구 404, 옛 시도 409, 다른 사건 결제 400, 끝난 보고서 409
+    @Test
+    void tools_outsideScope_rejected() throws Exception {
+        Sent first = requestInvestigation();
+        tool("get_case_payments", first, Map.of(), null).andExpect(status().isUnauthorized());
+        tool("get_case_payments", first, Map.of(), "wrong").andExpect(status().isUnauthorized());
+        tool("delete_payment", first, Map.of(), KEY)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RPT_002"));
+        tool("get_fds_evidence", first, Map.of("paymentIds", List.of("999999999")), KEY)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RPT_004"));
+
+        send(first.reportId(), result(first, "FAILED", null), KEY, 204);
+        await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> verify(aiServerClient, times(2))
+                        .requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt(), anyList()));
+        tool("get_case_payments", first, Map.of(), KEY)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RPT_003"));
+
+        Sent second = lastSent();
+        send(second.reportId(), result(second, "SUCCEEDED", String.valueOf(paymentId)), KEY, 204);
+        tool("get_case_payments", second, Map.of(), KEY)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RPT_003"));
     }
 }

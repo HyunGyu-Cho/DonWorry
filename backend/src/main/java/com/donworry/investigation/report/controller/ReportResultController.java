@@ -2,11 +2,8 @@ package com.donworry.investigation.report.controller;
 
 import com.donworry.investigation.report.dto.InvestigationResultRequest;
 import com.donworry.investigation.report.service.ReportResultService;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,13 +34,9 @@ class ReportResultController {
             @PathVariable Long reportId,
             @RequestHeader(name = "X-Service-Key", required = false) String key,
             @RequestBody InvestigationResultRequest result) {
-        if (serviceKey == null || serviceKey.isBlank()) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
-        }
-        if (key == null
-                || !MessageDigest.isEqual(
-                        key.getBytes(StandardCharsets.UTF_8), serviceKey.getBytes(StandardCharsets.UTF_8))) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        var rejected = ServiceKeyCheck.<Void>reject(serviceKey, key);
+        if (rejected.isPresent()) {
+            return rejected.get();
         }
         if (result.reportId() != null && !result.reportId().equals(reportId)) {
             return ResponseEntity.badRequest().build();

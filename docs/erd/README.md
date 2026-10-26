@@ -54,7 +54,7 @@
 | `payment` | P5 시은 | `payments`, `notifications`, `buyer_confirmations` | [20261022_145100](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql) · [20261024_102000](../../backend/src/main/resources/db/migration/V20261024_102000__add_card_and_buyer_fields_to_payments.sql) · [20261024_102015](../../backend/src/main/resources/db/migration/V20261024_102015__create_notifications_table.sql) · [20261024_102016](../../backend/src/main/resources/db/migration/V20261024_102016__create_buyer_confirmations_table.sql) |
 | `fds` | P2 정후 | `fds_evaluations`, `fds_rule_hits`, `fds_rules`, `blocklist_entries`, `staff_rule_hits` | [20261022_145102](../../backend/src/main/resources/db/migration/V20261022_145102__create_fds_evaluations_table.sql) · [20261022_145104](../../backend/src/main/resources/db/migration/V20261022_145104__create_fds_rule_hits_table.sql) · [20261022_174140](../../backend/src/main/resources/db/migration/V20261022_174140__add_fds_evaluation_request_fields.sql) · [20261024_102008](../../backend/src/main/resources/db/migration/V20261024_102008__create_fds_rules_table.sql) · [20261024_102009](../../backend/src/main/resources/db/migration/V20261024_102009__create_blocklist_entries_table.sql) · [20261024_102010](../../backend/src/main/resources/db/migration/V20261024_102010__create_staff_rule_hits_table.sql) · [20261024_102018](../../backend/src/main/resources/db/migration/V20261024_102018__seed_fds_rules.sql) |
 | `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories`, `case_staff_hits`, `case_actions`, `approval_requests`, `audit_logs` | [20261022_145106](../../backend/src/main/resources/db/migration/V20261022_145106__create_security_cases_table.sql) · [20261022_145108](../../backend/src/main/resources/db/migration/V20261022_145108__create_case_payments_table.sql) · [20261022_145111](../../backend/src/main/resources/db/migration/V20261022_145111__create_payment_decisions_table.sql) · [20261022_145112](../../backend/src/main/resources/db/migration/V20261022_145112__create_action_handoffs_table.sql) · [20261022_145115](../../backend/src/main/resources/db/migration/V20261022_145115__create_case_histories_table.sql) · [20261024_102002](../../backend/src/main/resources/db/migration/V20261024_102002__allow_staff_subject_on_security_cases.sql) · [20261024_102011](../../backend/src/main/resources/db/migration/V20261024_102011__create_case_staff_hits_table.sql) · [20261024_102012](../../backend/src/main/resources/db/migration/V20261024_102012__create_case_actions_table.sql) · [20261024_102013](../../backend/src/main/resources/db/migration/V20261024_102013__create_approval_requests_table.sql) · [20261024_102014](../../backend/src/main/resources/db/migration/V20261024_102014__create_audit_logs_table.sql) |
-| `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
+| `investigation/report` | P4 현규 | `ai_reports`, `ai_report_steps` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) · [20261027_065737](../../backend/src/main/resources/db/migration/V20261027_065737__create_ai_report_steps_table.sql) |
 | `settlement` | P6 민정 | `captures`, `settlements`, `loan_products` | [20261022_145118](../../backend/src/main/resources/db/migration/V20261022_145118__create_captures_table.sql) · [20261022_145120](../../backend/src/main/resources/db/migration/V20261022_145120__create_settlements_table.sql) · [20261024_102017](../../backend/src/main/resources/db/migration/V20261024_102017__create_loan_products_table.sql) · [20261024_102019](../../backend/src/main/resources/db/migration/V20261024_102019__seed_loan_products.sql) |
 | (공통) | — | `EVENT_PUBLICATION` (Modulith 이벤트 기록) | [create_event_publication_table](../../backend/src/main/resources/db/migration/V20261021_215412__create_event_publication_table.sql) |
 
@@ -80,6 +80,7 @@ erDiagram
     payments ||..o{ fds_evaluations : "payment_id"
     payments ||..o| case_payments : "payment_id"
     security_cases ||..o{ ai_reports : "case_id"
+    ai_reports ||--o{ ai_report_steps : "report_id"
     ai_reports |o..o{ payment_decisions : "report_id"
     payments ||..o| captures : "payment_id"
 
@@ -170,6 +171,7 @@ erDiagram
 | | `case_actions` | 직원 사건 조치 (세션 종료 · 계정 잠금 · OTP 재등록 등) |
 | | `approval_requests` | 2인 승인 요청. 요청자 본인 승인은 `CHECK` 제약으로도 막음 |
 | | `audit_logs` | 감사 로그 (수정 · 삭제 없음) |
+| P4 `investigation/report` | `ai_report_steps` | AI 조사 과정 한 단계 (증거 조회 Tool 호출 등, 짧은 요약만). 끝나면 `report_body.trace`로 요약 복사 (#70) |
 | P5 `payment` | `notifications` | 구매자 · 사장님 메일 발송 기록 |
 | | `buyer_confirmations` | "본인 결제가 맞나요?" 구매자 응답 (약한 근거) |
 | P6 `settlement` | `loan_products` | Mock 은행 대출 상품 |

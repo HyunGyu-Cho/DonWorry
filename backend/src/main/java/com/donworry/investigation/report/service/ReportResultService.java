@@ -30,6 +30,8 @@ public class ReportResultService {
     private final ReportService reportService;
     private final CaseStatusService caseStatusService;
     private final PaymentInfoReader paymentInfoReader;
+    // 증거 조회 기록을 보고서 trace에 넣는다 (2-19)
+    private final ReportToolService reportToolService;
     // 다시 요청은 쉬는 시간이 있어 결과를 보낸 ai-server를 기다리게 하지 않도록 따로 돌린다
     private final Executor retryExecutor;
 
@@ -40,7 +42,8 @@ public class ReportResultService {
             AiServerReportWriter aiServerReportWriter,
             ReportService reportService,
             CaseStatusService caseStatusService,
-            PaymentInfoReader paymentInfoReader) {
+            PaymentInfoReader paymentInfoReader,
+            ReportToolService reportToolService) {
         this(
                 reportTransitions,
                 attemptRegistry,
@@ -48,6 +51,7 @@ public class ReportResultService {
                 reportService,
                 caseStatusService,
                 paymentInfoReader,
+                reportToolService,
                 Executors.newVirtualThreadPerTaskExecutor());
     }
 
@@ -58,6 +62,7 @@ public class ReportResultService {
             ReportService reportService,
             CaseStatusService caseStatusService,
             PaymentInfoReader paymentInfoReader,
+            ReportToolService reportToolService,
             Executor retryExecutor) {
         this.reportTransitions = reportTransitions;
         this.attemptRegistry = attemptRegistry;
@@ -65,6 +70,7 @@ public class ReportResultService {
         this.reportService = reportService;
         this.caseStatusService = caseStatusService;
         this.paymentInfoReader = paymentInfoReader;
+        this.reportToolService = reportToolService;
         this.retryExecutor = retryExecutor;
     }
 
@@ -87,8 +93,13 @@ public class ReportResultService {
                 : Optional.of(failureReason(result));
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         if (problem.isEmpty()) {
-            Map<String, Object> body =
-                    ConclusionReportBuilder.build(target, result.report(), result.steps(), payments, now);
+            Map<String, Object> body = ConclusionReportBuilder.build(
+                    target,
+                    result.report(),
+                    result.steps(),
+                    reportToolService.traceRows(reportId, result.attemptId()),
+                    payments,
+                    now);
             // 이미 끝난 보고서면 false — 덮지 않고 할 일도 없다 (#54)
             if (reportTransitions.succeed(reportId, body, now)) {
                 finish(target);
