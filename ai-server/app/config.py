@@ -1,9 +1,14 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # .env 또는 환경변수에서 읽는다 (접두사 AI_SERVER_)
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="AI_SERVER_")
+    # 내 PC 설정 ai-server/.env (git 제외, 예시 .env.example). 테스트는 읽지 않는다 (conftest, #84)
+    model_config = SettingsConfigDict(
+        env_file=os.environ.get("AI_SERVER_ENV_FILE", ".env") or None, env_prefix="AI_SERVER_"
+    )
 
     llm_provider: str = "mock"
     llm_api_key: str = ""

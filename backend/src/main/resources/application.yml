@@ -2,9 +2,11 @@ spring:
   application:
     name: donworry
 
-  # 개인 PC 설정 파일이 있으면 자동으로 덮어쓴다 (없어도 됨)
+  # 내 PC 설정 backend/.env가 있으면 읽는다 (없어도 됨, git 제외) — 예시는 backend/.env.example (#84)
+  # .env의 DONWORRY_* 줄이 아래 ${DONWORRY_...:기본값} 자리를 채운다. 실제 환경 변수가 있으면 그쪽이 우선
+  # 테스트는 donworry.env-file을 없는 파일로 바꿔 내 PC 설정을 읽지 않는다 (build.gradle)
   config:
-    import: optional:classpath:application-local.yml
+    import: optional:file:${donworry.env-file:.env}[.properties]
 
   datasource:
     url: jdbc:mariadb://${DONWORRY_DB_HOST:localhost}:${DONWORRY_DB_PORT:3307}/${DONWORRY_DB_NAME:donworry}
