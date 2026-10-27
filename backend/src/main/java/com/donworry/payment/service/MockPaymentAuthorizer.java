@@ -9,9 +9,10 @@ class MockPaymentAuthorizer implements PaymentAuthorizer {
         if (command == null) {
             throw new IllegalArgumentException("command must not be null");
         }
-        // 시연 한도 초과 카드는 카드사가 거절한다 (#82)
-        if (DemoCard.declines(command.cardFingerprint())) {
-            return new AuthorizationResult(AuthorizationResult.Type.DECLINED, null, "LIMIT_EXCEEDED");
+        // 시연 거절 카드는 카드사가 사유와 함께 거절한다 (#82 · #98)
+        var declineCode = DemoCard.declineCodeOf(command.cardFingerprint());
+        if (declineCode.isPresent()) {
+            return new AuthorizationResult(AuthorizationResult.Type.DECLINED, null, declineCode.get());
         }
         return new AuthorizationResult(AuthorizationResult.Type.SUCCEEDED, "MOCK-AUTH-" + command.paymentId(), null);
     }

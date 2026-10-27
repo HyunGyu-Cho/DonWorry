@@ -142,6 +142,30 @@ class CheckoutToCaseFlowTests {
                         .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.nullValue())));
     }
 
+    // 모의 카드사가 도난 · 잘못된 카드를 사유와 함께 거절하고, 사유가 결제 기록에 남는다 (#98 F-7)
+    @Test
+    void 모의카드사_도난카드_거절사유저장_DECLINED() throws Exception {
+        Map<?, ?> stolen = pay(order("strawberry"), "demo-card-stolen-2", 200);
+        Map<?, ?> invalid = pay(order("strawberry"), "demo-card-stolen-3", 200);
+        Map<?, ?> approved = pay(order("strawberry"), "demo-card-stolen-1", 200);
+
+        assertThat(List.of(stolen.get("outcome"), invalid.get("outcome"), approved.get("outcome")))
+                .containsExactly("DECLINED", "DECLINED", "PAID");
+        String sql = "SELECT CONCAT(status, '/', COALESCE(decline_code, '-')) FROM payments WHERE payment_id = ?";
+        assertThat(jdbc.queryForObject(
+                        sql, String.class, Long.valueOf(stolen.get("paymentId").toString())))
+                .isEqualTo("DECLINED/LOST_OR_STOLEN");
+        assertThat(jdbc.queryForObject(
+                        sql, String.class, Long.valueOf(invalid.get("paymentId").toString())))
+                .isEqualTo("DECLINED/INVALID_CARD");
+        assertThat(jdbc.queryForObject(
+                        sql,
+                        String.class,
+                        Long.valueOf(approved.get("paymentId").toString())))
+                .doesNotEndWith("/LOST_OR_STOLEN")
+                .doesNotStartWith("DECLINED");
+    }
+
     // 같은 결제창으로 두 번 결제할 수 없다 · 없는 결제창은 만료와 같은 410
     @Test
     void secondPayAndUnknownToken_rejected() throws Exception {

@@ -19,7 +19,21 @@ export const DEMO_CARDS: DemoCard[] = [
   { cardToken: 'demo-card-new', label: '처음 쓰는 카드', masked: '**** 1173', country: 'KR' },
   { cardToken: 'demo-card-foreign', label: '해외 발급 카드', masked: '**** 4402', country: 'US' },
   { cardToken: 'demo-card-decline', label: '한도 초과 카드', masked: '**** 0007', country: 'KR' },
+  // 카드 테스팅 시연 (#98) — 백엔드 DemoCard와 같은 토큰 · 끝자리
+  { cardToken: 'demo-card-stolen-1', label: '도난 카드 1', masked: '**** 3101', country: 'KR' },
+  { cardToken: 'demo-card-stolen-2', label: '도난 카드 2', masked: '**** 3102', country: 'KR' },
+  { cardToken: 'demo-card-stolen-3', label: '도난 카드 3', masked: '**** 3103', country: 'KR' },
+  { cardToken: 'demo-card-stolen-4', label: '도난 카드 4', masked: '**** 3104', country: 'KR' },
+  { cardToken: 'demo-card-stolen-5', label: '도난 카드 5', masked: '**** 3105', country: 'KR' },
 ]
+
+// 모의 카드사가 거절하는 카드 (백엔드 DemoCard.declineCode와 같음)
+const DECLINED_CARDS = new Set([
+  'demo-card-decline',
+  'demo-card-stolen-2',
+  'demo-card-stolen-3',
+  'demo-card-stolen-5',
+])
 
 const HIGH_AMOUNT = 500_000
 const RETURN_URL = 'http://localhost:8080/orders/result'
@@ -95,7 +109,7 @@ const COPY: Record<CheckoutOutcome, [string, string]> = {
 }
 
 export function decideOutcome(cardToken: string, amount: number): CheckoutOutcome {
-  if (cardToken === 'demo-card-decline') return 'DECLINED'
+  if (DECLINED_CARDS.has(cardToken)) return 'DECLINED'
   if (amount >= HIGH_AMOUNT && cardToken === 'demo-card-foreign') return 'BLOCKED'
   return 'PAID'
 }

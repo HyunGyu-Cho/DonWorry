@@ -36,6 +36,7 @@
 - **R02 · R03 (#98 F-4).** 과거 정상 결제가 있는 구매자만 판단한다. R02는 P5가 센 `deviceCompletedPayments`(이 기기로 매입 완료한 결제 수)가 0이면, R03은 `cardCompletedPayments`가 0이면 적중. 과거 정상 결제가 없거나 기기 · 카드를 모르면 확인 불가(0점)로 이유를 남긴다
 - **IP 이름표 · 시연 접속 환경 (#98 F-5).** `identity.api.IpLocator`가 IP → 나라 · 회선 종류를 찾는다 (지금은 `demo_fake_ips`, 나중에 GeoIP 파일). P5가 찾아 FDS 요청 `clientCountry` · `clientIpType`으로 넘기고, P2는 identity를 부르지 않는다. 결제창은 `donworry.demo.fake-client-ip`(`DONWORRY_DEMO_FAKE_CLIENT_IP`, 기본 false)가 켜졌을 때만 테스트 상점이 고른 `X-Demo-Client-IP` · `X-Demo-Device-Id` 헤더를 쓰고, IP는 이름표에 있는 값만 받는다. 시연 브라우저는 김민수의 "평소 기기"가 아니라서(기기 쿠키를 그냥 발급하면 시연 ①이 80점 DENY), 김민수 시드 결제에 평소 기기를 적고 테스트 상점에서 IP + 기기를 함께 고른다. 실제 기기 쿠키 발급은 CakeShop 연동 때
 - **R05 고위험 국가 IP (#98 F-6).** 기준값 `{"countries": [...]}`에 있는 나라면 +40. 시연용 목록은 러시아 · 베트남 · 네덜란드(시연 IP 이름표의 해외 나라에서 고름, 실제 위험 국가 목록 아님). 이름표에 없는 IP는 확인 불가(0점) — 모르는 IP를 국내나 안전으로 치지 않는다
+- **모의 카드사 거절 사유 (#98 F-7).** 카드사 경계(`PaymentAuthorizer`)는 그대로 두고 모의 구현만 넓힌다 — 거절 사유 `LIMIT_EXCEEDED` · `LOST_OR_STOLEN` · `INVALID_CARD`를 `payments.decline_code`에 남긴다 (R08 · R06이 거절된 시도를 센다). 시연용 도난 카드 5장(1 · 4 승인, 2 분실/도난 · 3 잘못된 카드 · 5 한도 초과 거절). 별도 카드사 컨테이너(WireMock) 안은 1차에 일이 커서 버림
 - 이번 결정은 카탈로그와 판정 구간까지다. R02 · R04 · R05 · R06 · R07 · R08의 계산과 R03의 "과거 정상 결제가 있는 구매자만" 조건은 묶음 ② · ③에서 Rule마다 붙인다. 그전까지 계산하지 않는 Rule은 기록 없이 0점이다
 
 ## 고려한 대안
