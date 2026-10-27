@@ -38,14 +38,23 @@ class FdsEvaluationPersistenceTests {
     void evaluate_scenarioOne_persistsReviewWithRuleHits() {
         var requestedAt = Instant.parse("2026-10-27T01:00:00Z");
 
-        var result = evaluator.evaluate(
-                new FdsEvaluationRequest(UUID.randomUUID(), 3L, "hong-gildong", 650_000L, requestedAt, 40_000L, 0));
+        var result = evaluator.evaluate(FdsEvaluationRequest.builder()
+                .evaluationRequestId(UUID.randomUUID())
+                .paymentId(3L)
+                .merchantId(1L)
+                .customerRef("hong-gildong")
+                .amount(650_000L)
+                .paymentRequestedAt(requestedAt)
+                .hasPriorCapturedPayment(true)
+                .cardCompletedPayments(0)
+                .build());
 
         assertThat(result.result()).isEqualTo(FdsResult.REVIEW);
         assertThat(result.riskScore()).isEqualTo(55);
         assertThat(evaluationRepository.findAll()).singleElement().satisfies(evaluation -> {
             assertThat(evaluation.getPaymentRequestedAt()).isEqualTo(requestedAt);
             assertThat(evaluation.getRawScore()).isEqualTo(55);
+            assertThat(evaluation.getMerchantId()).isEqualTo(1L);
             assertThat(evaluation.getRuleHits()).hasSize(2);
         });
     }

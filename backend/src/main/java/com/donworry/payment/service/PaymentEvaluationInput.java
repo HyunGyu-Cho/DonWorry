@@ -11,8 +11,13 @@ public record PaymentEvaluationInput(
         String customerRef,
         long amount,
         Instant paymentRequestedAt,
-        // FDS 입력 (#82) — 고객 평균 매입 금액 · 이 카드로 매입까지 끝낸 결제 수
-        Long customerAverageAmount,
+        // FDS 입력 (#82 · #96) — 결제 정보와 이 고객의 이력. 모르면 null
+        Long merchantId,
+        String cardFingerprint,
+        String deviceId,
+        String clientIp,
+        String buyerEmail,
+        Boolean hasPriorCapturedPayment,
         Integer cardCompletedPayments) {
 
     public PaymentEvaluationInput {

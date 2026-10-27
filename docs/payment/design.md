@@ -97,7 +97,7 @@ P2와 P6 이벤트는 현재 코드 계약이다. P5의 ALLOW 자동 매입 연�
 
 | DTO | 필수 필드 | 선택 필드·규칙 |
 | --- | --- | --- |
-| FdsEvaluationRequest | evaluationRequestId(UUID), paymentId(Long, 양수), customerRef(String, 공백 불가), amount(long, 양수), paymentRequestedAt(Instant) | 모든 필드 필수. paymentRequestedAt은 결제 요청 시각이며 평가 완료 시각과 구분 |
+| FdsEvaluationRequest | evaluationRequestId(UUID), paymentId(Long, 양수), customerRef(String, 공백 불가), amount(long, 양수), paymentRequestedAt(Instant) | 모든 필드 필수. paymentRequestedAt은 결제 요청 시각이며 평가 완료 시각과 구분. #96부터 선택 칸 merchantId · cardFingerprint · deviceId · clientIp · buyerEmail · hasPriorCapturedPayment · cardCompletedPayments (모르면 null → 그 Rule은 확인 불가, [ADR-0023](../decisions/0023-payment-fds-rules-r01-r08.md)) |
 | FdsEvaluationResponse | evaluationRequestId(UUID), evaluationId(Long), result(ALLOW/REVIEW/DENY/ERROR), evaluatedAt(Instant) | 정상 결과는 riskScore(Integer) 0 이상·errorCode null. ERROR는 riskScore null·errorCode 필수 |
 
 기존 초안의 merchantId·orderRef·RiskSignals는 현재 P2 요청 DTO에 없다. 추가가 필요하면 P2와 계약을 먼저 합의한다.

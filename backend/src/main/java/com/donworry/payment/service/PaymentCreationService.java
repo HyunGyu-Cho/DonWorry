@@ -41,19 +41,35 @@ public class PaymentCreationService {
                 .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
     }
 
-    // FDS 입력값 (#82): 고객 평균 매입 금액 · 이 카드로 매입까지 끝낸 결제 수. 카드를 모르면 카드 값은 null
+    // FDS 입력값 (#82 · #96): 결제 정보(가맹점 · 카드 · 기기 · IP · 이메일)와 이 고객의 이력
+    // 과거 정상 결제 = 같은 가맹점 · 같은 고객의 매입 완료(CAPTURED) — 승인만 된 보류 · 취소 결제는 치지 않는다
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public Features features(Long paymentId) {
         Payment payment = paymentRepository
                 .findById(paymentId)
                 .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
-        Double average = paymentRepository.averageCapturedAmount(payment.getMerchantId(), payment.getCustomerRef());
+        boolean hasPriorCaptured =
+                paymentRepository.countCaptured(payment.getMerchantId(), payment.getCustomerRef()) > 0;
         Integer cardCount = payment.getCardFingerprint() == null
                 ? null
                 : (int) paymentRepository.countCapturedWithCard(
                         payment.getMerchantId(), payment.getCustomerRef(), payment.getCardFingerprint());
-        return new Features(average == null ? null : Math.round(average), cardCount);
+        return new Features(
+                payment.getMerchantId(),
+                payment.getCardFingerprint(),
+                payment.getDeviceId(),
+                payment.getClientIp(),
+                payment.getBuyerEmail(),
+                hasPriorCaptured,
+                cardCount);
     }
 
-    public record Features(Long customerAverageAmount, Integer cardCompletedPayments) {}
+    public record Features(
+            Long merchantId,
+            String cardFingerprint,
+            String deviceId,
+            String clientIp,
+            String buyerEmail,
+            Boolean hasPriorCapturedPayment,
+            Integer cardCompletedPayments) {}
 }

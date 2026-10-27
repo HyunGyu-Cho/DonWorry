@@ -54,7 +54,7 @@ class FdsEvaluationServiceTests {
         stubSave(1L);
         when(ruleRepository.findActiveCatalog()).thenReturn(seedRules());
 
-        var result = transactionEvaluator.evaluate(featureRequest(650_000L, 40_000L, 0));
+        var result = transactionEvaluator.evaluate(featureRequest(650_000L, true, 0));
 
         assertThat(result.result()).isEqualTo(FdsResult.REVIEW);
         assertThat(result.riskScore()).isEqualTo(55);
@@ -91,7 +91,7 @@ class FdsEvaluationServiceTests {
         rules.add(retired(rule("GEO_MISMATCH", 25, null, false)));
         when(ruleRepository.findActiveCatalog()).thenReturn(rules);
 
-        var result = transactionEvaluator.evaluate(featureRequest(650_000L, 40_000L, 0));
+        var result = transactionEvaluator.evaluate(featureRequest(650_000L, true, 0));
 
         assertThat(result.riskScore()).isEqualTo(55);
         assertThat(savedHits()).extracting("ruleCode").containsExactly("HIGH_AMOUNT", "NEW_CARD");
@@ -106,7 +106,7 @@ class FdsEvaluationServiceTests {
                         rule("HIGH_AMOUNT", 60, java.util.Map.of("minAmount", 500000), true),
                         rule("NEW_CARD", 50, null, true)));
 
-        var result = transactionEvaluator.evaluate(featureRequest(650_000L, 40_000L, 0));
+        var result = transactionEvaluator.evaluate(featureRequest(650_000L, true, 0));
 
         assertThat(result.riskScore()).isEqualTo(100);
         assertThat(result.result()).isEqualTo(FdsResult.DENY);
@@ -203,15 +203,17 @@ class FdsEvaluationServiceTests {
         return rule;
     }
 
-    private FdsEvaluationRequest featureRequest(long amount, Long average, Integer cardCompleted) {
-        return new FdsEvaluationRequest(
-                UUID.randomUUID(),
-                3L,
-                "kim-minsu",
-                amount,
-                Instant.parse("2026-10-27T01:00:00Z"),
-                average,
-                cardCompleted);
+    private FdsEvaluationRequest featureRequest(long amount, Boolean hasPriorCaptured, Integer cardCompleted) {
+        return FdsEvaluationRequest.builder()
+                .evaluationRequestId(UUID.randomUUID())
+                .paymentId(3L)
+                .merchantId(1L)
+                .customerRef("kim-minsu")
+                .amount(amount)
+                .paymentRequestedAt(Instant.parse("2026-10-27T01:00:00Z"))
+                .hasPriorCapturedPayment(hasPriorCaptured)
+                .cardCompletedPayments(cardCompleted)
+                .build();
     }
 
     // fds_rules 시드와 같은 값 (V20261027_211105)

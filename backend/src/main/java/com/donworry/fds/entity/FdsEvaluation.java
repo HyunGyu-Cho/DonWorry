@@ -39,6 +39,10 @@ public class FdsEvaluation {
     @Column(name = "payment_id", nullable = false)
     private Long paymentId;
 
+    // 평가 당시 가맹점 (#96) — 이력 비교 단위. 개발용 Mock 평가는 null
+    @Column(name = "merchant_id")
+    private Long merchantId;
+
     @Column(name = "customer_ref", nullable = false, length = 100)
     private String customerRef;
 
@@ -70,6 +74,7 @@ public class FdsEvaluation {
     private FdsEvaluation(
             UUID evaluationRequestId,
             Long paymentId,
+            Long merchantId,
             String customerRef,
             Instant paymentRequestedAt,
             Integer riskScore,
@@ -79,6 +84,7 @@ public class FdsEvaluation {
             String errorCode) {
         this.evaluationRequestId = evaluationRequestId;
         this.paymentId = paymentId;
+        this.merchantId = merchantId;
         this.customerRef = customerRef;
         this.paymentRequestedAt = paymentRequestedAt;
         this.riskScore = riskScore;
@@ -99,6 +105,7 @@ public class FdsEvaluation {
         return FdsEvaluation.builder()
                 .evaluationRequestId(request.evaluationRequestId())
                 .paymentId(request.paymentId())
+                .merchantId(request.merchantId())
                 .customerRef(request.customerRef())
                 .paymentRequestedAt(request.paymentRequestedAt())
                 .riskScore(riskScore)
@@ -113,6 +120,7 @@ public class FdsEvaluation {
         return FdsEvaluation.builder()
                 .evaluationRequestId(request.evaluationRequestId())
                 .paymentId(request.paymentId())
+                .merchantId(request.merchantId())
                 .customerRef(request.customerRef())
                 .paymentRequestedAt(request.paymentRequestedAt())
                 .result(FdsResult.ERROR)

@@ -32,6 +32,7 @@
 - 룰 · 차단 목록은 모든 고객사(가맹점)에 공통으로 적용한다. 비교 이력은 가맹점 + 구매자 단위로 나눈다
 - R04 · R06 · R08은 같은 결제에서 각각 더한다 (중복 가산). 합계가 100을 넘으면 화면 점수만 100으로 자른다
 - **FDS 평가 실패(ERROR)도 카드 승인 후 매입 보류(HELD) → 사건.** P2는 룰 계산 중 예외가 나면 예외를 던지지 않고 ERROR 평가(점수 없음 · `FDS_RULE_EVALUATION_FAILED`)를 남긴다. P5는 REVIEW처럼 승인을 받고 매입만 멈춘다. 평가 호출 자체가 예외로 끝나면(DB 장애 등) 지금처럼 결제창 오류 · PENDING
+- **평가 입력 넓히기 (F-3).** `FdsEvaluationRequest`에 선택 칸 `merchantId` · `cardFingerprint` · `deviceId` · `clientIp` · `buyerEmail` · `hasPriorCapturedPayment` · `cardCompletedPayments`를 둔다 (필수 5개는 ADR-0014 그대로). 폐지된 평소보다 큰 금액용 `customerAverageAmount`는 뺀다. "과거 정상 결제"는 같은 가맹점 · 같은 구매자의 매입 완료(CAPTURED) 1건 이상 — 승인만 된 보류 · 취소 결제를 치면 사기범이 한 번 승인받은 뒤 R02 · R03을 피할 수 있다. P2는 평가 당시 가맹점을 `fds_evaluations.merchant_id`에 남긴다
 - 이번 결정은 카탈로그와 판정 구간까지다. R02 · R04 · R05 · R06 · R07 · R08의 계산과 R03의 "과거 정상 결제가 있는 구매자만" 조건은 묶음 ② · ③에서 Rule마다 붙인다. 그전까지 계산하지 않는 Rule은 기록 없이 0점이다
 
 ## 고려한 대안
@@ -44,12 +45,15 @@
 | R 번호를 화면 상수로만 두기 | AI 보고서 · 경보 · 카탈로그가 번호를 따로 들고 있어 어긋날 수 있음 |
 | ERROR면 지금처럼 승인 요청을 하지 않음 | 결제창이 오류로 멈추고 결제가 PENDING에 갇힘. 룰안 4절 "안전한 보류(HELD), 자동 승인 금지"와 다름 |
 | ERROR를 자동 통과(ALLOW)로 | FDS가 고장 난 동안 사기 결제가 그대로 매입됨 |
+| 과거 정상 결제를 "승인된 결제"로 | 승인만 된 보류 · 취소 결제도 이력이 돼서, 사기범이 한 번 승인받은 뒤 새 기기 · 새 카드 Rule을 피함 |
+| P2가 결제 표를 직접 읽어 이력을 셈 | 모듈 경계(AGENTS 4절) 위반 — P2는 payments를 읽지 않는다 |
 | 합계를 100에서 잘라서만 저장 | 원래 합계가 사라져 나중에 Rule 성적표 · 조정(L-2 · L-3)에서 "얼마나 넘었는지"를 볼 수 없음 |
 
 ## 영향
 
 - API: `GET /api/fds/rules` 응답에 `displayCode`, 폐지 Rule 제외 · R01~R08 순. `GET /api/fds/rules/hit-stats`도 폐지 Rule 제외
-- DB: `fds_rules.display_code` · `retired_at`, `fds_evaluations.raw_score` 추가. 룰 시드 교체 migration (`V20261027_211046` · `V20261027_211057` · `V20261027_211105`)
+- DB: `fds_rules.display_code` · `retired_at`, `fds_evaluations.raw_score` · `merchant_id` 추가. 룰 시드 교체 migration (`V20261027_211046` · `V20261027_211057` · `V20261027_211105` · `V20261027_215208`)
+- 모듈 계약 (F-3): `fds.api.FdsEvaluationRequest` 선택 칸 추가 · `customerAverageAmount` 삭제. P5 `PaymentCreationService.Features`가 결제 · 이력에서 채운다
 - 화면: 판정 구간 안내 · 용어 풀이 · 튜토리얼 문구 · Rule 카탈로그(표시 번호) · 결제 경보 "평소와 다른 점" · Mock 데이터. 폐지 Rule은 과거 기록 표시용 설명만 남김
 - ai-server: 가짜 AI의 Rule 이름표를 새 이름으로, 폐지 Rule 이름은 과거 기록용으로 유지
 - 테스트: FDS 단위 테스트(판정 경계 · 110점 · 폐지 Rule) · 시드 MariaDB 테스트 · 시연 ① 흐름 · 화면 시드 대조 테스트

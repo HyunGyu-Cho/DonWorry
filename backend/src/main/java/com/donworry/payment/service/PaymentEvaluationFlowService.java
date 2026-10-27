@@ -56,7 +56,12 @@ public class PaymentEvaluationFlowService {
                 .customerRef(payment.customerRef())
                 .amount(payment.amount())
                 .paymentRequestedAt(payment.createdAt())
-                .customerAverageAmount(features == null ? null : features.customerAverageAmount())
+                .merchantId(features == null ? null : features.merchantId())
+                .cardFingerprint(features == null ? null : features.cardFingerprint())
+                .deviceId(features == null ? null : features.deviceId())
+                .clientIp(features == null ? null : features.clientIp())
+                .buyerEmail(features == null ? null : features.buyerEmail())
+                .hasPriorCapturedPayment(features == null ? null : features.hasPriorCapturedPayment())
                 .cardCompletedPayments(features == null ? null : features.cardCompletedPayments())
                 .build();
         var result = evaluationService.evaluateAndDecide(state, evaluationInput);
