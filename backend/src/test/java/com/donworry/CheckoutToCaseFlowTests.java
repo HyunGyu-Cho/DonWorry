@@ -90,7 +90,8 @@ class CheckoutToCaseFlowTests {
         assertThat(paymentLookup.find(paymentId).orElseThrow().status()).isEqualTo("HELD");
         var evaluation = fdsPaymentEvaluations.latestForPayment(paymentId).orElseThrow();
         assertThat(evaluation.riskScore()).isEqualTo(55);
-        assertThat(evaluation.matchedRuleCodes()).containsExactlyInAnyOrder("HIGH_AMOUNT", "AMOUNT_SPIKE", "NEW_CARD");
+        // R01 고액 30 + R03 결제 이력 없는 카드 25 = 55점 (#96)
+        assertThat(evaluation.matchedRuleCodes()).containsExactly("HIGH_AMOUNT", "NEW_CARD");
         await().atMost(Duration.ofSeconds(5))
                 .untilAsserted(() -> assertThat(casePaymentRepository.findByPaymentId(paymentId))
                         .isPresent());
@@ -135,11 +136,14 @@ class CheckoutToCaseFlowTests {
 
         mvc.perform(get("/api/fds/rules"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].displayCode").value("R01"))
                 .andExpect(
-                        jsonPath("$[?(@.ruleCode == 'NEW_CARD')].displayName").value("처음 쓰는 카드"));
+                        jsonPath("$[?(@.ruleCode == 'NEW_CARD')].displayName").value("기존 결제 이력 없는 카드"))
+                .andExpect(jsonPath("$[?(@.ruleCode == 'AMOUNT_SPIKE')]").isEmpty());
         mvc.perform(get("/api/fds/rules/hit-stats").param("days", "7"))
-                .andExpect(jsonPath("$[?(@.ruleCode == 'AMOUNT_SPIKE')].daily.length()")
-                        .value(7));
+                .andExpect(jsonPath("$[?(@.ruleCode == 'NEW_DEVICE')].daily.length()")
+                        .value(7))
+                .andExpect(jsonPath("$[?(@.ruleCode == 'AMOUNT_SPIKE')]").isEmpty());
         mvc.perform(get("/api/investigation/payment-alerts")
                         .param("attentionOnly", "true")
                         .param("size", "50"))
@@ -158,7 +162,7 @@ class CheckoutToCaseFlowTests {
                 .andExpect(jsonPath("$.code").value("PAY_001"));
         mvc.perform(get("/api/security-cases/{id}", caseId))
                 .andExpect(jsonPath("$.securityCase.subjectLabel").value("김민수 고객"))
-                .andExpect(jsonPath("$.payments[0].hitRuleCodes.length()").value(3))
+                .andExpect(jsonPath("$.payments[0].hitRuleCodes.length()").value(2))
                 .andExpect(jsonPath("$.payments[0].evaluationId").isNumber());
         mvc.perform(get("/api/security-cases/handoffs")).andExpect(status().isOk());
         mvc.perform(get("/api/investigation/approvals")).andExpect(status().isOk());

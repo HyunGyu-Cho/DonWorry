@@ -42,7 +42,7 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
       title: '왜 걸렸는지 보기',
       todo: '적중한 Rule을 읽고 [사건 보기]를 눌러 보세요.',
       look: [
-        '처음 쓰는 카드 · 평소(4만 원)의 16배 금액 · 고액 결제가 함께 걸렸어요',
+        '고액 결제(30점) · 기존 결제 이력 없는 카드(25점)가 함께 걸려 55점이에요',
         'Rule 하나만 걸렸다면 어떻게 읽는지도 적혀 있어요',
       ],
       path: '/security/alerts/103',
@@ -254,7 +254,7 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
     {
       title: '결제 경보 보기',
       todo: '[결제 경보]에서 정하늘 고객의 "거절" 경보를 눌러 보세요.',
-      look: ['70점 이상은 사람을 기다리지 않고 바로 거절해요'],
+      look: ['80점 이상은 사람을 기다리지 않고 바로 거절해요'],
       path: '/security/alerts',
       target: 'alert-106',
     },

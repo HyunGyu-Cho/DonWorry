@@ -106,11 +106,7 @@ test('mockSubmitDecisions_closesCaseAndAddsHistory', async () => {
   assert.equal(after?.handoffs[0].actionType, 'VOID')
   assert.ok(after?.history.some((h) => h.eventType === 'CASE_CLOSED'))
   const list = await mockGetCases()
-  assert.deepEqual(list.find((c) => c.caseId === '201')?.hitRuleCodes, [
-    'HIGH_AMOUNT',
-    'AMOUNT_SPIKE',
-    'NEW_CARD',
-  ])
+  assert.deepEqual(list.find((c) => c.caseId === '201')?.hitRuleCodes, ['HIGH_AMOUNT', 'NEW_CARD'])
 })
 
 // 직원 사건은 보안 관리자만 연다 (직무 분리)

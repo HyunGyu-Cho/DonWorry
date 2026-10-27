@@ -164,7 +164,7 @@ erDiagram
 | | `staff_devices` | 직원별 등록 기기 |
 | | `staff_recovery_codes` | OTP 복구 코드 (해시) |
 | | `demo_fake_ips` | 시연용 가짜 IP와 위치 (demo 프로필 전용) |
-| P2 `fds` | `fds_rules` | Rule 카탈로그 15개 (결제 8 · 직원 7), 점수 · 위험도 · 켜기/끄기 |
+| P2 `fds` | `fds_rules` | Rule 카탈로그 (결제 R01~R08 · 직원 7, 폐지 3), 표시 번호 · 점수 · 위험도 · 켜기/끄기 · 폐지 시각 (ADR-0023) |
 | | `blocklist_entries` | 차단 목록 (카드 · IP · 이메일 · 기기) |
 | | `staff_rule_hits` | 직원 Rule 적중 기록 (직원 경보) |
 | P3 `investigation` | `case_staff_hits` | 직원 사건에 묶인 직원 경보 |
@@ -180,7 +180,8 @@ erDiagram
 
 | migration | 내용 |
 | --- | --- |
-| `seed_fds_rules` | Rule 15개 (판정 구간: 0~39 ALLOW · 40~69 REVIEW · 70+ DENY, 차단 목록은 즉시 DENY) |
+| `seed_fds_rules` | Rule 15개 (10/24안, 판정 구간 40 · 70) — `replace_payment_rules_with_r01_r08`이 대체 |
+| `replace_payment_rules_with_r01_r08` | 결제 Rule R01~R08 (3개 추가 · 3개 폐지), 판정 구간 0~49 ALLOW · 50~79 REVIEW · 80+ DENY, 차단 목록은 즉시 DENY (ADR-0023) |
 | `seed_loan_products` | 가상 은행 대출 상품 3개 |
 | `seed_demo_fake_ips` | 가짜 IP 38개 (사내망 3 · 국내 3 · 익명 2 · 분산 공격 30) |
 | `seed_demo_staff_users` | 시연 직원 3명: `jiwon` 박지원(보안 직원) · `yunseo` 최윤서(보안 관리자) · `dohyun` 이도현(보안 직원). 비밀번호 1234, OTP는 demo 프로필 고정 코드 |

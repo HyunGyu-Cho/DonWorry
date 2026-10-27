@@ -129,11 +129,7 @@ export function buildMockCases(now: Date): CaseDetail[] {
         groupingBasis: '같은 고객 · 30분 창',
       },
       payments: [
-        payment(now, '2011', '31', 25, 650000, 'HELD', 55, 103, [
-          'HIGH_AMOUNT',
-          'AMOUNT_SPIKE',
-          'NEW_CARD',
-        ]),
+        payment(now, '2011', '31', 25, 650000, 'HELD', 55, 103, ['HIGH_AMOUNT', 'NEW_CARD']),
       ],
       reports: [report(now, '201', 24, 20)],
       decisions: [],
@@ -158,10 +154,9 @@ export function buildMockCases(now: Date): CaseDetail[] {
         groupingBasis: '같은 고객 · 30분 창',
       },
       payments: [
-        payment(now, '1801', '18', 40 * DAY + 11, 480000, 'VOIDED', 70, null, [
-          'HIGH_AMOUNT',
+        payment(now, '1801', '18', 40 * DAY + 11, 480000, 'VOIDED', 50, null, [
+          'NEW_DEVICE',
           'NEW_CARD',
-          'AMOUNT_SPIKE',
         ]),
       ],
       reports: [report(now, '180', 40 * DAY + 10, 40 * DAY)],
@@ -189,7 +184,7 @@ export function buildMockCases(now: Date): CaseDetail[] {
         groupingBasis: '같은 고객 · 30분 창',
       },
       payments: [
-        payment(now, '1751', '17', 55 * DAY + 11, 520000, 'CAPTURED', 50, null, [
+        payment(now, '1751', '17', 55 * DAY + 11, 520000, 'CAPTURED', 55, null, [
           'HIGH_AMOUNT',
           'NEW_CARD',
         ]),

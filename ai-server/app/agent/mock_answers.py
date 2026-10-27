@@ -14,12 +14,12 @@ PAYMENT_FRAUD = {
     ],
     "riskPoints": [
         {
-            "title": "처음 쓰는 카드",
+            "title": "기존 결제 이력 없는 카드",
             "detail": "이 고객이 결제를 끝낸 적 없는 카드입니다",
             "source": "get_fds_evidence",
         },
         {
-            "title": "평소보다 큰 금액",
+            "title": "평소의 16배 금액",
             "detail": "평소 평균 4만 원의 16배입니다",
             "source": "get_payment_history",
         },
@@ -113,15 +113,19 @@ TOOL_PLAN = {
     "STAFF_TAKEOVER": ["get_security_events", "find_similar_cases"],
 }
 
-# 결제 Rule 이름 — DB 정본 fds_rules.display_name (seed_fds_rules)과 같다
+# 결제 Rule 이름 — DB 정본 fds_rules.display_name (R01~R08, #96)과 같다
 RULE_NAMES = {
-    "BLOCKLIST": "차단 목록 일치",
     "HIGH_AMOUNT": "고액 결제",
-    "AMOUNT_SPIKE": "평소보다 큰 금액",
-    "NEW_CARD": "처음 쓰는 카드",
-    "NEW_ACCOUNT": "신규 계정 결제",
+    "NEW_DEVICE": "기존 미사용 단말기",
+    "NEW_CARD": "기존 결제 이력 없는 카드",
+    "RAPID_REPEAT": "특정 횟수 이상 결제",
+    "HIGH_RISK_COUNTRY_IP": "고위험 국가 IP",
     "CARD_TESTING": "카드 테스팅",
+    "BLOCKLIST": "차단 목록 일치",
     "DECLINE_RETRY": "거절 후 재시도",
+    # 폐지한 Rule — 과거 평가 기록에만 남아 있다
+    "AMOUNT_SPIKE": "평소보다 큰 금액",
+    "NEW_ACCOUNT": "신규 계정 결제",
     "GEO_MISMATCH": "해외 · 익명 접속",
 }
 
@@ -217,7 +221,8 @@ def _payment_fraud(results: Results) -> dict[str, object]:
     ]
     normal_points = []
     # 고객 과거 결제 · 카드 (#90) — 평소 금액과 비교, 처음 쓰는 카드인지
-    # FDS가 같은 Rule(AMOUNT_SPIKE · NEW_CARD)로 이미 잡았으면 그 줄에 자세한 내용을 붙인다
+    # FDS가 같은 Rule로 이미 잡았으면 그 줄에 자세한 내용을 붙인다
+    # (NEW_CARD, 과거 평가 기록은 폐지된 AMOUNT_SPIKE도)
     history_risk, history_normal = _history_points(results)
     merge = {"AMOUNT_SPIKE": "get_payment_history", "NEW_CARD": "get_payment_authentication"}
     for code, source in merge.items():
@@ -281,7 +286,7 @@ def _payment_fraud(results: Results) -> dict[str, object]:
     }
 
 
-# 이 배수 이상이면 "평소보다 큰 금액"으로 본다 (FDS AMOUNT_SPIKE 5배보다 낮게 잡아 참고 근거로)
+# 이 배수 이상이면 "평소의 N배 금액"을 위험 근거로 쓴다 (FDS Rule이 아닌 과거 결제 창구 근거)
 SPIKE_RATIO = 3.0
 
 

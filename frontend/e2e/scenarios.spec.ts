@@ -64,7 +64,7 @@ test('① 결제 사기 의심 — 경보 → 사건 → AI 재조사 → 판정
   await tour(page, 'alert-103').click()
   await expect(page).toHaveURL(/\/security\/alerts\/103$/)
   await expectStep(page, 3, 9)
-  await expect(page.getByRole('cell', { name: '평소 평균 4만 원의 16배' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '이 카드로 결제 완료 0건' })).toBeVisible()
 
   await tour(page, 'alert-case-link').click()
   await expect(page).toHaveURL(/\/security\/cases\/201$/)

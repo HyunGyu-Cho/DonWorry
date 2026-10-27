@@ -14,9 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class FdsEvaluationTransactionService {
 
-    // 결제 판정 구간 — 40점 이상 직원 확인(REVIEW), 70점 이상 거절(DENY) (화면 경보 목록 안내와 같다)
-    private static final int REVIEW_MIN_SCORE = 40;
-    private static final int DENY_MIN_SCORE = 70;
+    // 결제 판정 구간 — 50점 이상 직원 확인(REVIEW), 80점 이상 거절(DENY) (#96, ADR-0023 · 화면 경보 안내와 같다)
+    static final int REVIEW_MIN_SCORE = 50;
+    static final int DENY_MIN_SCORE = 80;
+    // 화면에 보이는 점수 상한. 원래 합계는 raw_score에 남긴다
+    static final int MAX_DISPLAY_SCORE = 100;
 
     private final FdsEvaluationRepository evaluationRepository;
     private final FdsRuleRepository ruleRepository;
@@ -32,11 +34,12 @@ class FdsEvaluationTransactionService {
         if (existing.isPresent()) {
             return responseOf(existing.get());
         }
-        // 켜진 결제 Rule만, 기준값 · 점수는 fds_rules에서 (#82 — 시나리오 ①의 3개부터, 나머지는 2-5)
-        var hits = PaymentRuleSet.evaluate(request, ruleRepository.findAllByOrderByRuleIdAsc());
-        var score = hits.stream().mapToInt(PaymentRuleSet.Hit::score).sum();
+        // 폐지 안 된 켜진 결제 Rule만, 기준값 · 점수는 fds_rules에서 (#82 · #96)
+        var hits = PaymentRuleSet.evaluate(request, ruleRepository.findActiveCatalog());
+        var rawScore = hits.stream().mapToInt(PaymentRuleSet.Hit::score).sum();
         var evaluatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        var evaluation = FdsEvaluation.completed(request, resultFor(score), score, evaluatedAt);
+        var evaluation = FdsEvaluation.completed(
+                request, resultFor(rawScore), Math.min(MAX_DISPLAY_SCORE, rawScore), rawScore, evaluatedAt);
         for (var hit : hits) {
             evaluation.addRuleHit(
                     hit.ruleCode(),
@@ -61,7 +64,7 @@ class FdsEvaluationTransactionService {
                 evaluation.getErrorCode());
     }
 
-    private FdsResult resultFor(int score) {
+    static FdsResult resultFor(int score) {
         if (score >= DENY_MIN_SCORE) {
             return FdsResult.DENY;
         }

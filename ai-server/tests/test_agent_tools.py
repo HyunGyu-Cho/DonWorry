@@ -97,7 +97,7 @@ def test_mockAgent_callsToolsInOrder_andWritesFromEvidence() -> None:
     assert result.status == InvestigationStatus.SUCCEEDED
     report = result.report
     assert report.risk_score == 65
-    assert [p.title for p in report.risk_points] == ["처음 쓰는 카드", "고액 결제"]
+    assert [p.title for p in report.risk_points] == ["기존 결제 이력 없는 카드", "고액 결제"]
     assert report.risk_points[0].detail == "300,000원 결제 · 65점"
     assert "300,000원" in report.summary
     assert [a.payment_id for a in report.payment_advice] == [PAYMENT]
@@ -120,7 +120,7 @@ def test_mockAgent_usesHistoryAndCard() -> None:
 
     # FakeTools의 FDS Rule은 NEW_CARD · HIGH_AMOUNT — 카드는 NEW_CARD 줄에 붙고, 금액 배수는 새 줄
     titles = [p.title for p in report.risk_points]
-    assert titles == ["처음 쓰는 카드", "고액 결제", "평소의 7.5배 금액"]
+    assert titles == ["기존 결제 이력 없는 카드", "고액 결제", "평소의 7.5배 금액"]
     assert report.risk_points[0].detail.endswith("카드 1173로 결제를 끝낸 적이 없습니다")
     spike = next(p for p in report.risk_points if p.title == "평소의 7.5배 금액")
     assert spike.detail == "이전 완료 결제 5건 평균 40,000원, 카드 4821 5건 — 이번은 평균의 7.5배"
@@ -129,6 +129,7 @@ def test_mockAgent_usesHistoryAndCard() -> None:
 
 
 # FDS가 같은 Rule로 이미 잡았으면 줄을 늘리지 않고 그 줄에 자세한 내용을 붙인다
+# (AMOUNT_SPIKE는 폐지됐지만 과거 평가 기록을 읽을 때 같은 규칙으로 붙인다, #96)
 def test_mockAgent_mergesHistoryIntoMatchingRule() -> None:
     class SpikeTools(FakeTools):
         async def call(self, report_id: int, attempt_id: str, name: str, args: dict) -> str:
@@ -145,7 +146,7 @@ def test_mockAgent_mergesHistoryIntoMatchingRule() -> None:
     report = investigate(SpikeTools(history=True)).report
 
     titles = [p.title for p in report.risk_points]
-    assert titles == ["평소보다 큰 금액", "처음 쓰는 카드"]
+    assert titles == ["평소보다 큰 금액", "기존 결제 이력 없는 카드"]
     assert report.risk_points[0].detail.endswith(
         "평균 40,000원, 카드 4821 5건 — 이번은 평균의 7.5배"
     )

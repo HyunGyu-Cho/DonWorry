@@ -45,8 +45,13 @@ public class FdsEvaluation {
     @Column(name = "payment_requested_at", nullable = false)
     private Instant paymentRequestedAt;
 
+    // 화면에 보이는 점수 = min(100, rawScore). ERROR면 null
     @Column(name = "risk_score")
     private Integer riskScore;
+
+    // 적용한 Rule 점수의 합 — 100을 넘을 수 있다 (#96). ERROR면 null
+    @Column(name = "raw_score")
+    private Integer rawScore;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -68,6 +73,7 @@ public class FdsEvaluation {
             String customerRef,
             Instant paymentRequestedAt,
             Integer riskScore,
+            Integer rawScore,
             FdsResult result,
             Instant evaluatedAt,
             String errorCode) {
@@ -76,19 +82,27 @@ public class FdsEvaluation {
         this.customerRef = customerRef;
         this.paymentRequestedAt = paymentRequestedAt;
         this.riskScore = riskScore;
+        this.rawScore = rawScore;
         this.result = result;
         this.evaluatedAt = evaluatedAt;
         this.errorCode = errorCode;
     }
 
+    // 합계가 100 이하인 평가 (테스트 · Mock) — 원점수 = 표시 점수
     public static FdsEvaluation completed(
             FdsEvaluationRequest request, FdsResult result, int riskScore, Instant evaluatedAt) {
+        return completed(request, result, riskScore, riskScore, evaluatedAt);
+    }
+
+    public static FdsEvaluation completed(
+            FdsEvaluationRequest request, FdsResult result, int riskScore, int rawScore, Instant evaluatedAt) {
         return FdsEvaluation.builder()
                 .evaluationRequestId(request.evaluationRequestId())
                 .paymentId(request.paymentId())
                 .customerRef(request.customerRef())
                 .paymentRequestedAt(request.paymentRequestedAt())
                 .riskScore(riskScore)
+                .rawScore(rawScore)
                 .result(result)
                 .evaluatedAt(evaluatedAt)
                 .build();

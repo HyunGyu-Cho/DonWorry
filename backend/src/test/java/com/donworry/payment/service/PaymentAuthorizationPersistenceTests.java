@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -96,7 +97,7 @@ class PaymentAuthorizationPersistenceTests {
     void createAndAuthorize_withRealEvaluation_commitsIndependently(boolean review) {
         String customer = UUID.randomUUID().toString();
         if (review) {
-            capturedHistory(customer);
+            highAmountScoresReview();
         }
         when(authorizer.authorize(any())).thenAnswer(invocation -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive())
@@ -162,7 +163,7 @@ class PaymentAuthorizationPersistenceTests {
     @Test
     void createAndAuthorize_whenCommitFails_rollsBackBothFields() {
         String customer = UUID.randomUUID().toString();
-        capturedHistory(customer);
+        highAmountScoresReview();
         var paymentId = new AtomicLong();
         var failure = new IllegalStateException("injected before-commit failure");
         when(authorizer.authorize(any())).thenAnswer(invocation -> {
@@ -265,14 +266,13 @@ class PaymentAuthorizationPersistenceTests {
         }
     }
 
-    // 이 고객의 매입 완료 이력 (평균 4만 원) — 평소보다 큰 금액 Rule이 판단할 수 있게 (#82)
-    private void capturedHistory(String customer) {
-        for (int i = 0; i < 2; i++) {
-            var past = com.donworry.payment.entity.Payment.pending(
-                    999L, customer, UUID.randomUUID().toString(), 40_000L, Instant.now());
-            past.recordAuthorizationSuccess("PAST-" + UUID.randomUUID(), false);
-            past.completeCapture();
-            payments.save(past);
-        }
+    // 이 흐름은 카드 없이 평가돼 R01 고액(30점)만 계산된다 — REVIEW를 만들려고 이 테스트 동안만 고액 점수를 50점으로 (#96)
+    private void highAmountScoresReview() {
+        jdbc.update("UPDATE fds_rules SET score = 50 WHERE rule_code = 'HIGH_AMOUNT'");
+    }
+
+    @AfterEach
+    void restoreHighAmountScore() {
+        jdbc.update("UPDATE fds_rules SET score = 30 WHERE rule_code = 'HIGH_AMOUNT'");
     }
 }

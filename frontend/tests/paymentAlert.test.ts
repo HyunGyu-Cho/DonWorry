@@ -28,7 +28,9 @@ test('mockEvaluations_scoreMatchesHitsAndBand', () => {
   for (const d of evals) {
     const e = d.evaluation
     const sum = d.ruleHits.reduce((s, h) => s + h.appliedScore, 0)
-    if (e.riskScore !== null) assert.equal(e.riskScore, sum, `평가 ${e.evaluationId}`)
+    // 화면 점수는 합계를 100에서 자른 값 (#96)
+    if (e.riskScore !== null)
+      assert.equal(e.riskScore, Math.min(100, sum), `평가 ${e.evaluationId}`)
     const matched = d.ruleHits.filter((h) => h.outcome === 'MATCH').map((h) => h.ruleCode)
     assert.deepEqual([...e.hitRuleCodes].sort(), [...matched].sort())
     // 결제 정보가 Mock 결제와 같다
@@ -40,7 +42,9 @@ test('mockEvaluations_scoreMatchesHitsAndBand', () => {
   assert.equal(fraud.riskScore, 55)
   assert.equal(fraud.result, 'REVIEW')
   assert.equal(fraud.caseId, '201')
-  assert.equal(byPayment(34).evaluation.riskScore, 90)
+  // 카드 테스팅 45 + 고위험 국가 IP 40 = 85 거절 (룰안 시나리오)
+  assert.equal(byPayment(34).evaluation.riskScore, 85)
+  assert.equal(byPayment(34).evaluation.result, 'DENY')
 })
 
 test('verdict_labelsAndMeaning', () => {
@@ -58,7 +62,7 @@ test('paymentFacts_followRuleHits', () => {
   const text = (label: string) => fraud.find((f) => f.label === label)
   assert.match(text('카드')?.text ?? '', /처음 쓰는 카드/)
   assert.equal(text('카드')?.tone, 'warn')
-  assert.match(text('금액')?.text ?? '', /5배 이상/)
+  assert.match(text('금액')?.text ?? '', /50만 원 이상 고액/)
   assert.equal(text('접속')?.tone, 'ok')
   assert.equal(text('계정')?.tone, 'ok')
 
@@ -66,11 +70,12 @@ test('paymentFacts_followRuleHits', () => {
   assert.equal(testing.find((f) => f.label === '접속')?.tone, 'bad')
   assert.match(testing.find((f) => f.label === '계정')?.text ?? '', /가입 40분 만에/)
   assert.ok(testing.some((f) => f.label === '시도' && f.tone === 'bad'))
-  // 가입 직후 계정은 카드 · 금액을 평소와 비교할 수 없다고 말한다
+  // 과거 정상 결제가 없으면 카드를 평소와 비교할 수 없다고 말한다 (R03 확인 불가)
   const of34 = (label: string) => testing.find((f) => f.label === label)
   assert.equal(of34('카드')?.tone, 'muted')
   assert.match(of34('카드')?.text ?? '', /비교할 수 없어요/)
-  assert.equal(of34('금액')?.tone, 'muted')
+  // 금액은 고정 기준(50만 원)과만 비교한다
+  assert.equal(of34('금액')?.tone, 'ok')
   // 자동화 브라우저는 정상(✅)으로 보이지 않는다
   assert.equal(of34('기기')?.tone, 'warn')
 

@@ -1757,6 +1757,17 @@ i.dw-stl-chip {
   font-weight: 400;
   color: #94a3b8;
 }
+/* 결제 Rule 표시 번호 R01~R08 (#96) */
+.dw-rule-display-code {
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: 2px;
+}
 .dw-case-trace-again {
   margin-top: 12px;
   border-top: 1px solid #f1f5f9;

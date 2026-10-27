@@ -6,16 +6,20 @@ import type { RuleCode } from '../types/fds.ts'
 export type ScoreResult = 'ALLOW' | 'REVIEW' | 'DENY'
 
 // 점수 합이 min 이상이면 그 구간 (높은 구간부터 검사)
+// 판정 구간 50 · 80 (#96, ADR-0023)
 export const SCORE_BANDS: { result: ScoreResult; min: number; label: string; meaning: string }[] = [
-  { result: 'DENY', min: 70, label: '거절', meaning: '70점 이상이면 결제를 바로 거절해요' },
+  { result: 'DENY', min: 80, label: '거절', meaning: '80점 이상이면 결제를 바로 거절해요' },
   {
     result: 'REVIEW',
-    min: 40,
+    min: 50,
     label: '직원 확인',
-    meaning: '40점 이상이면 카드 승인 후 매입을 멈추고 직원이 확인해요',
+    meaning: '50점 이상이면 카드 승인 후 매입을 멈추고 직원이 확인해요',
   },
-  { result: 'ALLOW', min: 0, label: '통과', meaning: '40점 미만이면 그대로 결제돼요' },
+  { result: 'ALLOW', min: 0, label: '통과', meaning: '50점 미만이면 그대로 결제돼요' },
 ]
+
+// 화면에 보이는 점수 상한 — 합계가 넘어도 100으로 보여 준다 (원래 합계는 백엔드 raw_score)
+export const MAX_DISPLAY_SCORE = 100
 
 // 차단 목록과 일치하면 점수와 관계없이 거절
 export function resultForScore(score: number, blocklisted = false): ScoreResult {
@@ -38,33 +42,39 @@ export type RuleGuide = {
 export const RULE_GUIDE: Record<RuleCode, RuleGuide> = {
   BLOCKLIST: {
     group: '차단 목록',
-    effect: '점수 계산 없이 즉시 거절',
+    effect: '점수 계산 없이 즉시 거절 (100점)',
     example: '사기 판정된 기기에서 새 카드로 재시도',
     alone: '단독으로도 차단 — 재범 방지',
   },
   HIGH_AMOUNT: {
     group: '금액',
-    effect: '+20점 / +35점',
+    effect: '+30점',
     example: '65만 원 단체 케이크 세트',
     alone: '단독으론 정상 — 단체 행사 주문일 수도',
   },
-  AMOUNT_SPIKE: {
-    group: '금액',
-    effect: '+20점',
-    example: '평균 4만 원 고객이 65만 원 결제',
-    alone: '단독으론 정상 — 특별한 날일 수도',
+  NEW_DEVICE: {
+    group: '신규성',
+    effect: '+25점',
+    example: '평소 노트북으로 결제하던 고객이 처음 보는 휴대폰으로 결제',
+    alone: '단독으론 정상 — 기기를 바꿨을 수도. 첫 손님에겐 적용하지 않아요',
   },
   NEW_CARD: {
     group: '신규성',
-    effect: '+15점',
+    effect: '+25점',
     example: '평소 카드 A 고객이 카드 B로 결제',
-    alone: '단독으론 정상 — 카드를 새로 발급받았을 수도',
+    alone: '단독으론 정상 — 카드를 새로 발급받았을 수도. 첫 손님에겐 적용하지 않아요',
   },
-  NEW_ACCOUNT: {
-    group: '신규성',
-    effect: '+20점',
-    example: '가입 40분 만에 결제',
-    alone: '단독으론 정상 — 첫 주문 고객일 수도',
+  RAPID_REPEAT: {
+    group: '빈도',
+    effect: '+30점',
+    example: '같은 고객이 10분 안에 결제를 3번 시도',
+    alone: '단독으론 정상 — 결제가 안 돼서 다시 눌렀을 수도',
+  },
+  HIGH_RISK_COUNTRY_IP: {
+    group: '접속 위치',
+    effect: '+40점',
+    example: '국내 고객 계정인데 고위험 국가 IP에서 결제',
+    alone: '단독으론 정상 — 해외 출장 중일 수도',
   },
   CARD_TESTING: {
     group: '빈도',
@@ -74,15 +84,28 @@ export const RULE_GUIDE: Record<RuleCode, RuleGuide> = {
   },
   DECLINE_RETRY: {
     group: '빈도',
-    effect: '+30점',
+    effect: '+35점',
     example: '거절 2번 뒤 금액을 낮춰 재시도',
     alone: '단독으론 정상 — 한도 초과를 몰랐을 수도',
   },
+  // 폐지한 Rule (#96) — 과거 평가 기록을 읽을 때만 쓴다
+  AMOUNT_SPIKE: {
+    group: '폐지',
+    effect: '지금은 쓰지 않음',
+    example: '평균 4만 원 고객이 65만 원 결제',
+    alone: '10/27 새 룰안에서 폐지',
+  },
+  NEW_ACCOUNT: {
+    group: '폐지',
+    effect: '지금은 쓰지 않음',
+    example: '가입 40분 만에 결제',
+    alone: '10/27 새 룰안에서 폐지',
+  },
   GEO_MISMATCH: {
-    group: '불일치',
-    effect: '+25점',
+    group: '폐지',
+    effect: '지금은 쓰지 않음',
     example: '한국 카드인데 네덜란드 Tor IP에서 결제',
-    alone: '단독으론 정상 — 해외 출장 중일 수도',
+    alone: '10/27 새 룰안에서 폐지 — 고위험 국가 IP로 대체',
   },
   STAFF_LOGIN_FAIL: {
     group: '인증',

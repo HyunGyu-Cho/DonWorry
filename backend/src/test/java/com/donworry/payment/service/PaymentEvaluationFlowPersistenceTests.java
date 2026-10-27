@@ -45,21 +45,21 @@ class PaymentEvaluationFlowPersistenceTests {
     // 실제 P2 평가가 저장된 결제의 고객·금액·시각으로 실행되고 평가 한 건만 남는다
     @Test
     void createAndEvaluate_withRealEvaluator_persistsMatchingEvaluation() {
-        // 이력 · 카드가 없으면 고액 결제만 판단한다 — 100만 원 이상 35점
+        // 이력 · 카드가 없으면 고액 결제만 판단한다 — 50만 원 이상 30점 (#96)
         var result = service.createAndEvaluate(input(UUID.randomUUID().toString(), 1_000_000L));
         assertThat(result.evaluationResult().evaluation().result()).isEqualTo(FdsResult.ALLOW);
-        assertThat(result.evaluationResult().evaluation().riskScore()).isEqualTo(35);
+        assertThat(result.evaluationResult().evaluation().riskScore()).isEqualTo(30);
         assertStored(result);
     }
 
-    // 평소 4만 원인 고객의 60만 원 결제는 고액 20 + 평소보다 큰 금액 20 = 40점 REVIEW, 승인 요청 판단만 반환한다 (#82)
+    // 평소 4만 원인 고객의 60만 원 결제는 R01 고액 30점만 — 카드가 없는 평가라 R03은 확인 불가, 50점 미만 ALLOW (#96)
     @Test
-    void createAndEvaluate_withSpikeOverHistory_returnsReviewWithoutHoldingPayment() {
+    void createAndEvaluate_highAmountWithoutCard_allowsWithoutAuthorization() {
         String customer = UUID.randomUUID().toString();
         capturedHistory(customer);
         var result = service.createAndEvaluate(input(customer, 600_000L));
-        assertThat(result.evaluationResult().evaluation().result()).isEqualTo(FdsResult.REVIEW);
-        assertThat(result.evaluationResult().evaluation().riskScore()).isEqualTo(40);
+        assertThat(result.evaluationResult().evaluation().result()).isEqualTo(FdsResult.ALLOW);
+        assertThat(result.evaluationResult().evaluation().riskScore()).isEqualTo(30);
         assertStored(result);
     }
 
