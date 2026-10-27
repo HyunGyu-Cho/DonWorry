@@ -35,4 +35,14 @@ public interface FdsEvaluationRepository
     @Query("select h.ruleCode, max(e.evaluatedAt) from FdsRuleHit h join h.evaluation e"
             + " where h.outcome = :outcome group by h.ruleCode")
     List<Object[]> findLastHitTimes(@Param("outcome") FdsRuleHitOutcome outcome);
+
+    // 차단 항목별 막은 결제 (#100): [차단 항목 번호, from 이후 건수, 마지막 차단 시각(기간 무관)] — 근거 JSON의 blocklistEntryId로 센다
+    @Query(
+            value = "SELECT CAST(JSON_VALUE(h.evidence_refs, '$.blocklistEntryId') AS SIGNED) AS entry_id,"
+                    + " SUM(CASE WHEN e.evaluated_at >= :from THEN 1 ELSE 0 END) AS recent, MAX(e.evaluated_at) AS last_at"
+                    + " FROM fds_rule_hits h JOIN fds_evaluations e ON e.evaluation_id = h.evaluation_id"
+                    + " WHERE h.rule_code = 'BLOCKLIST' AND h.outcome = 'MATCH' AND h.evidence_refs IS NOT NULL"
+                    + " GROUP BY entry_id",
+            nativeQuery = true)
+    List<Object[]> findBlocklistHits(@Param("from") Instant from);
 }

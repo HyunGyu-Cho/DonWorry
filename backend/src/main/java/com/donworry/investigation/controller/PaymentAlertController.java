@@ -1,13 +1,20 @@
 package com.donworry.investigation.controller;
 
 import com.donworry.fds.api.FdsResult;
+import com.donworry.investigation.dto.BlocklistDtos.BlockRequest;
+import com.donworry.investigation.dto.BlocklistDtos.BlockedEntry;
 import com.donworry.investigation.dto.InvestigationViewDtos.PaymentAlertDetail;
 import com.donworry.investigation.dto.InvestigationViewDtos.PaymentAlertPage;
+import com.donworry.investigation.service.PaymentAlertBlockService;
 import com.donworry.investigation.service.PaymentAlertService;
+import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentAlertController {
 
     private final PaymentAlertService paymentAlertService;
+    private final PaymentAlertBlockService paymentAlertBlockService;
 
     @GetMapping
     public PaymentAlertPage list(
@@ -34,5 +42,11 @@ public class PaymentAlertController {
     @GetMapping("/{evaluationId}")
     public ResponseEntity<PaymentAlertDetail> detail(@PathVariable Long evaluationId) {
         return ResponseEntity.of(paymentAlertService.detail(evaluationId));
+    }
+
+    // 결제 경보에서 고른 값을 차단 목록에 등록 (#100) — 보안 직원 · 보안 관리자만
+    @PostMapping("/{evaluationId}/blocklist")
+    public List<BlockedEntry> block(@PathVariable Long evaluationId, @Valid @RequestBody BlockRequest request) {
+        return paymentAlertBlockService.block(evaluationId, request);
     }
 }

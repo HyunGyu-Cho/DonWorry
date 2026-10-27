@@ -74,6 +74,17 @@ export type BlocklistEntry = {
   lastHitAt: string | null
 }
 
+// 결제 경보에서 차단 등록 (#100) — POST /investigation/payment-alerts/{evaluationId}/blocklist {types, reason}
+// 값은 서버가 결제에서 찾는다 (카드 지문은 화면에 없음). already = 이미 차단돼 있던 값
+export type BlockedEntry = {
+  entryId: number
+  entryType: BlocklistType
+  // 화면용 값 (카드는 **** 1173)
+  entryValue: string
+  already: boolean
+}
+
+// Mock 차단 목록에 직접 넣을 때 (화면은 결제 경보 등록만 쓴다)
 export type NewBlocklistEntry = {
   entryType: BlocklistType
   entryValue: string

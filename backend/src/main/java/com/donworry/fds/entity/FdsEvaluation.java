@@ -142,6 +142,28 @@ public class FdsEvaluation {
             String observedValue,
             Instant windowStart,
             Instant windowEnd) {
+        addRuleHit(
+                ruleCode,
+                outcome,
+                appliedScore,
+                ruleNameSnapshot,
+                thresholdSnapshot,
+                observedValue,
+                null,
+                windowStart,
+                windowEnd);
+    }
+
+    public void addRuleHit(
+            String ruleCode,
+            FdsRuleHitOutcome outcome,
+            int appliedScore,
+            String ruleNameSnapshot,
+            String thresholdSnapshot,
+            String observedValue,
+            String evidenceRefs,
+            Instant windowStart,
+            Instant windowEnd) {
         ruleHits.add(FdsRuleHit.create(
                 this,
                 ruleCode,
@@ -150,6 +172,7 @@ public class FdsEvaluation {
                 ruleNameSnapshot,
                 thresholdSnapshot,
                 observedValue,
+                evidenceRefs,
                 windowStart,
                 windowEnd));
     }

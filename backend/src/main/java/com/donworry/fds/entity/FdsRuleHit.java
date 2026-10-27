@@ -52,6 +52,10 @@ public class FdsRuleHit {
     @Column(name = "observed_value")
     private String observedValue;
 
+    // 근거 참조 JSON (#100) — 차단 목록 일치면 {"blocklistEntryId": N, "entryType": "DEVICE"}
+    @Column(name = "evidence_refs")
+    private String evidenceRefs;
+
     @Column(name = "window_start")
     private Instant windowStart;
 
@@ -67,6 +71,7 @@ public class FdsRuleHit {
             String ruleNameSnapshot,
             String thresholdSnapshot,
             String observedValue,
+            String evidenceRefs,
             Instant windowStart,
             Instant windowEnd) {
         this.evaluation = evaluation;
@@ -76,6 +81,7 @@ public class FdsRuleHit {
         this.ruleNameSnapshot = ruleNameSnapshot;
         this.thresholdSnapshot = thresholdSnapshot;
         this.observedValue = observedValue;
+        this.evidenceRefs = evidenceRefs;
         this.windowStart = windowStart;
         this.windowEnd = windowEnd;
     }
@@ -88,6 +94,7 @@ public class FdsRuleHit {
             String ruleNameSnapshot,
             String thresholdSnapshot,
             String observedValue,
+            String evidenceRefs,
             Instant windowStart,
             Instant windowEnd) {
         return FdsRuleHit.builder()
@@ -98,6 +105,7 @@ public class FdsRuleHit {
                 .ruleNameSnapshot(ruleNameSnapshot)
                 .thresholdSnapshot(thresholdSnapshot)
                 .observedValue(observedValue)
+                .evidenceRefs(evidenceRefs)
                 .windowStart(windowStart)
                 .windowEnd(windowEnd)
                 .build();

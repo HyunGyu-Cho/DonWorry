@@ -38,6 +38,11 @@ public interface PaymentLookup {
     record CardUsage(
             String cardLast4, String cardCountry, Integer completedPaymentsWithCard, String authorizationRef) {}
 
+    // 차단 목록에 올릴 값 (#100) — 카드 지문은 모듈 안 Java 호출로만 넘기고 화면 · 보고서에는 내보내지 않는다
+    Optional<BlockValues> blockValues(Long paymentId);
+
+    record BlockValues(String cardFingerprint, String cardLast4, String deviceId, String clientIp, String buyerEmail) {}
+
     // 화면 · 보고서에 보일 결제 정보. 카드 번호 원문 · 지문은 넣지 않는다
     record PaymentView(
             Long paymentId,
