@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.donworry.MariaDbTestContainerConfig;
@@ -177,6 +178,28 @@ class PaymentFdsInputTests {
     private static Payment fromIp(Payment payment, String ip) {
         org.springframework.test.util.ReflectionTestUtils.setField(payment, "clientIp", ip);
         return payment;
+    }
+
+    // 결제 정보 화면에 접속 위치(나라 · 회선 · 설명)와 시연 기기 이름이 붙는다, 이름표에 없으면 비운다 (#100 F-11)
+    @Test
+    void 결제정보_접속위치기기설명_이름표로채움() throws Exception {
+        Payment vpn = attempt(3004L, "c-" + UUID.randomUUID(), "fp-" + UUID.randomUUID(), Instant.now());
+        org.springframework.test.util.ReflectionTestUtils.setField(vpn, "clientIp", "45.83.64.12");
+        org.springframework.test.util.ReflectionTestUtils.setField(vpn, "deviceId", "demo-device-attacker");
+        Long vpnId = save(vpn);
+        Long unknownId = save(attempt(3004L, "c-" + UUID.randomUUID(), "fp-" + UUID.randomUUID(), Instant.now()));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/payment/payments/{id}", vpnId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ip.countryCode").value("NL"))
+                .andExpect(jsonPath("$.ip.ipType").value("ANONYMOUS"))
+                .andExpect(jsonPath("$.ip.label").isNotEmpty())
+                .andExpect(jsonPath("$.deviceLabel").value("처음 보는 기기 (해외 VPN 접속)"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/payment/payments/{id}", unknownId))
+                .andExpect(jsonPath("$.ip").isEmpty())
+                .andExpect(jsonPath("$.deviceLabel").isEmpty());
     }
 
     // 결제창에서 카드를 붙인 결제 (= 시도)

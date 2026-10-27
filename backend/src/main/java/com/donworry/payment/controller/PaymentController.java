@@ -1,7 +1,7 @@
 package com.donworry.payment.controller;
 
-import com.donworry.payment.api.PaymentLookup;
 import com.donworry.payment.dto.PaymentContextResponse;
+import com.donworry.payment.service.PaymentContextService;
 import com.donworry.payment.service.PaymentErrorCode;
 import com.donworry.payment.service.PaymentException;
 import lombok.RequiredArgsConstructor;
@@ -16,13 +16,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PaymentController {
 
-    private final PaymentLookup paymentLookup;
+    private final PaymentContextService paymentContextService;
 
     @GetMapping("/{paymentId}")
     public PaymentContextResponse payment(@PathVariable Long paymentId) {
-        return paymentLookup
-                .find(paymentId)
-                .map(PaymentContextResponse::from)
+        return paymentContextService
+                .context(paymentId)
                 .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
     }
 }
