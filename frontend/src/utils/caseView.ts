@@ -175,6 +175,11 @@ export function historyText(h: { eventType: string; eventData: Record<string, st
   title: string
   sub?: string
 } {
+  if (h.eventType === 'BUYER_RESPONDED')
+    return {
+      title: `구매자 응답: ${h.eventData.answer === 'NOT_MINE' ? '결제하지 않았어요' : '제가 결제했어요'}`,
+      sub: 'AI가 이 응답을 증거로 다시 조사해요',
+    }
   if (h.eventType !== 'CASE_STATUS_CHANGED')
     return { title: HISTORY_TEXT[h.eventType] ?? h.eventType }
   // 사건이 막 열린 뒤의 첫 조사는 "다시"가 아니다 (#82)

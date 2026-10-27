@@ -9,6 +9,10 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum PaymentErrorCode {
     PAYMENT_NOT_FOUND("PAY_001", "결제가 없습니다.", HttpStatus.NOT_FOUND),
+    // 구매자 본인 확인 링크 (0-6)
+    CONFIRM_LINK_EXPIRED("PAY_010", "본인 확인 링크가 만료됐거나 없습니다.", HttpStatus.GONE),
+    CONFIRM_ALREADY_ANSWERED("PAY_011", "이미 응답한 본인 확인입니다.", HttpStatus.CONFLICT),
+    INVALID_ANSWER("PAY_012", "응답은 MINE 또는 NOT_MINE입니다.", HttpStatus.BAD_REQUEST),
     CHECKOUT_EXPIRED("PAY_022", "결제창이 만료됐거나 없습니다.", HttpStatus.GONE),
     CHECKOUT_ALREADY_PAID("PAY_023", "이미 결제한 결제창입니다.", HttpStatus.CONFLICT),
     UNKNOWN_CARD("PAY_025", "없는 시연 카드입니다.", HttpStatus.BAD_REQUEST),

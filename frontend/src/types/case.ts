@@ -36,6 +36,8 @@ export type CaseHistoryEventType =
   /** CASE_CREATED · CASE_CLOSED 외의 상태 전이. eventData에 from · to (설계 3.9 ⑧) */
   | 'CASE_STATUS_CHANGED'
   | 'CASE_CLOSED'
+  /** 구매자 본인 확인 응답. eventData에 paymentId · answer(MINE · NOT_MINE) (#82) */
+  | 'BUYER_RESPONDED'
 
 // ── 엔터티 (설계 3.9) ──
 export type SecurityCase = {

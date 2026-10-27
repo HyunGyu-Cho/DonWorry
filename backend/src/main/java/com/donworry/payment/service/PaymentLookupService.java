@@ -14,10 +14,18 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentLookupService implements PaymentLookup {
 
     private final PaymentRepository paymentRepository;
+    private final com.donworry.payment.repository.BuyerConfirmationRepository buyerConfirmationRepository;
 
     @Override
     public Optional<PaymentView> find(Long paymentId) {
         return paymentRepository.findById(paymentId).map(PaymentLookupService::view);
+    }
+
+    @Override
+    public Optional<BuyerAnswer> latestBuyerAnswer(Long paymentId) {
+        return buyerConfirmationRepository
+                .findFirstByPaymentIdOrderByRespondedAtDesc(paymentId)
+                .map(confirmation -> new BuyerAnswer(confirmation.getAnswer(), confirmation.getRespondedAt()));
     }
 
     static PaymentView view(Payment payment) {

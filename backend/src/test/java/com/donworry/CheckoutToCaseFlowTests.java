@@ -161,4 +161,62 @@ class CheckoutToCaseFlowTests {
         mvc.perform(get("/api/security-cases/handoffs")).andExpect(status().isOk());
         mvc.perform(get("/api/investigation/approvals")).andExpect(status().isOk());
     }
+
+    // ㉢ 구매자 답변 (#82): 보류되면 확인 요청이 남고, 시연 링크로 "결제하지 않았어요" → 사건 기록 · 증거 버전 2 · AI 재조사
+    @Test
+    void buyerDenies_caseGetsNewEvidenceAndReinvestigates() throws Exception {
+        Long paymentId = Long.valueOf(
+                pay(order("cake-set"), "demo-card-new", 200).get("paymentId").toString());
+        await().atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> assertThat(casePaymentRepository.findByPaymentId(paymentId))
+                        .isPresent());
+        Long caseId = casePaymentRepository
+                .findByPaymentId(paymentId)
+                .orElseThrow()
+                .getSecurityCase()
+                .getId();
+
+        // 같은 고객 결제는 30분 안이면 한 사건으로 묶이므로 (다른 테스트 포함) 답변 전 버전에서 +1을 본다
+        int before = mapper.readTree(mvc.perform(get("/api/security-cases/{id}", caseId))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .get("securityCase")
+                .get("evidenceVersion")
+                .asInt();
+        String link = mapper.readTree(mvc.perform(post("/api/demo/buyer-confirmations/{id}/link", paymentId))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .get("url")
+                .asString();
+        String token = link.substring("/confirm/".length());
+        mvc.perform(get("/api/public/buyer-confirmations/{token}", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderTitle").value("단체 행사용 케이크 세트"))
+                .andExpect(jsonPath("$.answered").doesNotExist());
+
+        String answer = mapper.writeValueAsString(Map.of("answer", "NOT_MINE"));
+        mvc.perform(post("/api/public/buyer-confirmations/{token}", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(answer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answer").value("NOT_MINE"));
+        mvc.perform(post("/api/public/buyer-confirmations/{token}", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(answer))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PAY_011"));
+        mvc.perform(get("/api/public/buyer-confirmations/{token}", "no-such-link"))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.code").value("PAY_010"));
+
+        mvc.perform(get("/api/security-cases/{id}", caseId))
+                .andExpect(jsonPath("$.securityCase.evidenceVersion").value(before + 1))
+                .andExpect(jsonPath("$.history[?(@.eventType == 'BUYER_RESPONDED')].eventData.answer")
+                        .value("NOT_MINE"))
+                .andExpect(jsonPath("$.reports[?(@.evidenceVersion == " + (before + 1) + ")]")
+                        .isNotEmpty());
+    }
 }

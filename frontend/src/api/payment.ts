@@ -93,3 +93,14 @@ export const getOwnerResults = mock ? mockGetOwnerResults : realGetOwnerResults
 // 구매자 본인 확인 페이지
 export const getBuyerConfirmRequest = mock ? mockGetBuyerConfirmRequest : realGetBuyerConfirmRequest
 export const answerBuyerConfirm = mock ? mockAnswerBuyerConfirm : realAnswerBuyerConfirm
+
+// 시연 전용 (#82): 메일함 대신 구매자 본인 확인 화면 링크를 새로 받는다. Mock에서는 튜토리얼 버튼을 쓴다
+async function realDemoBuyerConfirmLink(paymentId: string): Promise<string> {
+  const { url } = await api<{ url: string }>(`/demo/buyer-confirmations/${paymentId}/link`, {
+    method: 'POST',
+  })
+  return url
+}
+export const demoBuyerConfirmLink: ((paymentId: string) => Promise<string>) | null = mock
+  ? null
+  : realDemoBuyerConfirmLink

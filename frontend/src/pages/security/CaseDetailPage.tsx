@@ -12,7 +12,7 @@ import { getRules, getStaffAlerts } from '../../api/fdsRules'
 import { getLoginEvents, getStaffAccounts, getStaffSessions } from '../../api/identity'
 import { getApprovals, getStaffCase, requestCaseActions } from '../../api/investigation'
 import { CaseActionForbiddenError, StaffCaseForbiddenError } from '../../api/investigationErrors'
-import { getPaymentContext } from '../../api/payment'
+import { demoBuyerConfirmLink, getPaymentContext } from '../../api/payment'
 import { getCaseReport, getReportRun, retryReport } from '../../api/report'
 import { useAuth } from '../../auth/useAuth'
 import { useFeedback } from '../../components/common/Feedback'
@@ -110,6 +110,53 @@ async function fetchCase(id: string, merchant: string): Promise<Loaded> {
   } catch (e) {
     return e instanceof StaffCaseForbiddenError ? 'forbidden' : 'error'
   }
+}
+
+// 구매자 본인 확인 (#82) — 매입 보류되면 구매자에게 확인 요청을 보낸다. 시연에서는 메일함 대신 버튼으로 구매자 화면을 연다
+function BuyerCheckCard(props: { data: PaymentData; onOpened: () => void; onError: () => void }) {
+  const { detail } = props.data
+  const held = detail.payments.find((p) => p.paymentStatus === 'HELD') ?? detail.payments[0]
+  const answered = [...detail.history].reverse().find((h) => h.eventType === 'BUYER_RESPONDED')
+  const [opening, setOpening] = useState(false)
+  if (!demoBuyerConfirmLink || !held) return null
+  const link = demoBuyerConfirmLink
+  const open = async () => {
+    setOpening(true)
+    try {
+      const url = await link(held.paymentId)
+      window.open(url, '_blank', 'noreferrer')
+      props.onOpened()
+    } catch {
+      props.onError()
+    } finally {
+      setOpening(false)
+    }
+  }
+  return (
+    <Card title="구매자 본인 확인">
+      {answered ? (
+        <p>
+          구매자가{' '}
+          <b>
+            {answered.eventData.answer === 'NOT_MINE' ? '"결제하지 않았어요"' : '"제가 결제했어요"'}
+          </b>
+          라고 답했어요. AI가 이 응답을 증거로 다시 조사해요.
+        </p>
+      ) : (
+        <p className="dw-muted">
+          구매자 메일로 본인 확인 요청을 보냈어요. 답이 오면 AI가 다시 조사해요.
+        </p>
+      )}
+      {!answered && (
+        <Button onClick={() => void open()} loading={opening}>
+          구매자 화면 열기 (시연) ↗
+        </Button>
+      )}
+      <p className="dw-muted dw-small">
+        시연에서는 메일 대신 이 버튼으로 구매자가 받은 화면을 열어요.
+      </p>
+    </Card>
+  )
 }
 
 function PaymentTargets(props: { data: PaymentData }) {
@@ -355,6 +402,8 @@ export function CaseDetailPage() {
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [now, setNow] = useState(() => new Date())
   const [retrying, setRetrying] = useState(false)
+  // 구매자 화면을 연 뒤에는 답이 올 때까지 사건을 다시 읽는다 — 답이 오면 AI 재조사가 시작된다 (#82)
+  const [awaitingBuyer, setAwaitingBuyer] = useState(false)
   const manager = user?.role === 'SECURITY_MANAGER'
   const base = manager ? '/manager/cases' : '/security/cases'
 
@@ -396,6 +445,23 @@ export function CaseDetailPage() {
     }, 1000)
     return () => clearTimeout(timer)
   }, [running, loaded, id, toast])
+
+  const buyerAnswered =
+    typeof loaded === 'object' &&
+    loaded?.kind === 'payment' &&
+    loaded.detail.history.some((h) => h.eventType === 'BUYER_RESPONDED')
+  useEffect(() => {
+    if (!awaitingBuyer || buyerAnswered) return
+    const timer = setTimeout(() => void load(), 2000)
+    return () => clearTimeout(timer)
+  }, [awaitingBuyer, buyerAnswered, loaded, load])
+
+  // 다른 탭(구매자 화면 등)에서 돌아오면 최신 상태로
+  useEffect(() => {
+    const onFocus = () => void load()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [load])
 
   // [AI 조사 다시 하기] (2-19e) — 조사 중으로 바뀌면 위 1초 폴링이 이어받는다. 사건 상태도 다시 읽는다
   const retry = useCallback(async () => {
@@ -639,6 +705,13 @@ export function CaseDetailPage() {
               }
             />
           </div>
+          {loaded.kind === 'payment' && (
+            <BuyerCheckCard
+              data={loaded}
+              onOpened={() => setAwaitingBuyer(true)}
+              onError={() => void toast.error('구매자 화면 링크를 받지 못했어요.')}
+            />
+          )}
           {loaded.kind === 'payment' ? (
             <PaymentTargets data={loaded} />
           ) : (

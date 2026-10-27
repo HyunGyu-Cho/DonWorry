@@ -104,6 +104,7 @@ TOOL_PLAN = {
     "PAYMENT_FRAUD": [
         "get_fds_evidence",
         "get_case_payments",
+        "get_order_context",
         "get_payment_history",
         "find_similar_cases",
     ],
@@ -134,6 +135,10 @@ UNKNOWN_BY_TOOL = {
 
 # 이 점수 이상이면 승인 취소 검토를 권한다 (화면 위험도 "높음" 구간과 같다)
 HIGH_RISK = 70
+
+# 구매자 답변이 위험 판단을 얼마나 움직이는지 (가짜 AI의 고정 규칙 — 진짜 AI는 스스로 판단)
+BUYER_DENIED_POINTS = 30
+BUYER_CONFIRMED_POINTS = 20
 
 Results = dict[str, dict[str, object]]
 
@@ -185,6 +190,14 @@ def _payment_fraud(results: Results) -> dict[str, object]:
                 rules.append(str(code))
     total = sum(int(a) for a in amounts.values() if isinstance(a, int))
     names = [RULE_NAMES.get(code, code) for code in rules]
+    # 구매자 본인 확인 응답 (get_order_context, #82) — 답이 있으면 결론을 그 답에 맞춘다
+    answers = [r.get("buyerAnswer") for r in _rows(results, "get_order_context")]
+    not_mine = "NOT_MINE" in answers
+    mine = not not_mine and "MINE" in answers
+    if not_mine:
+        score = min(score + BUYER_DENIED_POINTS, 100)
+    elif mine:
+        score = max(score - BUYER_CONFIRMED_POINTS, 0)
     high = score >= HIGH_RISK
 
     risk_points = [
@@ -201,38 +214,97 @@ def _payment_fraud(results: Results) -> dict[str, object]:
             "source": "get_fds_evidence",
         }
     ]
-    recommendations = [{"label": "구매자 본인 확인 연락", "kind": "INFO"}]
-    if high:
-        recommendations.append({"label": "승인 취소 검토", "kind": "NEGATIVE"})
+    normal_points = []
+    if not_mine:
+        risk_points.insert(
+            0,
+            {
+                "title": "구매자가 결제하지 않았다고 답함",
+                "detail": '본인 확인 메일에 "결제하지 않았어요"라고 응답',
+                "source": "get_order_context",
+            },
+        )
+    if mine:
+        normal_points.append(
+            {
+                "title": "구매자가 본인 결제라고 답함",
+                "detail": '본인 확인 메일에 "제가 결제했어요"라고 응답',
+                "source": "get_order_context",
+            }
+        )
+    recommendations = _recommendations(high, not_mine, mine)
     advice = [
         {
             "paymentId": str(row.get("paymentId")),
-            "recommendation": "REJECT_REVIEW" if high else "NEEDS_CHECK",
-            "reason": (
-                "위험 점수가 높아 승인 취소를 검토할 만합니다"
-                if high
-                else "본인 확인 전이라 판단을 미룹니다"
-            ),
+            "recommendation": _advice(high, not_mine, mine),
+            "reason": _advice_reason(high, not_mine, mine),
         }
         for row in evidence
     ]
     rule_text = " · ".join(names) if names else "탐지 규칙"
+    summary = f"{rule_text}에 걸린 결제 {len(evidence)}건, 합계 {total:,}원입니다."
+    if not_mine:
+        summary += ' 구매자가 본인 확인에 "결제하지 않았어요"라고 답했습니다.'
+    elif mine:
+        summary += ' 구매자가 본인 확인에 "제가 결제했어요"라고 답했습니다.'
     return {
         "reportType": "PAYMENT_FRAUD",
         "riskScore": score,
-        "verdict": (
-            "위험 신호가 겹쳐 승인 취소를 검토할 만합니다"
-            if high
-            else "추가 확인 후 결제별로 판정할 것을 권고합니다"
-        ),
-        "summary": f"{rule_text}에 걸린 결제 {len(evidence)}건, 합계 {total:,}원입니다.",
+        "verdict": _verdict(high, not_mine, mine),
+        "summary": summary,
         "recommendations": recommendations,
         "riskPoints": risk_points,
-        "normalPoints": [],
+        "normalPoints": normal_points,
         "unknowns": [],
-        "checks": ["구매자 본인 확인 응답"],
+        "checks": (
+            ["답한 사람이 실제 구매자인지 (계정이 털리면 공격자도 메일을 받음)"]
+            if not_mine or mine
+            else ["구매자 본인 확인 응답"]
+        ),
         "paymentAdvice": advice,
     }
+
+
+def _verdict(high: bool, not_mine: bool, mine: bool) -> str:
+    if not_mine:
+        return "구매자가 결제하지 않았다고 답해 카드 도용 가능성이 높습니다"
+    if mine:
+        return "구매자가 본인 결제라고 답해 매입 허용을 검토할 만합니다"
+    if high:
+        return "위험 신호가 겹쳐 승인 취소를 검토할 만합니다"
+    return "추가 확인 후 결제별로 판정할 것을 권고합니다"
+
+
+def _recommendations(high: bool, not_mine: bool, mine: bool) -> list[dict[str, str]]:
+    if not_mine:
+        return [
+            {"label": "승인 취소 검토", "kind": "NEGATIVE"},
+            {"label": "사기로 확정되면 카드 · 기기 차단 목록 등록", "kind": "INFO"},
+        ]
+    if mine:
+        return [{"label": "매입 허용 검토", "kind": "POSITIVE"}]
+    recommendations = [{"label": "구매자 본인 확인 연락", "kind": "INFO"}]
+    if high:
+        recommendations.append({"label": "승인 취소 검토", "kind": "NEGATIVE"})
+    return recommendations
+
+
+def _advice(high: bool, not_mine: bool, mine: bool) -> str:
+    if not_mine or (high and not mine):
+        return "REJECT_REVIEW"
+    if mine:
+        return "ACCEPT_REVIEW"
+    return "NEEDS_CHECK"
+
+
+def _advice_reason(high: bool, not_mine: bool, mine: bool) -> str:
+    if not_mine:
+        return "구매자가 결제하지 않았다고 답했습니다"
+    if mine:
+        return "구매자가 본인 결제라고 답했습니다"
+    if high:
+        return "위험 점수가 높아 승인 취소를 검토할 만합니다"
+    return "본인 확인 전이라 판단을 미룹니다"
 
 
 # "결제 1 (300,000원) · 65점"처럼 그 규칙이 걸린 결제를 적는다

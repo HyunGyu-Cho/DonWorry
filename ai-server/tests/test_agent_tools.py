@@ -40,10 +40,13 @@ def not_ready(tool: str, note: str = "데이터 준비 전") -> str:
 
 # Spring 창구 대신 — 부른 순서를 기록하고 정해 둔 증거를 돌려준다
 class FakeTools:
-    def __init__(self, score: int = 65, fail: set[str] | None = None) -> None:
+    def __init__(
+        self, score: int = 65, fail: set[str] | None = None, buyer: str | None = None
+    ) -> None:
         self.calls: list[str] = []
         self.score = score
         self.fail = fail or set()
+        self.buyer = buyer
 
     async def call(
         self, report_id: int, attempt_id: str, name: str, args: dict[str, object]
@@ -56,6 +59,9 @@ class FakeTools:
             return ok(name, [{"paymentId": PAYMENT, "riskScore": self.score, "ruleHits": rules}])
         if name == "get_case_payments":
             return ok(name, [{"paymentId": PAYMENT, "amount": 300_000, "paymentStatus": "HELD"}])
+        if name == "get_order_context":
+            row = {"paymentId": PAYMENT, "orderTitle": "케이크 세트", "buyerAnswer": self.buyer}
+            return ok(name, [row])
         return not_ready(name)
 
 
@@ -80,8 +86,8 @@ def test_mockAgent_callsToolsInOrder_andWritesFromEvidence() -> None:
     assert report.payment_advice[0].recommendation == "NEEDS_CHECK"
     assert "이 고객의 과거 결제 패턴 (데이터 준비 전)" in report.unknowns
     # 창구 호출 기록은 Spring이 정본 — ai-server 과정에는 AI 판단(물을 때마다) · 형식 검사만
-    assert [s.kind for s in result.steps] == ["LLM_ANSWER"] * 5 + ["VALIDATION"]
-    assert [s.detail for s in result.steps[:5]] == ["AI 판단 — 다음에 볼 증거 고르기"] * 4 + [
+    assert [s.kind for s in result.steps] == ["LLM_ANSWER"] * 6 + ["VALIDATION"]
+    assert [s.detail for s in result.steps[:6]] == ["AI 판단 — 다음에 볼 증거 고르기"] * 5 + [
         "AI 판단 — 보고서 작성 (1차)"
     ]
 
@@ -91,6 +97,24 @@ def test_mockAgent_highScore_recommendsRejectReview() -> None:
     report = investigate(FakeTools(score=82)).report
     assert report.payment_advice[0].recommendation == "REJECT_REVIEW"
     assert "승인 취소 검토" in [r.label for r in report.recommendations]
+
+
+# 구매자가 "결제하지 않았어요" → 위험이 오르고 승인 취소 검토 (#82, get_order_context)
+def test_mockAgent_buyerDenied_recommendsReject() -> None:
+    report = investigate(FakeTools(buyer="NOT_MINE")).report
+    assert report.risk_score == 95
+    assert report.verdict == "구매자가 결제하지 않았다고 답해 카드 도용 가능성이 높습니다"
+    assert report.risk_points[0].source == "get_order_context"
+    assert report.payment_advice[0].recommendation == "REJECT_REVIEW"
+    assert [r.label for r in report.recommendations][0] == "승인 취소 검토"
+
+
+# 구매자가 "제가 결제했어요" → 정상 정황으로 남기고 매입 허용 검토
+def test_mockAgent_buyerConfirmed_recommendsAccept() -> None:
+    report = investigate(FakeTools(buyer="MINE")).report
+    assert report.risk_score == 45
+    assert [p.title for p in report.normal_points] == ["구매자가 본인 결제라고 답함"]
+    assert report.payment_advice[0].recommendation == "ACCEPT_REVIEW"
 
 
 # 창구가 오류를 내도 조사는 끝까지 가고, 그 내용은 모르는 것으로 남는다
