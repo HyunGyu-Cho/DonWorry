@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # 가짜 AI가 처음 N번은 형식이 틀린 답을 낸다 — 시연 · 테스트에서 "1차 실패 → 다시 시도" 재현
     mock_invalid_answers: int = 0
 
+    # 가짜 AI가 그다음 N번은 증거에 없는 숫자를 쓴다 — "근거 검사 실패 → 다시 시도" 시연 (#92)
+    mock_ungrounded_answers: int = 0
+
     # 가짜 AI가 한 번 답하는 데 걸리는 시간(초) — 시연에서 조사 과정이 보이게
     mock_delay_seconds: float = 0.0
 

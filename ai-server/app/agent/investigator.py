@@ -50,7 +50,10 @@ ANSWER_RULES = (
     "답은 아래 예시와 같은 모양의 JSON 하나만 씁니다 (내용은 증거로 채움). "
     "reportType은 위 사건 종류 그대로, riskScore는 0~100 정수, "
     "kind는 POSITIVE · NEGATIVE · INFO 중 하나, "
-    "unknowns · checks는 문장 목록(객체 아님), checks는 1개 이상."
+    "unknowns · checks는 문장 목록(객체 아님), checks는 1개 이상. "
+    "source에는 실제로 부른 창구 이름(get_...)을 씁니다. "
+    "금액 · 배수 · 건수는 창구 결과에 있는 숫자 그대로 쓰고, 문장에 결제 번호를 쓰지 않습니다. "
+    "checks는 직원이 할 행동으로 씁니다 (예: 구매자에게 결제 여부 확인)."
 )
 
 
@@ -151,6 +154,15 @@ class InvestigationAgent:
                 raise InvalidAnswer(f"사건에 없는 결제 번호 {', '.join(unknown)}", raw)
         return draft
 
+    def grounding_correction(
+        self, messages: list[LlmMessage], raw: str, problems: list[str]
+    ) -> list[LlmMessage]:
+        return [
+            *messages,
+            LlmMessage(role="assistant", content=raw),
+            LlmMessage(role="user", content=_grounding_message(problems)),
+        ]
+
     # 틀린 답과 이유를 대화에 붙여 다시 묻는다
     def correction(self, messages: list[LlmMessage], invalid: InvalidAnswer) -> list[LlmMessage]:
         return [
@@ -161,6 +173,15 @@ class InvestigationAgent:
                 content=f"형식 검사 실패: {invalid.reason}. 같은 JSON 형식으로 다시 써 주세요.",
             ),
         ]
+
+
+# 근거 검사 실패 (#92) — 형식은 맞았지만 증거에 없는 내용. 틀린 곳을 짚어 다시 쓰게 한다
+def _grounding_message(problems: list[str]) -> str:
+    listed = "; ".join(problems[:5])
+    return (
+        f"근거 검사 실패: {listed}. 받은 창구 결과에 있는 내용 · 숫자만 쓰고, "
+        "출처는 실제로 부른 창구 이름으로 고쳐 같은 JSON 형식으로 다시 써 주세요."
+    )
 
 
 # 결제 사기면 쓸 수 있는 결제 번호를 질문에 적는다. 가짜 AI도 이 줄을 읽는다 (llm.py)

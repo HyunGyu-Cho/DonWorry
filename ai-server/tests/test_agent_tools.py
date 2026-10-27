@@ -98,14 +98,16 @@ def test_mockAgent_callsToolsInOrder_andWritesFromEvidence() -> None:
     report = result.report
     assert report.risk_score == 65
     assert [p.title for p in report.risk_points] == ["처음 쓰는 카드", "고액 결제"]
-    assert report.risk_points[0].detail == "결제 1 (300,000원) · 65점"
+    assert report.risk_points[0].detail == "300,000원 결제 · 65점"
     assert "300,000원" in report.summary
     assert [a.payment_id for a in report.payment_advice] == [PAYMENT]
     assert report.payment_advice[0].recommendation == "NEEDS_CHECK"
     assert "이 고객의 과거 결제 패턴 (데이터 준비 전)" in report.unknowns
     # 창구 호출 기록은 Spring이 정본 — ai-server 과정에는 AI 판단(물을 때마다) · 형식 검사만
     picks = len(TOOL_PLAN["PAYMENT_FRAUD"])
-    assert [s.kind for s in result.steps] == ["LLM_ANSWER"] * (picks + 1) + ["VALIDATION"]
+    assert [s.kind for s in result.steps] == ["LLM_ANSWER"] * (picks + 1) + ["VALIDATION"] * 2
+    # 주문 창구는 받았지만 구매자 응답이 없어 보고서에 쓰지 않았다 — 알림만, 실패 아님
+    assert result.steps[-1].detail == "근거 검사 통과 · 받고도 안 쓴 증거: 주문 · 구매자 정보"
     assert [s.detail for s in result.steps[: picks + 1]] == [
         "AI 판단 — 다음에 볼 증거 고르기"
     ] * picks + ["AI 판단 — 보고서 작성 (1차)"]
@@ -147,6 +149,7 @@ def test_mockAgent_mergesHistoryIntoMatchingRule() -> None:
         "평균 40,000원, 카드 4821 5건 — 이번은 평균의 7.5배"
     )
     assert report.risk_points[1].detail.endswith("이 고객이 카드 1173로 결제를 끝낸 적이 없습니다")
+    assert report.risk_points[0].source == "get_fds_evidence, get_payment_history"
 
 
 # 위험 점수가 높으면 승인 취소 검토를 권한다
@@ -186,8 +189,10 @@ def test_staffCase_callsSecurityEvents() -> None:
     tools = FakeTools()
     result = investigate(tools, request("STAFF_TAKEOVER"))
     assert tools.calls == ["get_security_events", "find_similar_cases"]
-    assert result.status == InvestigationStatus.SUCCEEDED
-    assert "로그인 · 기기 기록 (데이터 준비 전)" in result.report.unknowns
+    # 보안 이벤트 창구(P1)가 열리기 전이라 가짜 AI의 직원 예시 답은 받지 않은 증거를 출처로 쓴다
+    # → 근거 검사가 잡아 실패 (#92). 창구가 열리면(2-3) 받은 증거로 조립하게 바꾼다
+    assert result.status == InvestigationStatus.FAILED
+    assert "출처 get_security_events는 받은 증거가 아님" in result.error.reason
 
 
 # Spring이 "현재 시도 아님"(409)이라고 하면 조사를 멈추고 결과를 남기지 않는다
@@ -293,10 +298,11 @@ def test_steps_reportedAsTheyFinish() -> None:
 
     assert result.status == InvestigationStatus.SUCCEEDED
     assert reporter.details == [s.detail for s in result.steps]
-    assert reporter.details[-3:] == [
+    assert reporter.details[-4:] == [
         "구조 검증 실패: 필수 항목 '확인할 것' 누락 → 다시 시도",
         "AI 판단 — 보고서 작성 (2차)",
         "구조 검증 통과",
+        "근거 검사 통과 · 받고도 안 쓴 증거: 주문 · 구매자 정보",
     ]
 
 
