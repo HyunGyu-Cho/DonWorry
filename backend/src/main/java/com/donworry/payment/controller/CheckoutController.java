@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,12 +41,15 @@ public class CheckoutController {
     }
 
     // 접속 IP는 요청 주소 그대로 (믿을 수 있는 중계 서버의 X-Forwarded-For는 2-4), 기기는 결제창 쿠키
+    // 시연 헤더(X-Demo-Client-IP · X-Demo-Device-Id)는 시연 설정이 켜졌을 때만 쓴다 (#98 F-5)
     @PostMapping("/{token}/pay")
     public CheckoutResultResponse pay(
             @PathVariable String token,
             @RequestBody PayRequest request,
             @CookieValue(name = "dw_device", required = false) String deviceId,
+            @RequestHeader(name = "X-Demo-Client-IP", required = false) String demoIp,
+            @RequestHeader(name = "X-Demo-Device-Id", required = false) String demoDevice,
             HttpServletRequest http) {
-        return checkoutService.pay(token, request.cardToken(), http.getRemoteAddr(), deviceId);
+        return checkoutService.pay(token, request.cardToken(), http.getRemoteAddr(), deviceId, demoIp, demoDevice);
     }
 }

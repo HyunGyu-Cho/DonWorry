@@ -53,8 +53,8 @@ public class PaymentAuthorizationService {
                 payment.recordAuthorizationSuccess(
                         authorization.authorizationRef(), decision.state().status() == PaymentStatus.HELD);
             } else {
-                payment.declineAuthorization();
                 declineCode = authorization.declineCode();
+                payment.declineAuthorization(declineCode);
             }
         } else if (decision.state().status() == PaymentStatus.DENIED) {
             payment.deny();

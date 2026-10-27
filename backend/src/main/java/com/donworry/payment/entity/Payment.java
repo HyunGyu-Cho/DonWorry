@@ -46,6 +46,10 @@ public class Payment {
     @Column(name = "authorization_ref", length = 100)
     private String authorizationRef;
 
+    // 카드사 거절 사유 (#98) — DECLINED 결제만
+    @Column(name = "decline_code", length = 40)
+    private String declineCode;
+
     @Column(name = "created_at", nullable = false, columnDefinition = "DATETIME(6)")
     private Instant createdAt;
 
@@ -157,9 +161,15 @@ public class Payment {
         status = hold ? PaymentStatus.HELD : PaymentStatus.PENDING;
     }
 
-    public void declineAuthorization() {
+    // 카드사 거절 — 사유(한도 초과 · 분실/도난 · 잘못된 카드)를 남긴다 (#98 F-7)
+    public void declineAuthorization(String declineCode) {
         requireUnapprovedPending();
         status = PaymentStatus.DECLINED;
+        this.declineCode = declineCode;
+    }
+
+    public void declineAuthorization() {
+        declineAuthorization(null);
     }
 
     // 직원 판정 승인 취소 (#82) — 매입 보류된 결제만. 카드 승인 기록(authorizationRef)은 남긴다

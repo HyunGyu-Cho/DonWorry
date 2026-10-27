@@ -55,6 +55,9 @@ donworry:
   demo:
     # 모의 카드사가 승인 취소 · 매입을 처리하는 시간 (#82). 그동안 사건은 "조치 진행 중" — 시연용, 테스트는 0초
     card-company-delay: ${DONWORRY_CARD_COMPANY_DELAY:PT5S}
+    # 테스트 상점 "접속 환경"(X-Demo-Client-IP · X-Demo-Device-Id 헤더)을 믿을지 (#98). 운영은 false — 아무나 IP · 기기를 꾸밀 수 있다
+    # 켜도 IP는 demo_fake_ips 이름표에 있는 값만 받는다
+    fake-client-ip: ${DONWORRY_DEMO_FAKE_CLIENT_IP:false}
   report:
     # 보고서 내용을 채우는 쪽. fake = Spring 안의 템플릿으로 바로 완료, ai-server = ai-server에 조사를 맡김
     # 결과 받기(2-17) 전에는 ai-server로 바꾸면 보고서가 "생성 중"에서 멈춘다

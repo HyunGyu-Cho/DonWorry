@@ -20,12 +20,24 @@ public record FdsEvaluationRequest(
         // 결제창이 수집한 기기 · 접속 IP. R02 · R05 · R06 · R07
         String deviceId,
         String clientIp,
+        // 접속 IP의 나라(ISO) · 회선 종류(DOMESTIC · FOREIGN · ANONYMOUS …) — P5가 찾아 넘김, 모르면 null. R05 (#98)
+        String clientCountry,
+        String clientIpType,
         // 구매자 이메일 — R07 차단 목록
         String buyerEmail,
         // 같은 가맹점 · 같은 구매자의 매입 완료 결제가 있는지 — R02 · R03은 있을 때만 판단
         Boolean hasPriorCapturedPayment,
         // 이 구매자가 이 카드로 매입까지 끝낸 결제 수 — R03
-        Integer cardCompletedPayments) {
+        Integer cardCompletedPayments,
+        // 이 구매자가 이 기기로 매입까지 끝낸 결제 수 — R02 (#98)
+        Integer deviceCompletedPayments,
+        // 시간 창 안의 기록 (#98) — 기간은 FdsCountWindows. P5가 자기 결제 기록으로 센다
+        // 같은 가맹점 · 같은 구매자의 결제 시도 수(이번 포함) — R04
+        Integer recentCustomerAttempts,
+        // 같은 카드가 카드사에서 거절된 수(이번 제외) — R08
+        Integer recentCardDeclines,
+        // 같은 IP에서 쓴 서로 다른 카드 수(이번 포함, 거절 · 차단 시도 포함) — R06
+        Integer recentIpCards) {
 
     public FdsEvaluationRequest(
             UUID evaluationRequestId, Long paymentId, String customerRef, long amount, Instant paymentRequestedAt) {
@@ -36,6 +48,12 @@ public record FdsEvaluationRequest(
                 customerRef,
                 amount,
                 paymentRequestedAt,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

@@ -60,9 +60,15 @@ public class PaymentEvaluationFlowService {
                 .cardFingerprint(features == null ? null : features.cardFingerprint())
                 .deviceId(features == null ? null : features.deviceId())
                 .clientIp(features == null ? null : features.clientIp())
+                .clientCountry(features == null ? null : features.clientCountry())
+                .clientIpType(features == null ? null : features.clientIpType())
                 .buyerEmail(features == null ? null : features.buyerEmail())
                 .hasPriorCapturedPayment(features == null ? null : features.hasPriorCapturedPayment())
                 .cardCompletedPayments(features == null ? null : features.cardCompletedPayments())
+                .deviceCompletedPayments(features == null ? null : features.deviceCompletedPayments())
+                .recentCustomerAttempts(features == null ? null : features.recentCustomerAttempts())
+                .recentCardDeclines(features == null ? null : features.recentCardDeclines())
+                .recentIpCards(features == null ? null : features.recentIpCards())
                 .build();
         var result = evaluationService.evaluateAndDecide(state, evaluationInput);
         return new PaymentAuthorizationContext(payment, evaluationInput.evaluationRequestId(), result);

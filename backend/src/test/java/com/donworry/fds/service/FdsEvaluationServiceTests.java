@@ -116,6 +116,99 @@ class FdsEvaluationServiceTests {
     }
 
     @Test
+    // R02: 과거 정상 결제가 있는 단골이 처음 보는 기기로 결제하면 +25 (#98 F-4)
+    void R02_과거정상결제있고처음기기_25점() {
+        stubSave(5L);
+        when(ruleRepository.findActiveCatalog()).thenReturn(List.of(rule("NEW_DEVICE", 25, null, true)));
+
+        var result = transactionEvaluator.evaluate(deviceRequest(40_000L, true, 3, "DEV-NEW-PHONE", 0));
+
+        assertThat(result.riskScore()).isEqualTo(25);
+        assertThat(savedHits()).singleElement().satisfies(hit -> {
+            assertThat(hit.getOutcome()).isEqualTo(com.donworry.fds.api.FdsRuleHitOutcome.MATCH);
+            assertThat(hit.getObservedValue()).contains("이 기기로 완료한 결제 0건");
+        });
+    }
+
+    @Test
+    // 과거 정상 결제가 없는 첫 손님 · 기기를 모르는 결제는 새 기기 · 새 카드를 판단하지 않는다 (확인 불가, 0점) (#98 F-4)
+    void R02R03_과거정상결제없음_기기모름_확인불가0점() {
+        stubSave(7L);
+        var rules = List.of(rule("NEW_DEVICE", 25, null, true), rule("NEW_CARD", 25, null, true));
+        when(ruleRepository.findActiveCatalog()).thenReturn(rules);
+
+        var firstVisit = transactionEvaluator.evaluate(deviceRequest(40_000L, false, 0, "DEV-NEW-PHONE", 0));
+        var unknownDevice = transactionEvaluator.evaluate(deviceRequest(40_000L, true, 3, null, null));
+
+        assertThat(firstVisit.riskScore()).isZero();
+        assertThat(unknownDevice.riskScore()).isZero();
+        verify(evaluationRepository, org.mockito.Mockito.times(2)).saveAndFlush(evaluationCaptor.capture());
+        var first = evaluationCaptor.getAllValues().get(0).getRuleHits();
+        assertThat(first).extracting("outcome").containsOnly(com.donworry.fds.api.FdsRuleHitOutcome.UNAVAILABLE);
+        assertThat(first.get(0).getObservedValue()).contains("비교할 과거 정상 결제 없음");
+        var device = evaluationCaptor.getAllValues().get(1).getRuleHits().get(0);
+        assertThat(device.getOutcome()).isEqualTo(com.donworry.fds.api.FdsRuleHitOutcome.UNAVAILABLE);
+        assertThat(device.getObservedValue()).contains("기기 정보 없음");
+    }
+
+    @Test
+    // 룰안 시나리오: 기존 구매자가 새 기기 + 새 카드로 결제하면 R02 25 + R03 25 = 50점 직원 확인 (#98 F-4)
+    void 단골_새기기새카드_50점REVIEW() {
+        stubSave(6L);
+        var rules = new java.util.ArrayList<>(seedRules());
+        rules.add(1, rule("NEW_DEVICE", 25, null, true));
+        when(ruleRepository.findActiveCatalog()).thenReturn(rules);
+
+        var result = transactionEvaluator.evaluate(deviceRequest(40_000L, true, 0, "DEV-NEW-PHONE", 0));
+
+        assertThat(result.riskScore()).isEqualTo(50);
+        assertThat(result.result()).isEqualTo(FdsResult.REVIEW);
+        assertThat(savedHits()).extracting("ruleCode").containsExactly("HIGH_AMOUNT", "NEW_DEVICE", "NEW_CARD");
+    }
+
+    @Test
+    // R05: 고위험 국가 IP면 +40, 목록 밖 나라는 0점, 이름표에 없는 IP는 확인 불가 (#98 F-6)
+    void R05_고위험국가40점_목록밖0점_이름표없음확인불가() {
+        stubSave(8L);
+        when(ruleRepository.findActiveCatalog())
+                .thenReturn(List.of(rule(
+                        "HIGH_RISK_COUNTRY_IP", 40, java.util.Map.of("countries", List.of("RU", "VN", "NL")), true)));
+
+        var vpn = transactionEvaluator.evaluate(countryRequest("NL", "ANONYMOUS"));
+        var domestic = transactionEvaluator.evaluate(countryRequest("KR", "DOMESTIC"));
+        var unknown = transactionEvaluator.evaluate(countryRequest(null, null));
+
+        assertThat(vpn.riskScore()).isEqualTo(40);
+        assertThat(domestic.riskScore()).isZero();
+        assertThat(unknown.riskScore()).isZero();
+        verify(evaluationRepository, org.mockito.Mockito.times(3)).saveAndFlush(evaluationCaptor.capture());
+        var hits = evaluationCaptor.getAllValues().stream()
+                .map(e -> e.getRuleHits().get(0))
+                .toList();
+        assertThat(hits)
+                .extracting("outcome")
+                .containsExactly(
+                        com.donworry.fds.api.FdsRuleHitOutcome.MATCH,
+                        com.donworry.fds.api.FdsRuleHitOutcome.NO_MATCH,
+                        com.donworry.fds.api.FdsRuleHitOutcome.UNAVAILABLE);
+        assertThat(hits.get(0).getObservedValue()).contains("네덜란드 IP (VPN · Tor)");
+    }
+
+    private FdsEvaluationRequest countryRequest(String country, String ipType) {
+        return FdsEvaluationRequest.builder()
+                .evaluationRequestId(UUID.randomUUID())
+                .paymentId(4L)
+                .merchantId(1L)
+                .customerRef("c-0601")
+                .amount(12_000L)
+                .paymentRequestedAt(Instant.parse("2026-10-27T01:00:00Z"))
+                .clientIp("45.83.64.12")
+                .clientCountry(country)
+                .clientIpType(ipType)
+                .build();
+    }
+
+    @Test
     // 판정 구간 경계 — 0~49 통과 · 50~79 직원 확인 · 80 이상 거절 (#96, ADR-0023)
     void 판정구간_49_50_79_80점_ALLOW_REVIEW_REVIEW_DENY() {
         assertThat(FdsEvaluationTransactionService.resultFor(49)).isEqualTo(FdsResult.ALLOW);
@@ -204,6 +297,11 @@ class FdsEvaluationServiceTests {
     }
 
     private FdsEvaluationRequest featureRequest(long amount, Boolean hasPriorCaptured, Integer cardCompleted) {
+        return deviceRequest(amount, hasPriorCaptured, cardCompleted, null, null);
+    }
+
+    private FdsEvaluationRequest deviceRequest(
+            long amount, Boolean hasPriorCaptured, Integer cardCompleted, String deviceId, Integer deviceCompleted) {
         return FdsEvaluationRequest.builder()
                 .evaluationRequestId(UUID.randomUUID())
                 .paymentId(3L)
@@ -213,6 +311,8 @@ class FdsEvaluationServiceTests {
                 .paymentRequestedAt(Instant.parse("2026-10-27T01:00:00Z"))
                 .hasPriorCapturedPayment(hasPriorCaptured)
                 .cardCompletedPayments(cardCompleted)
+                .deviceId(deviceId)
+                .deviceCompletedPayments(deviceCompleted)
                 .build();
     }
 

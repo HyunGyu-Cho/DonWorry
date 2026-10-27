@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +51,20 @@ class CheckoutToCaseFlowTests {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    // 이 흐름 테스트들은 같은 김민수 · 같은 시연 카드 · 같은 접속 주소로 몇 분 안에 여러 번 결제한다
+    // 반복 결제 · 거절 후 재시도 · 카드 테스팅(시간 창 Rule)이 서로의 결제를 세지 않게 이 클래스에서만 끈다 (#98)
+    @BeforeEach
+    void disableWindowRules() {
+        jdbc.update(
+                "UPDATE fds_rules SET enabled = FALSE WHERE rule_code IN ('RAPID_REPEAT', 'DECLINE_RETRY', 'CARD_TESTING')");
+    }
+
+    @AfterEach
+    void enableWindowRules() {
+        jdbc.update(
+                "UPDATE fds_rules SET enabled = TRUE WHERE rule_code IN ('RAPID_REPEAT', 'DECLINE_RETRY', 'CARD_TESTING')");
+    }
 
     // 평가 실패 테스트가 깨뜨린 고액 결제 기준값을 시드 값으로 되돌린다 (#96)
     @AfterEach
@@ -140,6 +155,30 @@ class CheckoutToCaseFlowTests {
                 .andExpect(jsonPath(row + ".fdsResult").value("ERROR"))
                 .andExpect(jsonPath(row + ".riskScore")
                         .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.nullValue())));
+    }
+
+    // 모의 카드사가 도난 · 잘못된 카드를 사유와 함께 거절하고, 사유가 결제 기록에 남는다 (#98 F-7)
+    @Test
+    void 모의카드사_도난카드_거절사유저장_DECLINED() throws Exception {
+        Map<?, ?> stolen = pay(order("strawberry"), "demo-card-stolen-2", 200);
+        Map<?, ?> invalid = pay(order("strawberry"), "demo-card-stolen-3", 200);
+        Map<?, ?> approved = pay(order("strawberry"), "demo-card-stolen-1", 200);
+
+        assertThat(List.of(stolen.get("outcome"), invalid.get("outcome"), approved.get("outcome")))
+                .containsExactly("DECLINED", "DECLINED", "PAID");
+        String sql = "SELECT CONCAT(status, '/', COALESCE(decline_code, '-')) FROM payments WHERE payment_id = ?";
+        assertThat(jdbc.queryForObject(
+                        sql, String.class, Long.valueOf(stolen.get("paymentId").toString())))
+                .isEqualTo("DECLINED/LOST_OR_STOLEN");
+        assertThat(jdbc.queryForObject(
+                        sql, String.class, Long.valueOf(invalid.get("paymentId").toString())))
+                .isEqualTo("DECLINED/INVALID_CARD");
+        assertThat(jdbc.queryForObject(
+                        sql,
+                        String.class,
+                        Long.valueOf(approved.get("paymentId").toString())))
+                .doesNotEndWith("/LOST_OR_STOLEN")
+                .doesNotStartWith("DECLINED");
     }
 
     // 같은 결제창으로 두 번 결제할 수 없다 · 없는 결제창은 만료와 같은 410

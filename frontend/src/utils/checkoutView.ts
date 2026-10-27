@@ -17,6 +17,11 @@ export const CARD_GUIDE: { label: string; result: string }[] = [
   { label: '처음 쓰는 카드', result: '결제 완료 (고액이면 돈워리가 뒤에서 확인 · 본인 확인 메일)' },
   { label: '해외 발급 카드', result: '고액이면 결제 진행 불가' },
   { label: '한도 초과 카드', result: '카드사 거절' },
+  { label: '도난 카드 1', result: '카드사 승인 (카드 테스팅 시연용)' },
+  { label: '도난 카드 2', result: '카드사 거절 — 분실 · 도난 카드' },
+  { label: '도난 카드 3', result: '카드사 거절 — 잘못된 카드' },
+  { label: '도난 카드 4', result: '카드사 승인 (카드 테스팅 시연용)' },
+  { label: '도난 카드 5', result: '카드사 거절 — 한도 초과' },
 ]
 
 // 남은 시간 → "이 결제창은 14분 뒤 닫혀요"

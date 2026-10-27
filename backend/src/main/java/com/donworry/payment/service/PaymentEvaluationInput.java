@@ -16,9 +16,15 @@ public record PaymentEvaluationInput(
         String cardFingerprint,
         String deviceId,
         String clientIp,
+        String clientCountry,
+        String clientIpType,
         String buyerEmail,
         Boolean hasPriorCapturedPayment,
-        Integer cardCompletedPayments) {
+        Integer cardCompletedPayments,
+        Integer deviceCompletedPayments,
+        Integer recentCustomerAttempts,
+        Integer recentCardDeclines,
+        Integer recentIpCards) {
 
     public PaymentEvaluationInput {
         if (evaluationRequestId == null) {
