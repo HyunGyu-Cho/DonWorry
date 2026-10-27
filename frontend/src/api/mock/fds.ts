@@ -10,6 +10,7 @@ import {
 } from './investigation.ts'
 import { canToggle } from '../../utils/ruleCatalog.ts'
 import type {
+  BlockedEntry,
   BlocklistEntry,
   FdsRule,
   NewBlocklistEntry,
@@ -384,6 +385,28 @@ export function mockAddBlocklistEntry(input: NewBlocklistEntry): Promise<Blockli
     reason: input.reason,
   })
   return mockRespond(created)
+}
+
+// 결제 경보에서 고른 값 등록 (#100) — 실제 서버는 결제 번호로 값을 찾지만 Mock은 화면이 고른 값을 쓴다
+export async function mockBlockFromAlert(
+  values: { type: BlocklistEntry['entryType']; value: string }[],
+  reason: string,
+): Promise<BlockedEntry[]> {
+  const result: BlockedEntry[] = []
+  for (const v of values) {
+    const active = [...addedEntries, ...buildMockBlocklist(mockEpoch())].find(
+      (e) => e.entryType === v.type && e.entryValue === v.value && e.releasedAt === null,
+    )
+    const entry =
+      active ?? (await mockAddBlocklistEntry({ entryType: v.type, entryValue: v.value, reason }))
+    result.push({
+      entryId: entry.entryId,
+      entryType: entry.entryType,
+      entryValue: entry.entryValue,
+      already: !!active,
+    })
+  }
+  return result
 }
 
 export function mockGetStaffAlerts(query: StaffAlertQuery = {}): Promise<StaffAlert[]> {

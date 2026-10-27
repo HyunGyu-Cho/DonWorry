@@ -4,7 +4,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getFdsEvaluation, type FdsEvaluationDetail, type FdsRuleHit } from '../../api/fds'
-import { addBlocklistEntry, getBlocklist } from '../../api/fdsRules'
+import { blockFromAlert, getBlocklist } from '../../api/fdsRules'
 import { getPaymentContext } from '../../api/payment'
 import { useFeedback } from '../../components/common/Feedback'
 import { TUTORIAL_EVENT } from '../../components/tutorial/tutorialStore'
@@ -171,6 +171,7 @@ function RuleTable({ detail }: { detail: FdsEvaluationDetail }) {
 
 interface BlockModalProps {
   open: boolean
+  evaluationId: number
   candidates: BlockCandidate[]
   onClose: () => void
   onDone: () => void
@@ -179,7 +180,7 @@ interface BlockModalProps {
 const keyOf = (c: BlockCandidate) => `${c.type}:${c.value}`
 
 // 고른 값만 차단 목록에 올린다. 이 사람만 쓰는 값은 미리 골라 두고, 공용 IP는 직원이 직접 고르게 한다
-function BlockModal({ open, candidates, onClose, onDone }: BlockModalProps) {
+function BlockModal({ open, evaluationId, candidates, onClose, onDone }: BlockModalProps) {
   const { toast } = useFeedback()
   const [picked, setPicked] = useState<string[]>(() =>
     candidates.filter((c) => c.advice === 'recommend' && !c.already).map(keyOf),
@@ -196,9 +197,8 @@ function BlockModal({ open, candidates, onClose, onDone }: BlockModalProps) {
     setSaving(true)
     try {
       const chosen = candidates.filter((c) => picked.includes(keyOf(c)))
-      for (const c of chosen) {
-        await addBlocklistEntry({ entryType: c.type, entryValue: c.value, reason: reason.trim() })
-      }
+      // 서버가 결제 번호로 실제 값(카드 지문 등)을 찾아 한 번에 등록한다 (#100)
+      await blockFromAlert(evaluationId, chosen, reason.trim())
       void toast.success(
         `${chosen.length}개 값을 차단 목록에 올렸습니다. 다음 결제부터 바로 막아요.`,
       )
@@ -428,6 +428,7 @@ export function AlertDetailPage() {
         // 열 때마다 새로 그려 추천 값을 다시 골라 둔다
         key={blockOpen ? 'open' : 'closed'}
         open={blockOpen}
+        evaluationId={e.evaluationId}
         candidates={candidates}
         onClose={() => setBlockOpen(false)}
         onDone={() => {

@@ -47,6 +47,9 @@ export type TestProduct = {
   note: string
 }
 
+// 테스트 상점 구매자 (#100 S-4) — MINSU = 결제 이력 있는 단골 김민수, GUEST = 탭마다 새로 만드는 처음 온 손님
+export type TestBuyer = 'MINSU' | 'GUEST'
+
 export type TestOrder = {
   // 이 토큰으로 결제창 /checkout/{토큰}을 연다
   sessionToken: string

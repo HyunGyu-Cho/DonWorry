@@ -27,6 +27,14 @@ public class PaymentLookupService implements PaymentLookup {
     }
 
     @Override
+    public Optional<BlockValues> blockValues(Long paymentId) {
+        return paymentRepository
+                .findById(paymentId)
+                .map(p -> new BlockValues(
+                        p.getCardFingerprint(), p.getCardLast4(), p.getDeviceId(), p.getClientIp(), p.getBuyerEmail()));
+    }
+
+    @Override
     public Optional<BuyerAnswer> latestBuyerAnswer(Long paymentId) {
         return buyerConfirmationRepository
                 .findFirstByPaymentIdOrderByRespondedAtDesc(paymentId)

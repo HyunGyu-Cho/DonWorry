@@ -19,7 +19,11 @@ public class MariaDbTestContainerConfig {
     private static MariaDBContainer start() {
         MariaDBContainer container = new MariaDBContainer(IMAGE)
                 .withDatabaseName("donworry")
-                .withCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci");
+                // 테스트 설정 묶음(Spring 컨텍스트)마다 연결 10개를 잡아 두어 기본 한도 151을 넘는다 (#100 CI)
+                .withCommand(
+                        "--character-set-server=utf8mb4",
+                        "--collation-server=utf8mb4_unicode_ci",
+                        "--max-connections=300");
         container.start();
         return container;
     }

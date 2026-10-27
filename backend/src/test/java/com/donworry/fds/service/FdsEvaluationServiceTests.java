@@ -35,6 +35,9 @@ class FdsEvaluationServiceTests {
     @Mock
     private FdsRuleRepository ruleRepository;
 
+    @Mock
+    private com.donworry.fds.repository.BlocklistEntryRepository blocklistRepository;
+
     @Captor
     private ArgumentCaptor<FdsEvaluation> evaluationCaptor;
 
@@ -44,7 +47,8 @@ class FdsEvaluationServiceTests {
 
     @BeforeEach
     void setUp() {
-        transactionEvaluator = new FdsEvaluationTransactionService(evaluationRepository, ruleRepository);
+        transactionEvaluator =
+                new FdsEvaluationTransactionService(evaluationRepository, ruleRepository, blocklistRepository);
         evaluator = new FdsEvaluationService(evaluationRepository, transactionService);
     }
 
@@ -206,6 +210,54 @@ class FdsEvaluationServiceTests {
                 .clientCountry(country)
                 .clientIpType(ipType)
                 .build();
+    }
+
+    @Test
+    // R07: 차단 목록과 일치하면 다른 Rule 점수를 계산하지 않고 100점 거절, 어느 차단 항목인지 근거에 남긴다 (#100 F-10)
+    void R07_차단기기카드IP이메일일치_점수계산없이100점DENY() {
+        stubSave(9L);
+        var rules = new java.util.ArrayList<>(seedRules());
+        rules.add(rule("BLOCKLIST", 100, null, true));
+        when(ruleRepository.findActiveCatalog()).thenReturn(rules);
+        var device = com.donworry.fds.entity.BlocklistEntry.create(
+                "DEVICE",
+                "demo-device-attacker",
+                "demo-device-attacker",
+                "카드 테스팅 기기",
+                "STAFF",
+                null,
+                4L,
+                Instant.now());
+        org.springframework.test.util.ReflectionTestUtils.setField(device, "entryId", 12L);
+        var request = FdsEvaluationRequest.builder()
+                .evaluationRequestId(UUID.randomUUID())
+                .paymentId(7L)
+                .customerRef("guest")
+                .amount(650_000L)
+                .paymentRequestedAt(Instant.parse("2026-10-27T01:00:00Z"))
+                .cardFingerprint("fp-other")
+                .deviceId("demo-device-attacker")
+                .clientIp("45.83.64.12")
+                .buyerEmail(" Guest@Example.com ")
+                .hasPriorCapturedPayment(true)
+                .cardCompletedPayments(0)
+                .build();
+        when(blocklistRepository.findActiveMatches(
+                        org.mockito.ArgumentMatchers.eq("fp-other"),
+                        org.mockito.ArgumentMatchers.eq("demo-device-attacker"),
+                        org.mockito.ArgumentMatchers.eq("45.83.64.12"),
+                        org.mockito.ArgumentMatchers.eq("guest@example.com"),
+                        any()))
+                .thenReturn(List.of(device));
+
+        var result = transactionEvaluator.evaluate(request);
+
+        assertThat(result.result()).isEqualTo(FdsResult.DENY);
+        assertThat(result.riskScore()).isEqualTo(100);
+        var hit = savedHits().getFirst();
+        assertThat(savedHits()).singleElement().extracting("ruleCode").isEqualTo("BLOCKLIST");
+        assertThat(hit.getEvidenceRefs()).contains("\"blocklistEntryId\":12").contains("DEVICE");
+        assertThat(hit.getObservedValue()).contains("기기가 차단 목록과 일치");
     }
 
     @Test

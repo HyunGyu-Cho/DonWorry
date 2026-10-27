@@ -5,7 +5,7 @@ import { api, ApiError } from './client.ts'
 import { RuleActionForbiddenError, RuleAlreadyEnabledError } from './fdsErrors.ts'
 import { isMock } from './mockMode.ts'
 import {
-  mockAddBlocklistEntry,
+  mockBlockFromAlert,
   mockEnableRule,
   mockGetBlocklist,
   mockGetRules,
@@ -13,9 +13,9 @@ import {
 } from './mock/fds.ts'
 import { mockGetRuleHitStats } from './mock/fdsEvaluations.ts'
 import type {
+  BlockedEntry,
   BlocklistEntry,
   FdsRule,
-  NewBlocklistEntry,
   RuleHitStat,
   StaffAlert,
   StaffAlertQuery,
@@ -36,11 +36,16 @@ const realEnableRule = (ruleId: number) =>
 const realGetBlocklist = (activeOnly = true) =>
   api<BlocklistEntry[]>(`/fds/blocklist?active=${activeOnly}`)
 
-const realAddBlocklistEntry = (input: NewBlocklistEntry) =>
-  api<BlocklistEntry>('/fds/blocklist', {
+// 결제 경보에서 고른 값을 차단 목록에 (#100) — 서버는 종류만 받고 값은 결제에서 찾는다
+const realBlockFromAlert = (
+  evaluationId: number,
+  values: { type: BlocklistEntry['entryType']; value: string }[],
+  reason: string,
+) =>
+  api<BlockedEntry[]>(`/investigation/payment-alerts/${evaluationId}/blocklist`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ types: values.map((v) => v.type), reason }),
   })
 
 function realGetStaffAlerts(query: StaffAlertQuery = {}) {
@@ -63,6 +68,9 @@ export const enableRule = mock ? mockEnableRule : realEnableRule
 // 차단 목록 (기본: 해제되지 않은 것만)
 export const getBlocklist = mock ? mockGetBlocklist : realGetBlocklist
 // 차단 목록 직접 등록 (보안 직원)
-export const addBlocklistEntry = mock ? mockAddBlocklistEntry : realAddBlocklistEntry
+export const blockFromAlert = mock
+  ? (_evaluationId: number, values: Parameters<typeof mockBlockFromAlert>[0], reason: string) =>
+      mockBlockFromAlert(values, reason)
+  : realBlockFromAlert
 // 직원 경보 (직원 Rule 적중)
 export const getStaffAlerts = mock ? mockGetStaffAlerts : realGetStaffAlerts

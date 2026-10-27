@@ -105,8 +105,8 @@ const SEEDS: Seed[] = [
     orderTitle: '프리미엄 웨딩 케이크',
     minutes: 15,
     result: 'DENY',
-    // 차단 목록과 일치하면 점수 계산 없이 끝난다
-    hits: [['BLOCKLIST', 0, '접속 IP가 차단 목록과 일치 (VPN 대역 · 카드 테스팅 시도로 등록)']],
+    // 차단 목록과 일치하면 다른 Rule 점수 계산 없이 R07 100점으로 끝난다 (#100)
+    hits: [['BLOCKLIST', 100, '접속 IP가 차단 목록과 일치 (VPN 대역 · 카드 테스팅 시도로 등록)']],
   },
   {
     evaluationId: 103,
@@ -173,8 +173,8 @@ function toDetail(seed: Seed, now: Date): Omit<FdsEvaluationDetail, 'history'> {
       evaluationId: seed.evaluationId,
       paymentId: seed.paymentId,
       customerRef: seed.customerRef,
-      // 화면 점수는 최대 100 (원래 합계는 백엔드 raw_score)
-      riskScore: seed.result === 'ERROR' || blocklisted ? null : Math.min(100, score),
+      // 화면 점수는 최대 100 (원래 합계는 백엔드 raw_score). 차단 목록 일치도 100점
+      riskScore: seed.result === 'ERROR' ? null : Math.min(100, score),
       result: seed.result,
       evaluatedAt: at,
       errorCode: seed.errorCode ?? null,
