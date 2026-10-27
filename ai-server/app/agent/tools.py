@@ -71,6 +71,15 @@ TOOL_SPECS = [
 
 TOOL_NAMES = {spec.name for spec in TOOL_SPECS}
 
+# 증거 수집 끝 신호 (#94) — Spring 창구가 아니다
+# AI가 부르면 다음 질문부터 창구 없이 보고서 모양을 고정한다
+# 그래서 1차 보고서부터 형식이 맞게 나온다. 창구 횟수(max_tool_calls)에 세지 않는다
+FINISH_EVIDENCE = ToolSpec(
+    name="finish_evidence",
+    description="필요한 증거를 다 봤으면 부르세요. 그다음에 보고서 JSON을 씁니다",
+    parameters=_NO_ARGS,
+)
+
 
 # 창구 결과를 쓸 수 없게 된 시도 — Spring이 "현재 시도 아님"(409)으로 답함. 조사를 그만둔다
 class AttemptOutdated(Exception):

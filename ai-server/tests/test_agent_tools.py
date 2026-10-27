@@ -104,13 +104,14 @@ def test_mockAgent_callsToolsInOrder_andWritesFromEvidence() -> None:
     assert report.payment_advice[0].recommendation == "NEEDS_CHECK"
     assert "이 고객의 과거 결제 패턴 (데이터 준비 전)" in report.unknowns
     # 창구 호출 기록은 Spring이 정본 — ai-server 과정에는 AI 판단(물을 때마다) · 형식 검사만
+    # 창구 고르기마다 한 번 + 증거 수집 끝 한 번(#94) + 보고서 한 번
     picks = len(TOOL_PLAN["PAYMENT_FRAUD"])
-    assert [s.kind for s in result.steps] == ["LLM_ANSWER"] * (picks + 1) + ["VALIDATION"] * 2
+    assert [s.kind for s in result.steps] == ["LLM_ANSWER"] * (picks + 2) + ["VALIDATION"] * 2
     # 주문 창구는 받았지만 구매자 응답이 없어 보고서에 쓰지 않았다 — 알림만, 실패 아님
     assert result.steps[-1].detail == "근거 검사 통과 · 받고도 안 쓴 증거: 주문 · 구매자 정보"
-    assert [s.detail for s in result.steps[: picks + 1]] == [
+    assert [s.detail for s in result.steps[: picks + 2]] == [
         "AI 판단 — 다음에 볼 증거 고르기"
-    ] * picks + ["AI 판단 — 보고서 작성 (1차)"]
+    ] * picks + ["AI 판단 — 증거 수집 끝", "AI 판단 — 보고서 작성 (1차)"]
 
 
 # 과거 결제 · 카드 창구가 답하면 평소 금액 배수 · 처음 쓰는 카드를 근거로 쓴다 (#90)

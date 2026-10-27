@@ -9,8 +9,14 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.agent.grounding import TOOL_LABELS, check_grounding
 from app.agent.investigator import InvalidAnswer, InvestigationAgent
-from app.agent.llm import LlmError, LlmMessage, LlmReply
-from app.agent.tools import TOOL_NAMES, TOOL_SPECS, StepReporter, ToolRunner
+from app.agent.llm import LlmError, LlmMessage, LlmReply, ToolCall
+from app.agent.tools import (
+    FINISH_EVIDENCE,
+    TOOL_NAMES,
+    TOOL_SPECS,
+    StepReporter,
+    ToolRunner,
+)
 from app.schemas.investigation import FailureInfo, InvestigationRequest, TraceStep
 from app.schemas.report import ReportDraft, answer_schema
 
@@ -27,6 +33,8 @@ class InvestigationState(TypedDict, total=False):
     last_reason: str
     # 형식 검사를 통과한 초안 — 근거 검사까지 통과해야 report가 된다 (#92)
     draft: ReportDraft | None
+    # AI가 증거 수집 끝(finish_evidence)을 불렀다 — 다음 질문부터 형식 고정 (#94)
+    evidence_done: bool
     report: ReportDraft
     error: FailureInfo
 
@@ -50,7 +58,8 @@ class InvestigationGraph:
         self.tools = tools
         # 조사 단계 알림 (2-19b) — 화면이 조사 중에 단계를 그린다
         self.reporter = reporter
-        self.specs = TOOL_SPECS if tools is not None else []
+        # 창구가 있을 때만 증거 수집 끝 신호도 준다 (#94)
+        self.specs = [*TOOL_SPECS, FINISH_EVIDENCE] if tools is not None else []
         self.max_llm_attempts = max_llm_attempts
         self.max_tool_calls = max_tool_calls
         self.now = now
@@ -107,6 +116,7 @@ class InvestigationGraph:
             "nudged": False,
             "attempt": 0,
             "last_reason": "",
+            "evidence_done": False,
         }
         # 한 바퀴마다 노드 두 개 안팎 — 창구 · 다시 묻기 최대치를 다 써도 멈추지 않을 만큼
         limit = 4 * (self.max_tool_calls + self.max_llm_attempts) + 10
@@ -118,7 +128,7 @@ class InvestigationGraph:
     # 형식이 한 번 틀린 뒤로는 창구 없이 보고서 모양을 고정해 묻는다 (#88) — 증거는 이미 대화에 있다
     async def _ask_ai(self, state: InvestigationState) -> InvestigationState:
         asked_at, clock = self.now(), time.monotonic()
-        locked = state["attempt"] > 0
+        locked = self._locked(state)
         tools = [] if locked else self.specs
         schema = answer_schema(state["request"].case_type) if locked else None
         try:
@@ -128,7 +138,9 @@ class InvestigationGraph:
             await self._report(state, step)
             error = FailureInfo(code="LLM_ERROR", reason=str(e), llm_attempts=state["attempt"] + 1)
             return {"steps": [*state["steps"], step], "error": error}
-        if reply.tool_calls and tools:
+        if reply.tool_calls and tools and not _evidence_calls(reply.tool_calls):
+            detail = "AI 판단 — 증거 수집 끝"
+        elif reply.tool_calls and tools:
             detail = "AI 판단 — 다음에 볼 증거 고르기"
         else:
             detail = f"AI 판단 — 보고서 작성 ({state['attempt'] + 1}차)"
@@ -142,7 +154,15 @@ class InvestigationGraph:
         reply = state["reply"]
         request = state["request"]
         results = []
+        done = state["evidence_done"]
         for call in reply.tool_calls:
+            # 증거 수집 끝 — Spring에 묻지 않고 대화에만 답을 붙인다 (호출마다 답이 있어야 함)
+            if call.name == FINISH_EVIDENCE.name:
+                done = True
+                note = "증거 수집 끝 — 이제 받은 증거로 보고서 JSON을 씁니다"
+                body = {"tool": call.name, "ready": True, "note": note, "data": []}
+                results.append((call.name, json.dumps(body, ensure_ascii=False)))
+                continue
             if self.tools is None or call.name not in TOOL_NAMES:
                 missing = {"tool": call.name, "ready": False, "note": "없는 창구", "data": []}
                 results.append((call.name, json.dumps(missing)))
@@ -153,7 +173,8 @@ class InvestigationGraph:
             results.append((call.name, text))
         return {
             "messages": self.agent.with_tool_results(state["messages"], reply, results),
-            "tool_calls": state["tool_calls"] + len(reply.tool_calls),
+            "tool_calls": state["tool_calls"] + len(_evidence_calls(reply.tool_calls)),
+            "evidence_done": done,
         }
 
     # 창구를 너무 많이 부르면 한 번 알린다. 그래도 부르면 형식이 틀린 답으로 센다
@@ -242,9 +263,10 @@ class InvestigationGraph:
             return "AI_호출_실패"
         reply = state["reply"]
         if reply.tool_calls and self.specs:
-            # 형식 고정으로 물은 뒤(attempt > 0)엔 창구를 안 줬다 — 그래도 부르면 "너무 많이"로 센다
-            within = state["tool_calls"] + len(reply.tool_calls) <= self.max_tool_calls
-            within = within and state["attempt"] == 0
+            # 형식 고정으로 물은 뒤엔 창구를 안 줬다 — 그래도 부르면 "너무 많이"로 센다
+            asked = len(_evidence_calls(reply.tool_calls))
+            within = state["tool_calls"] + asked <= self.max_tool_calls
+            within = within and not self._locked(state)
             return "창구_요청" if within else "창구_너무_많음"
         return "보고서_작성"
 
@@ -268,6 +290,11 @@ class InvestigationGraph:
 
     # ── 도움 ──
 
+    # 형식이 한 번 틀렸거나(#88) 증거 수집 끝을 불렀으면(#94) 창구 없이 보고서 모양을 고정
+    @staticmethod
+    def _locked(state: InvestigationState) -> bool:
+        return state["attempt"] > 0 or state.get("evidence_done", False)
+
     # 끝난 단계를 Spring에 알린다 — 알릴 곳이 없으면(Spring 주소 없음) 건너뛴다
     async def _report(self, state: InvestigationState, step: TraceStep) -> None:
         if self.reporter is None:
@@ -283,3 +310,8 @@ class InvestigationGraph:
     def _step(kind: str, ok: bool, detail: str, started: datetime, clock: float) -> TraceStep:
         elapsed = int((time.monotonic() - clock) * 1000)
         return TraceStep(kind=kind, ok=ok, detail=detail, started_at=started, duration_ms=elapsed)
+
+
+# 진짜 증거 창구 호출만 (증거 수집 끝 신호 제외) — 창구 횟수는 이것만 센다
+def _evidence_calls(calls: list[ToolCall]) -> list[ToolCall]:
+    return [call for call in calls if call.name != FINISH_EVIDENCE.name]
