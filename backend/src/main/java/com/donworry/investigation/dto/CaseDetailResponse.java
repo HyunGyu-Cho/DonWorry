@@ -26,9 +26,13 @@ public record CaseDetailResponse(
             int evidenceVersion,
             Instant createdAt,
             Instant mergeUntil,
-            Instant closedAt) {
+            Instant closedAt,
+            // 화면용 대상 이름 · 묶은 기준 (#82)
+            String subjectLabel,
+            String groupingBasis) {
 
-        public static SecurityCaseResponse from(SecurityCase securityCase, Instant mergeUntil) {
+        public static SecurityCaseResponse from(
+                SecurityCase securityCase, Instant mergeUntil, String subjectLabel, String groupingBasis) {
             return new SecurityCaseResponse(
                     securityCase.getId(),
                     securityCase.getMerchantId(),
@@ -38,7 +42,9 @@ public record CaseDetailResponse(
                     securityCase.getEvidenceVersion(),
                     securityCase.getCreatedAt(),
                     mergeUntil,
-                    securityCase.getClosedAt());
+                    securityCase.getClosedAt(),
+                    subjectLabel,
+                    groupingBasis);
         }
     }
 
@@ -52,7 +58,10 @@ public record CaseDetailResponse(
             Instant requestedAt,
             Integer riskScore,
             String fdsResult,
-            List<String> ruleHits) {}
+            List<String> ruleHits,
+            // 이 결제의 FDS 평가 번호 · 적중 Rule (점수 큰 순) — 흐름도 카드에서 경보 상세로 간다 (#82)
+            Long evaluationId,
+            List<String> hitRuleCodes) {}
 
     public record AiReportResponse(
             Long reportId,

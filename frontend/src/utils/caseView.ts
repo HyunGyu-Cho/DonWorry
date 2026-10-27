@@ -166,7 +166,7 @@ const STATUS_CHANGE_TEXT: Record<string, string> = {
   APPROVED: '관리자 승인 · 판정 반영',
   REJECTED: '관리자 거절 · 다시 판정 대기',
   DECISION_PENDING: 'AI 조사 완료 · 판정 대기',
-  // 새 정보가 들어오거나 직원이 [AI 조사 다시 하기]를 눌러 다시 조사 (2-19e)
+  // 판정 대기에서 돌아오면: 새 정보가 들어오거나 직원이 [AI 조사 다시 하기]를 눌러 다시 조사 (2-19e)
   INVESTIGATING: 'AI 다시 조사 중',
 }
 
@@ -177,6 +177,10 @@ export function historyText(h: { eventType: string; eventData: Record<string, st
 } {
   if (h.eventType !== 'CASE_STATUS_CHANGED')
     return { title: HISTORY_TEXT[h.eventType] ?? h.eventType }
-  const title = STATUS_CHANGE_TEXT[h.eventData.to] ?? STATUS_CHANGE_TEXT.DECISION_PENDING
+  // 사건이 막 열린 뒤의 첫 조사는 "다시"가 아니다 (#82)
+  const firstInvestigation = h.eventData.to === 'INVESTIGATING' && h.eventData.from === 'OPEN'
+  const title = firstInvestigation
+    ? 'AI 조사 시작'
+    : (STATUS_CHANGE_TEXT[h.eventData.to] ?? STATUS_CHANGE_TEXT.DECISION_PENDING)
   return h.eventData.comment ? { title, sub: `메모: ${h.eventData.comment}` } : { title }
 }

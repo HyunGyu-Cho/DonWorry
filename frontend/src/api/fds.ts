@@ -40,12 +40,13 @@ function realGetFdsEvaluations({
   if (result) query.set('result', result)
   if (attentionOnly) query.set('attentionOnly', 'true')
   if (search?.trim()) query.set('search', search.trim())
-  return api<FdsEvaluationPage>(`/fds/evaluations?${query}`)
+  // 결제 · 사건 칸까지 붙인 경보는 investigation이 합쳐 준다 (#82, fds는 결제 · 사건을 모른다)
+  return api<FdsEvaluationPage>(`/investigation/payment-alerts?${query}`)
 }
 
 async function realGetFdsEvaluation(evaluationId: string) {
   try {
-    return await api<FdsEvaluationDetail>(`/fds/evaluations/${evaluationId}`)
+    return await api<FdsEvaluationDetail>(`/investigation/payment-alerts/${evaluationId}`)
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null
     throw error

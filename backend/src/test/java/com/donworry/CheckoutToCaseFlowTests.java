@@ -116,4 +116,49 @@ class CheckoutToCaseFlowTests {
         assertThat(paymentLookup.find(declinedId).orElseThrow().status()).isEqualTo("DECLINED");
         assertThat(casePaymentRepository.findByPaymentId(declinedId)).isEmpty();
     }
+
+    // ㉠ 화면 조회 (#82): 보류된 결제가 경보 · 사건 · 결제 · Rule 화면에 실제 값으로 보인다
+    @Test
+    void heldPayment_visibleOnReadScreens() throws Exception {
+        Long paymentId = Long.valueOf(
+                pay(order("cake-set"), "demo-card-new", 200).get("paymentId").toString());
+        await().atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> assertThat(casePaymentRepository.findByPaymentId(paymentId))
+                        .isPresent());
+        Long caseId = casePaymentRepository
+                .findByPaymentId(paymentId)
+                .orElseThrow()
+                .getSecurityCase()
+                .getId();
+
+        mvc.perform(get("/api/fds/rules"))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$[?(@.ruleCode == 'NEW_CARD')].displayName").value("처음 쓰는 카드"));
+        mvc.perform(get("/api/fds/rules/hit-stats").param("days", "7"))
+                .andExpect(jsonPath("$[?(@.ruleCode == 'AMOUNT_SPIKE')].daily.length()")
+                        .value(7));
+        mvc.perform(get("/api/investigation/payment-alerts")
+                        .param("attentionOnly", "true")
+                        .param("size", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.paymentId == " + paymentId + ")].customerLabel")
+                        .value("김민수"))
+                .andExpect(jsonPath("$.content[?(@.paymentId == " + paymentId + ")].caseId")
+                        .value(String.valueOf(caseId)))
+                .andExpect(jsonPath("$.content[?(@.paymentId == " + paymentId + ")].orderTitle")
+                        .value("단체 행사용 케이크 세트"));
+        mvc.perform(get("/api/payment/payments/{id}", paymentId))
+                .andExpect(jsonPath("$.status").value("HELD"))
+                .andExpect(jsonPath("$.cardLast4").value("1173"));
+        mvc.perform(get("/api/payment/payments/{id}", 987654321L))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PAY_001"));
+        mvc.perform(get("/api/security-cases/{id}", caseId))
+                .andExpect(jsonPath("$.securityCase.subjectLabel").value("김민수 고객"))
+                .andExpect(jsonPath("$.payments[0].hitRuleCodes.length()").value(3))
+                .andExpect(jsonPath("$.payments[0].evaluationId").isNumber());
+        mvc.perform(get("/api/security-cases/handoffs")).andExpect(status().isOk());
+        mvc.perform(get("/api/investigation/approvals")).andExpect(status().isOk());
+    }
 }

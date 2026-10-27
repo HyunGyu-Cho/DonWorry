@@ -8,6 +8,7 @@ import com.donworry.investigation.dto.CaseDetailResponse.HandoffResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.HistoryResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.SecurityCaseResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
+import com.donworry.investigation.dto.InvestigationViewDtos.HandoffRowResponse;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.ActionHandoffRepository;
@@ -52,8 +53,13 @@ public class CaseQueryService {
         SecurityCase securityCase = securityCaseRepository
                 .findById(caseId)
                 .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.CASE_NOT_FOUND));
+        Optional<PaymentInfo> first = firstPayment(caseId);
         return new CaseDetailResponse(
-                SecurityCaseResponse.from(securityCase, InvestigationRules.mergeDeadline(securityCase.getCreatedAt())),
+                SecurityCaseResponse.from(
+                        securityCase,
+                        InvestigationRules.mergeDeadline(securityCase.getCreatedAt()),
+                        CaseLabels.subject(securityCase.getCaseType(), first),
+                        CaseLabels.groupingBasis(securityCase.getCaseType())),
                 casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
                         .map(this::payment)
                         .toList(),
@@ -91,7 +97,47 @@ public class CaseQueryService {
                 totalAmount(payments),
                 maxRiskScore(payments),
                 reportGateway.latest(caseId).map(ReportSnapshot::status).orElse(null),
-                (int) paymentDecisionRepository.countByCasePaymentSecurityCaseId(caseId));
+                (int) paymentDecisionRepository.countByCasePaymentSecurityCaseId(caseId),
+                CaseLabels.subject(securityCase.getCaseType(), payments.isEmpty() ? Optional.empty() : payments.get(0)),
+                CaseLabels.groupingBasis(securityCase.getCaseType()),
+                payments.stream()
+                        .flatMap(Optional::stream)
+                        .flatMap(payment -> payment.ruleHits().stream())
+                        .distinct()
+                        .toList());
+    }
+
+    // 조치 센터 (#82) — 인계마다 사건 · 결제 표시 정보를 붙인다
+    @Transactional(readOnly = true)
+    public List<HandoffRowResponse> handoffs() {
+        return actionHandoffRepository.findAllByOrderByRequestedAtDesc().stream()
+                .map(handoff -> {
+                    CasePayment casePayment = handoff.getDecision().getCasePayment();
+                    SecurityCase securityCase = casePayment.getSecurityCase();
+                    Optional<PaymentInfo> info = paymentInfoReader.find(casePayment.getPaymentId());
+                    return new HandoffRowResponse(
+                            handoff.getId(),
+                            handoff.getDecision().getId(),
+                            handoff.getActionType().name(),
+                            handoff.getStatus().name(),
+                            handoff.getTargetOperationId(),
+                            handoff.getRequestedAt(),
+                            handoff.getAcceptedAt(),
+                            handoff.getLastErrorCode(),
+                            securityCase.getId(),
+                            CaseLabels.subject(securityCase.getCaseType(), info),
+                            casePayment.getPaymentId(),
+                            info.map(PaymentInfo::orderTitle).orElse(null),
+                            info.map(PaymentInfo::amount).orElse(null),
+                            info.map(PaymentInfo::paymentStatus).orElse(null));
+                })
+                .toList();
+    }
+
+    private Optional<PaymentInfo> firstPayment(Long caseId) {
+        return casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
+                .findFirst()
+                .flatMap(casePayment -> paymentInfoReader.find(casePayment.getPaymentId()));
     }
 
     // 금액을 모르는 결제가 있으면 합계도 모른다 (null). 빠진 금액을 0으로 치지 않는다
@@ -131,6 +177,8 @@ public class CaseQueryService {
                 info.map(PaymentInfo::requestedAt).orElse(null),
                 info.map(PaymentInfo::riskScore).orElse(null),
                 info.map(PaymentInfo::fdsResult).orElse(null),
+                info.map(PaymentInfo::ruleHits).orElse(List.of()),
+                info.map(PaymentInfo::evaluationId).orElse(null),
                 info.map(PaymentInfo::ruleHits).orElse(List.of()));
     }
 

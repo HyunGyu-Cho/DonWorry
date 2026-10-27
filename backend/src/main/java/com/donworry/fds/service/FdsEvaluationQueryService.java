@@ -11,6 +11,7 @@ import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.entity.FdsRuleHit;
 import com.donworry.fds.repository.FdsEvaluationRepository;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import org.springframework.data.domain.PageRequest;
@@ -32,6 +33,7 @@ public class FdsEvaluationQueryService implements FdsPaymentEvaluations {
         this.jsonMapper = jsonMapper;
     }
 
+    @Override
     public FdsEvaluationPage list(FdsResult result, boolean attentionOnly, String search, int page, int size) {
         var pageable =
                 PageRequest.of(page, size, Sort.by(Sort.Order.desc("evaluatedAt"), Sort.Order.desc("evaluationId")));
@@ -147,5 +149,23 @@ public class FdsEvaluationQueryService implements FdsPaymentEvaluations {
                                         .reversed())
                                 .map(FdsRuleHit::getRuleCode)
                                 .toList()));
+    }
+
+    @Override
+    public Optional<FdsEvaluationDetail> find(Long evaluationId) {
+        return evaluationRepository.findById(evaluationId).map(evaluation -> detail(evaluationId));
+    }
+
+    @Override
+    public List<String> matchedRuleCodes(Long evaluationId) {
+        return evaluationRepository
+                .findById(evaluationId)
+                .map(evaluation -> evaluation.getRuleHits().stream()
+                        .filter(hit -> hit.getOutcome() == FdsRuleHitOutcome.MATCH)
+                        .sorted(java.util.Comparator.comparingInt(FdsRuleHit::getAppliedScore)
+                                .reversed())
+                        .map(FdsRuleHit::getRuleCode)
+                        .toList())
+                .orElse(List.of());
     }
 }
