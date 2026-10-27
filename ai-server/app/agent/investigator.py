@@ -1,3 +1,5 @@
+import json
+
 from pydantic import ValidationError
 
 from app.agent.llm import LlmClient, LlmMessage, LlmReply
@@ -42,13 +44,34 @@ TYPE_GUIDES = {
     ),
 }
 
-ANSWER_FORMAT = (
-    "JSON 칸: reportType, riskScore(0~100), verdict, summary, "
-    "recommendations[{label, kind: POSITIVE|NEGATIVE|INFO}], "
-    "riskPoints[{title, detail, source}], normalPoints[{title, detail, source}], "
-    "unknowns[], checks[] (확인할 것, 1개 이상), "
-    "paymentAdvice[{paymentId, recommendation, reason}] (결제 사기만)"
+# 칸 이름만 주면 7b 모델이 값 모양을 자주 틀린다 (kind에 다른 값, unknowns에 객체, #88 PC 실행)
+# 그래서 실제 모양의 짧은 예시를 준다. 결제 번호는 진짜 번호 — 예시 번호를 베끼면 소속 검사에 걸린다
+ANSWER_RULES = (
+    "답은 아래 예시와 같은 모양의 JSON 하나만 씁니다 (내용은 증거로 채움). "
+    "reportType은 위 사건 종류 그대로, riskScore는 0~100 정수, "
+    "kind는 POSITIVE · NEGATIVE · INFO 중 하나, "
+    "unknowns · checks는 문장 목록(객체 아님), checks는 1개 이상."
 )
+
+
+def answer_example(request: InvestigationRequest) -> str:
+    example: dict[str, object] = {
+        "reportType": request.case_type,
+        "riskScore": 70,
+        "verdict": "한 줄 결론",
+        "summary": "두세 문장 요약",
+        "recommendations": [{"label": "버튼 이름", "kind": "NEGATIVE"}],
+        "riskPoints": [{"title": "위험 근거", "detail": "설명", "source": "get_fds_evidence"}],
+        "normalPoints": [{"title": "정상 정황", "detail": "설명", "source": "get_payment_history"}],
+        "unknowns": ["확인하지 못한 것"],
+        "checks": ["판정 전에 확인할 것"],
+    }
+    if request.case_type == "PAYMENT_FRAUD":
+        payment_id = str(request.payment_ids[0]) if request.payment_ids else "결제 번호"
+        example["paymentAdvice"] = [
+            {"paymentId": payment_id, "recommendation": "NEEDS_CHECK", "reason": "이유"}
+        ]
+    return f"{ANSWER_RULES}\n예시: {json.dumps(example, ensure_ascii=False)}"
 
 
 # 창구를 쓸 수 있을 때 붙이는 안내 — AI가 스스로 고르되 FDS 증거부터, 받지 못한 것은 지어내지 않기
@@ -82,15 +105,20 @@ class InvestigationAgent:
             f"사건 {request.case_id} (증거 버전 {request.evidence_version})을 조사해 "
             "보고서 초안을 JSON으로 써 주세요.\n"
             f"{TYPE_GUIDES[request.case_type]}\n{_payment_line(request)}"
-            f"{TOOL_GUIDE if with_tools else ''}{ANSWER_FORMAT}"
+            f"{TOOL_GUIDE if with_tools else ''}{answer_example(request)}"
         )
         return [
             LlmMessage(role="system", content=SYSTEM_PROMPT),
             LlmMessage(role="user", content=question),
         ]
 
-    async def ask(self, messages: list[LlmMessage], tools: list[ToolSpec]) -> LlmReply:
-        return await self.llm.complete(messages, tools)
+    async def ask(
+        self,
+        messages: list[LlmMessage],
+        tools: list[ToolSpec],
+        answer_schema: dict[str, object] | None = None,
+    ) -> LlmReply:
+        return await self.llm.complete(messages, tools, answer_schema)
 
     # AI가 창구를 부르겠다는 답과 각 창구 결과를 대화에 붙인다 (다음 질문에 같이 보낸다)
     def with_tool_results(

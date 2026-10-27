@@ -11,7 +11,7 @@ from app.agent.investigator import InvalidAnswer, InvestigationAgent
 from app.agent.llm import LlmError, LlmMessage, LlmReply
 from app.agent.tools import TOOL_NAMES, TOOL_SPECS, StepReporter, ToolRunner
 from app.schemas.investigation import FailureInfo, InvestigationRequest, TraceStep
-from app.schemas.report import ReportDraft
+from app.schemas.report import ReportDraft, answer_schema
 
 
 # 조사 한 번의 상태 — 노드는 바뀐 칸만 돌려주고 LangGraph가 덮어쓴다 (체크포인트 없이 메모리에만)
@@ -106,16 +106,20 @@ class InvestigationGraph:
     # ── 노드 ──
 
     # AI에게 한 번 물을 때마다 단계 하나 — 창구를 고른 판단도 보고서를 쓴 판단도 보인다 (2-19b)
+    # 형식이 한 번 틀린 뒤로는 창구 없이 보고서 모양을 고정해 묻는다 (#88) — 증거는 이미 대화에 있다
     async def _ask_ai(self, state: InvestigationState) -> InvestigationState:
         asked_at, clock = self.now(), time.monotonic()
+        locked = state["attempt"] > 0
+        tools = [] if locked else self.specs
+        schema = answer_schema(state["request"].case_type) if locked else None
         try:
-            reply = await self.agent.ask(state["messages"], self.specs)
+            reply = await self.agent.ask(state["messages"], tools, schema)
         except LlmError as e:
             step = self._step("LLM_ANSWER", False, f"AI 호출 실패: {e}", asked_at, clock)
             await self._report(state, step)
             error = FailureInfo(code="LLM_ERROR", reason=str(e), llm_attempts=state["attempt"] + 1)
             return {"steps": [*state["steps"], step], "error": error}
-        if reply.tool_calls and self.specs:
+        if reply.tool_calls and tools:
             detail = "AI 판단 — 다음에 볼 증거 고르기"
         else:
             detail = f"AI 판단 — 보고서 작성 ({state['attempt'] + 1}차)"
@@ -195,7 +199,9 @@ class InvestigationGraph:
             return "AI_호출_실패"
         reply = state["reply"]
         if reply.tool_calls and self.specs:
+            # 형식 고정으로 물은 뒤(attempt > 0)엔 창구를 안 줬다 — 그래도 부르면 "너무 많이"로 센다
             within = state["tool_calls"] + len(reply.tool_calls) <= self.max_tool_calls
+            within = within and state["attempt"] == 0
             return "창구_요청" if within else "창구_너무_많음"
         return "보고서_작성"
 

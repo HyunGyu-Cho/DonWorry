@@ -139,7 +139,7 @@ export function DecisionPanel(props: {
             type="warning"
             showIcon
             message="AI 보고서 없이 판정합니다"
-            description="AI 조사가 세 번 실패했어요. 사유에 직접 조사한 근거를 적어 주세요."
+            description="AI 조사가 실패했어요. 사유에 직접 조사한 근거를 적어 주세요."
           />
         )}
         {mode.kind === 'blocked' && undecided.length > 0 && (

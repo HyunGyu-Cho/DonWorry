@@ -151,6 +151,7 @@ sequenceDiagram
   - ai-server는 조사가 끝나면 `POST /internal/ai/reports/{reportId}/result`로 결과를 보낸다. 같은 서비스 키(`X-Service-Key`)를 쓴다. 보내기 실패는 기록만 하고, Spring의 조회(`GET /investigations/{reportId}`)로 복구한다 (2-18)
   - Spring은 AI 칸을 다시 검사하고(사건 종류 · 필수 칸 · 위험도 범위 · 결제별 권고의 결제 번호가 Case 소속인지), 화면 결론 카드(`frontend/src/types/report.ts` ConclusionReport, schemaVersion 2)로 합쳐 `report_body`에 저장한다. 모르는 칸(경위 · 증거 · 비슷한 사건)은 빈 목록으로 둔다
   - 접수 실패(결정 2)와 결과 실패(ai-server가 실패를 보냄 · Spring 검사 실패)를 **같은 횟수**로 센다. 첫 시도 포함 총 3번이면 `FAILED`
+    - 예외 (#88): ai-server가 **AI 형식 실패**(`LLM_INVALID_ANSWER`, 안에서 이미 3번 다시 물음)를 보내면 다시 요청하지 않고 바로 `FAILED`. 같은 모델 · 같은 증거로 다시 해도 또 틀려서, 진짜 AI(7b)로는 직원이 최대 약 12분(3 × 3번 × 65초)을 기다린 뒤 실패를 봤다. 직원은 [AI 조사 다시 하기] · 수동 판정을 쓴다. 연결 실패 · 시간 초과 같은 일시적 실패는 3번 그대로
   - `/internal/ai/**`는 직원 로그인이 아니라 서비스 키로 지킨다. 보안 설정(P1)이 전체 API를 잠글 때도 이 경로는 열어 둔다
   - 조사 요청에 사건에 묶인 결제 번호 `paymentIds`를 싣는다 (직원 사건은 빈 목록). 결제 사기면 AI 질문에 이 번호를 적고, ai-server는 답의 결제별 권고가 이 목록 밖이면 구조 검증 실패로 다시 묻는다. Spring의 소속 검사는 마지막 방어선으로 그대로 둔다
     - 이유: 요청에 사건 번호만 있으면 AI는 결제 번호를 알 수 없어 지어낼 수밖에 없다. 실제로 셋을 띄워 돌리자 가짜 AI의 예시 번호가 3번 모두 소속 검사에 걸려 결제 사기 보고서가 늘 `FAILED`가 됐다
@@ -220,6 +221,10 @@ sequenceDiagram
 - **창구 결과 짝짓기:** chat/completions는 창구 결과마다 `tool_call_id`가 필요하다. AI가 준 호출 번호(`ToolCall.id`)를 쓰고, 없으면 같은 순서로 번호를 만든다 — 그래프는 호출 순서대로 결과를 붙이므로 순서로 짝이 맞는다
 - **AI 답 다듬기:** 보고서를 ` ```json ` 으로 감싸 보내면 껍데기만 벗기고 형식 검사에 넘긴다. 창구 인자가 JSON 문자열(OpenAI)이든 객체(Ollama)든 받고, 못 읽으면 빈 인자로 부른다 (Spring이 사건 범위로 다시 막는다)
 - **실패:** 연결 실패 · 시간 초과 · 4xx · 5xx · 모양이 다른 응답은 `LlmError` → "AI 호출 실패"(`LLM_ERROR`). 형식이 틀린 답(`LLM_INVALID_ANSWER`, 다시 묻기)과 구분한다
+- **형식 맞추기 (PC에서 qwen2.5:7b로 돌려 보고 추가):** 증거 고르기는 잘 했지만, 보고서는 3번 모두 다른 곳을 틀렸다 (`kind`에 없는 값, `unknowns` · `checks`에 문장 대신 객체, `reportType` 누락)
+  - 질문에 칸 이름 대신 **실제 모양의 짧은 예시 JSON**을 넣는다 (결제 번호는 사건의 진짜 번호). 예시 자체가 형식 검사를 통과하는지 테스트로 지킨다
+  - **형식 고정:** 형식이 한 번 틀린 뒤의 질문은 창구 목록을 빼고, 사건 종류 하나의 보고서 모양(형식 검사와 같은 Pydantic 모델에서 뽑은 JSON Schema)을 `response_format`으로 건다 → Ollama는 그 모양 밖의 글자를 못 쓴다. 첫 질문은 창구를 골라야 해서 걸지 않는다. 가짜 AI는 무시한다
+  - 버린 안: 처음부터 형식 고정 — 창구 호출(tool calling)과 같이 걸면 모델이 창구를 못 부른다. 틀린 값을 서버에서 고쳐 받기(객체 → 문장 등) — 검사가 느슨해져 화면에 엉뚱한 값이 나갈 수 있다
 - **결과 대기 시간:** CPU로 도는 7b는 보고서 1건에 몇 분 걸린다. Spring `donworry.report.result-timeout`을 `DONWORRY_REPORT_RESULT_TIMEOUT`(`.env` 예시 `PT5M`)으로 바꿀 수 있게 했다 (기본 PT2M 유지)
 - 버린 안: LangChain 모델 클래스(`ChatOllama` · `ChatOpenAI`) — 기능은 많지만 우리 메시지 모양(`LlmMessage`)과 서로 바꾸는 코드가 더 들고 의존성이 늘어난다. Ollama 고유 주소(`/api/chat`) — 문맥 길이를 요청마다 줄 수 있지만 OpenAI와 코드가 갈라진다 (문맥 길이는 `OLLAMA_CONTEXT_LENGTH`로 해결)
 

@@ -17,6 +17,7 @@ from app.agent.openai_compat import OpenAiCompatibleClient, strip_fence, to_wire
 from app.agent.tools import TOOL_SPECS
 from app.config import Settings
 from app.schemas.investigation import InvestigationStatus
+from app.schemas.report import answer_schema
 from app.service.investigations import InvestigationService
 from tests.test_agent_tools import PAYMENT, FakeTools, request
 
@@ -157,3 +158,53 @@ def test_createLlmClient_byProvider() -> None:
     assert openai.url == "https://api.openai.com/v1/chat/completions"
     with pytest.raises(ValueError, match="지원하지 않는"):
         create_llm_client(Settings(llm_provider="claude"))
+
+
+# 1차 보고서가 형식에 틀리면 2차는 창구 없이 보고서 모양을 고정해 묻는다
+# (#88 PC 실행에서 7b가 매번 다르게 틀림)
+def test_secondTry_locksAnswerSchema_withoutTools() -> None:
+    fake = FakeOllama()
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        res = fake(req)
+        message = res.json()["choices"][0]["message"]
+        if len(fake.bodies) == 2:
+            draft = json.loads(strip_fence(message["content"]))
+            draft["recommendations"][0]["kind"] = "WARNING"
+            message["content"] = json.dumps(draft, ensure_ascii=False)
+        return reply(message)
+
+    service = InvestigationService(InvestigationAgent(client(handler)), tools=FakeTools())
+    result = asyncio.run(service._investigate(request()))
+
+    assert result.status == InvestigationStatus.SUCCEEDED, result.error
+    tool_pick, first_report, second_report = fake.bodies
+    assert "response_format" not in first_report and "tools" in first_report
+    assert "tools" not in second_report
+    schema = second_report["response_format"]["json_schema"]["schema"]
+    assert schema == answer_schema("PAYMENT_FRAUD")
+    details = [s.detail for s in result.steps]
+    assert "AI 판단 — 보고서 작성 (2차)" in details
+
+
+# 고정할 모양은 형식 검사와 같은 모델에서 — 화면 칸 이름(camelCase) · 권고 버튼 값 · 결제 권고 유무
+def test_answerSchema_matchesValidation() -> None:
+    fraud = answer_schema("PAYMENT_FRAUD")
+    assert {"reportType", "riskScore", "checks", "paymentAdvice"} <= set(fraud["properties"])
+    assert fraud["additionalProperties"] is False
+    button = fraud["$defs"]["RecommendationButton"]["properties"]["kind"]
+    assert button["enum"] == ["POSITIVE", "NEGATIVE", "INFO"]
+    assert "paymentAdvice" not in answer_schema("STAFF_TAKEOVER")["properties"]
+
+
+# 지시문 예시는 그대로 내도 형식 검사를 통과하는 모양이고, 결제 번호는 사건의 진짜 번호
+@pytest.mark.parametrize("case_type", ["PAYMENT_FRAUD", "STAFF_TAKEOVER", "STAFF_SPRAY"])
+def test_promptExample_passesValidation(case_type: str) -> None:
+    req = request(case_type)
+    agent = InvestigationAgent(MockLlmClient())
+    question = agent.first_messages(req, with_tools=True)[1].content
+    example = question.split("예시: ", 1)[1]
+    draft = agent.parse(example, req)
+    assert draft.report_type == case_type
+    if case_type == "PAYMENT_FRAUD":
+        assert f'"paymentId": "{PAYMENT}"' in example

@@ -150,7 +150,9 @@ def test_attemptOutdated_stopsWithoutResult() -> None:
 # 창구를 너무 많이 부르면 한 번 알리고, 그래도 부르면 형식 실패로 세어 끝내 실패
 def test_tooManyToolCalls_nudgesThenFails() -> None:
     class Greedy:
-        async def complete(self, messages: list[LlmMessage], tools: list[ToolSpec]) -> LlmReply:
+        async def complete(
+            self, messages: list[LlmMessage], tools: list[ToolSpec], answer_schema: object = None
+        ) -> LlmReply:
             return LlmReply(tool_calls=[ToolCall(name="get_case_payments")])
 
     service = InvestigationService(
@@ -167,7 +169,10 @@ def test_tooManyToolCalls_nudgesThenFails() -> None:
 def test_unknownToolName_notSentToSpring() -> None:
     class Wanders(MockLlmClient):
         async def complete(
-            self, messages: list[LlmMessage], tools: list[ToolSpec] | None = None
+            self,
+            messages: list[LlmMessage],
+            tools: list[ToolSpec] | None = None,
+            answer_schema: object = None,
         ) -> LlmReply:
             if not any(m.role == "tool" for m in messages):
                 return LlmReply(tool_calls=[ToolCall(name="delete_payment")])

@@ -28,7 +28,12 @@ class OpenAiCompatibleClient:
         self.timeout = timeout_seconds
         self.transport = transport
 
-    async def complete(self, messages: list[LlmMessage], tools: list[ToolSpec]) -> LlmReply:
+    async def complete(
+        self,
+        messages: list[LlmMessage],
+        tools: list[ToolSpec],
+        answer_schema: dict[str, object] | None = None,
+    ) -> LlmReply:
         body: dict[str, object] = {
             "model": self.model,
             "messages": to_wire(messages),
@@ -37,6 +42,13 @@ class OpenAiCompatibleClient:
         }
         if tools:
             body["tools"] = [_tool(spec) for spec in tools]
+        # 형식 고정 — Ollama는 이 모양 밖의 글자를 못 쓰게 막는다
+        # strict는 끈다 (OpenAI strict는 기본값이 있는 칸을 못 받음)
+        if answer_schema is not None:
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "report", "schema": answer_schema, "strict": False},
+            }
         try:
             async with httpx.AsyncClient(timeout=self.timeout, transport=self.transport) as client:
                 res = await client.post(self.url, json=body, headers=self.headers)

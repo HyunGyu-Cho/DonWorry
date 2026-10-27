@@ -160,7 +160,8 @@ class ReportResultFlowTests {
         body.put("evidenceVersion", 1);
         body.put("status", status);
         body.put("report", "SUCCEEDED".equals(status) ? report : null);
-        body.put("error", "FAILED".equals(status) ? Map.of("code", "LLM_INVALID_ANSWER", "reason", "형식 3번 실패") : null);
+        // 기본 실패는 다시 해 볼 만한 실패(AI 연결 실패). 형식 실패는 result_invalidAnswer_failsWithoutRetry에서
+        body.put("error", "FAILED".equals(status) ? Map.of("code", "LLM_ERROR", "reason", "AI 서버 연결 실패") : null);
         body.put(
                 "steps",
                 List.of(Map.of(
@@ -283,6 +284,23 @@ class ReportResultFlowTests {
                         .orElseThrow()
                         .getStatus())
                 .isEqualTo(CaseStatus.DECISION_PENDING);
+    }
+
+    // AI가 형식을 3번 다 틀린 실패는 같은 증거로 다시 해도 또 틀린다 — 다시 요청하지 않고 바로 실패 (#88)
+    @Test
+    void result_invalidAnswer_failsWithoutRetry() throws Exception {
+        Sent sent = requestInvestigation();
+        Map<String, Object> body = result(sent, "FAILED", null);
+        body.put("error", Map.of("code", "LLM_INVALID_ANSWER", "reason", "3번 모두 형식이 맞지 않음"));
+        send(sent.reportId(), body, KEY, 204);
+
+        AiReport failed = report(sent.reportId());
+        assertThat(failed.getStatus()).isEqualTo(ReportStatus.FAILED);
+        assertThat(failed.getReportBody().get("error").toString())
+                .contains("AI_RESULT_FAILED", "attempts=1", "3번 모두 형식이 맞지 않음");
+        verify(aiServerClient, times(1))
+                .requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt(), anyList());
+        assertThat(caseStatus()).isEqualTo(CaseStatus.DECISION_PENDING);
     }
 
     // 조사를 요청하고 ai-server가 실패를 3번 보내 최종 실패로 끝낸다 — 마지막 시도를 돌려준다

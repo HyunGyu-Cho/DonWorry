@@ -73,3 +73,15 @@ ReportDraft = Annotated[
 ]
 
 REPORT_DRAFT = TypeAdapter(ReportDraft)
+
+DRAFT_MODELS: dict[str, type[_DraftBase]] = {
+    "PAYMENT_FRAUD": PaymentFraudDraft,
+    "STAFF_TAKEOVER": StaffTakeoverDraft,
+    "STAFF_SPRAY": StaffSprayDraft,
+}
+
+
+# 사건 종류 하나의 보고서 모양 (JSON Schema). 다시 물을 때 AI가 이 모양 밖으로 못 쓰게 건다 (#88)
+# 형식 검사와 같은 모델에서 뽑아 검사 · 고정이 어긋나지 않는다
+def answer_schema(case_type: str) -> dict[str, object]:
+    return DRAFT_MODELS[case_type].model_json_schema(by_alias=True)
