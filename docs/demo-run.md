@@ -37,6 +37,8 @@ ai-server/.env  AI_SERVER_SERVICE_KEY=내가-정한-키
 | --- | --- | --- |
 | `DONWORRY_REPORT_WRITER` | `ai-server` | AI 조사를 AI 서버에 맡김 |
 | `DONWORRY_CARD_COMPANY_DELAY` | `PT5S` | 판정 뒤 "조치 진행 중" 5초 |
+| `DONWORRY_REPORT_RESULT_TIMEOUT` | `PT5M` | AI 조사 결과를 5분까지 기다림 (진짜 AI는 몇 분 걸림) |
+| `AI_SERVER_LLM_PROVIDER` | `mock` | 가짜 AI가 보고서를 씀 — 진짜 AI는 4절 |
 | `AI_SERVER_MOCK_DELAY_SECONDS` | `1` | 가짜 AI가 단계마다 1초 쉼 → 조사 과정이 한 줄씩 보임 |
 | `VITE_USE_MOCK` | (비움) | 화면이 실제 API를 씀 |
 
@@ -62,7 +64,7 @@ npm run dev
 
 ## 3. 시나리오 ① 결제 사기 의심
 
-1. 새 탭에서 `http://localhost:5173/demo/shop` → **단체 행사용 케이크 세트(65만 원)** [결제하기] → **처음 쓰는 카드** → "결제를 확인하고 있습니다"
+1. 새 탭에서 `http://localhost:5173/demo/shop` → **단체 행사용 케이크 세트(65만 원)** [결제하기] → **처음 쓰는 카드** → "결제가 완료되었습니다" (뒤에서는 매입 보류 · 직원 검토, #86)
 2. `http://localhost:5173/login`에서 `jiwon` / `1234` 로그인
 3. 홈 → [확인할 결제 경보] → 김민수 · 65만 원 경보 → [사건 보기]
 4. 사건 화면 [구매자 화면 열기 (시연)] → 새 탭에서 "아니요, 결제하지 않았어요"
@@ -70,9 +72,40 @@ npm run dev
 6. [AI 보고서]에서 결론 확인 → 사건 화면에서 [승인 취소] + 사유 → [판정 확정]
 7. "조치 진행 중" 약 5초 뒤 "종료" → 조치 센터에서 반영 확인
 
+## 4. 진짜 AI(Ollama Qwen)로 바꾸기 (#88)
+
+가짜 AI는 정해진 순서로 증거를 보고 보고서를 조립합니다. 진짜 AI는 **어떤 증거를 볼지 스스로 고르고** 보고서를 직접 씁니다.
+내 PC 안에서만 돌아가서 결제 · 고객 정보가 밖으로 나가지 않습니다.
+
+1. [ollama.com](https://ollama.com)에서 Windows용 Ollama를 설치합니다 (설치하면 작업 표시줄에서 계속 켜져 있음)
+2. 증거가 잘리지 않게 문맥 길이를 늘립니다 — PowerShell에서 한 번만, 그다음 Ollama를 껐다 켭니다
+   ```powershell
+   setx OLLAMA_CONTEXT_LENGTH 8192
+   ```
+3. 모델을 받습니다 (약 4.7GB, 처음 한 번)
+   ```powershell
+   ollama pull qwen2.5:7b
+   ```
+4. `ai-server/.env`에서 한 줄을 바꾸고 AI 서버(창 2)를 다시 켭니다
+   ```
+   AI_SERVER_LLM_PROVIDER=ollama
+   ```
+5. 시나리오 ①을 그대로 합니다. 조사 과정에 "AI 판단 — 다음에 볼 증거 고르기"가 AI가 고른 만큼 보입니다
+
+알아 둘 것
+
+- **"구조 검증 실패 → 다시 시도"가 한 번 보이는 건 정상:** 작은 모델은 보고서 모양을 가끔 틀립니다. 2차부터는 모양을 고정해 물어서 대부분 통과합니다. 3번 모두 틀리면 바로 "AI 조사에 실패했어요" → [AI 조사 다시 하기] 또는 직접 판정
+- **시간:** 그래픽카드 없이 CPU로 돌면 보고서 1건에 2~4분 걸립니다. 너무 느리면 `ollama pull qwen2.5:3b` 후 `AI_SERVER_LLM_MODEL=qwen2.5:3b` (빠르지만 형식을 더 자주 틀림 → "AI 판단 (2차)"로 다시 물음)
+- **포트:** Ollama는 내 PC 안(`127.0.0.1:11434`)에서만 받습니다. `OLLAMA_HOST`를 `0.0.0.0`으로 바꾸지 않습니다 (같은 와이파이의 누구나 쓸 수 있게 됨)
+- **OpenAI로 바꾸기:** `AI_SERVER_LLM_PROVIDER=openai`, `AI_SERVER_LLM_MODEL=gpt-4o-mini`, `AI_SERVER_LLM_API_KEY=`에 키를 직접 넣습니다. 키는 저장소 · 메신저에 붙여 넣지 않습니다
+- **되돌리기:** `AI_SERVER_LLM_PROVIDER=mock`
+
 ## 자주 겪는 문제
 
 - **사건 화면 "AI 조사에 실패했어요"** — 서비스 키가 두 `.env`에서 다르거나, AI 서버(창 2)가 꺼져 있습니다. 키를 맞추고 두 서버를 다시 켠 뒤, 사건 화면 [AI 조사 다시 하기]를 누릅니다
+- **조사 과정에 "AI 호출 실패: AI 서버 연결 실패"** — Ollama가 꺼져 있습니다. 작업 표시줄에서 Ollama를 켜고 [AI 조사 다시 하기]
+- **"AI 서버 오류 404: model ... not found"** — 모델을 아직 받지 않았거나 `.env`의 모델 이름이 다릅니다. `ollama list`로 이름을 확인합니다
+- **"AI 응답 시간 초과"** — 모델이 너무 느립니다. 3b 모델로 바꾸거나 `AI_SERVER_LLM_TIMEOUT_SECONDS`를 늘립니다 (늘리면 `DONWORRY_REPORT_RESULT_TIMEOUT`도 함께)
 - **`Port 8081 was already in use`** — 이미 켜진 백엔드가 있습니다. 그 창을 닫거나 `Ctrl+C`로 끕니다
 - **`.env`를 고쳤는데 그대로** — 설정은 켤 때만 읽습니다. 그 서버를 껐다 켭니다
 - **값을 비워 둔 줄** — `KEY=`처럼 남기면 "빈 값"이 됩니다. 안 쓸 줄은 지우거나 앞에 `#`을 붙입니다

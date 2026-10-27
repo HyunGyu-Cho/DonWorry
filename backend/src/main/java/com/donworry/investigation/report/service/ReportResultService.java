@@ -26,6 +26,9 @@ import org.springframework.stereotype.Service;
 @ConditionalOnProperty(prefix = "donworry.report", name = "writer", havingValue = "ai-server")
 public class ReportResultService {
 
+    // ai-server FailureInfo.code — AI가 형식을 3번 다 틀림 (app/agent/graph.py)
+    static final String LLM_INVALID_ANSWER = "LLM_INVALID_ANSWER";
+
     private final ReportTransitions reportTransitions;
     private final AttemptRegistry attemptRegistry;
     private final AiServerReportWriter aiServerReportWriter;
@@ -107,7 +110,10 @@ public class ReportResultService {
             }
             return;
         }
-        failAttempt(target, result.isSucceeded() ? "AI_RESULT_INVALID" : "AI_RESULT_FAILED", problem.get(), now);
+        // AI가 3번 다 형식을 틀렸으면 같은 증거로 다시 해도 또 틀린다 — 바로 끝내고 직원이 다시 조사 · 수동 판정 (#88)
+        boolean retryable = result.isSucceeded() || !LLM_INVALID_ANSWER.equals(failureCode(result));
+        failAttempt(
+                target, result.isSucceeded() ? "AI_RESULT_INVALID" : "AI_RESULT_FAILED", problem.get(), now, retryable);
     }
 
     // ai-server가 AI 판단 · 형식 검사 한 번을 끝낼 때마다 알린다 (2-19b) — 현재 시도만 기록, 아니면 409
@@ -137,15 +143,15 @@ public class ReportResultService {
             return;
         }
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        failAttempt(found.get(), "AI_RESULT_TIMEOUT", "결과가 제시간에 오지 않음", now);
+        failAttempt(found.get(), "AI_RESULT_TIMEOUT", "결과가 제시간에 오지 않음", now, true);
     }
 
-    // 시도 1번 실패 — 총 3번 전이면 새 시도로 다시 요청, 3번째면 FAILED로 끝낸다
-    private void failAttempt(ReportTarget target, String code, String reason, Instant now) {
+    // 시도 1번 실패 — 다시 해 볼 만한 실패(연결 · 시간 초과 등)면 총 3번까지 새 시도, 아니면 바로 FAILED
+    private void failAttempt(ReportTarget target, String code, String reason, Instant now, boolean retryable) {
         Long reportId = target.reportId();
         int attempts = attemptRegistry.attempts(reportId);
         log.warn("조사 결과 실패 reportId={} attempt={} code={} reason={}", reportId, attempts, code, reason);
-        if (attempts < AiServerReportWriter.MAX_ATTEMPTS) {
+        if (retryable && attempts < AiServerReportWriter.MAX_ATTEMPTS) {
             retryExecutor.execute(() -> retry(target));
             return;
         }
@@ -177,6 +183,10 @@ public class ReportResultService {
             payments.put(id, paymentInfoReader.find(id).orElse(null));
         }
         return payments;
+    }
+
+    private static Object failureCode(InvestigationResultRequest result) {
+        return result.error() != null ? result.error().get("code") : null;
     }
 
     private static String failureReason(InvestigationResultRequest result) {

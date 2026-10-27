@@ -26,14 +26,19 @@ class CountingLlm(MockLlmClient):
         self.calls = 0
 
     async def complete(
-        self, messages: list[LlmMessage], tools: list[ToolSpec] | None = None
+        self,
+        messages: list[LlmMessage],
+        tools: list[ToolSpec] | None = None,
+        answer_schema: object = None,
     ) -> LlmReply:
         self.calls += 1
         return await super().complete(messages, tools)
 
 
 class BrokenLlm:
-    async def complete(self, messages: list[LlmMessage], tools: list[ToolSpec]) -> LlmReply:
+    async def complete(
+        self, messages: list[LlmMessage], tools: list[ToolSpec], answer_schema: object = None
+    ) -> LlmReply:
         raise LlmError("연결 시간 초과")
 
 
@@ -186,7 +191,10 @@ def test_run_newAttemptDuringRun_discardsOldResult() -> None:
 
         class SlowLlm(MockLlmClient):
             async def complete(
-                self, messages: list[LlmMessage], tools: list[ToolSpec] | None = None
+                self,
+                messages: list[LlmMessage],
+                tools: list[ToolSpec] | None = None,
+                answer_schema: object = None,
             ) -> LlmReply:
                 await release.wait()
                 return await super().complete(messages, tools)

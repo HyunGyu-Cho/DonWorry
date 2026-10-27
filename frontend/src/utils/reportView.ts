@@ -99,4 +99,4 @@ export function reportPageState(
 // 실패 안내 문구 — 보고서 화면 · 사건 화면 "AI 조사 요약"이 같이 쓴다 (실패 이유는 보여 주지 않음)
 export const REPORT_FAILED_TITLE = 'AI 조사에 실패했어요. 판정은 직접 해 주세요'
 export const REPORT_FAILED_DETAIL =
-  'AI가 정해진 횟수만큼 조사했지만 쓸 수 있는 보고서를 만들지 못했어요. 사건의 결제 정보와 경보를 보고 판정해 주세요.'
+  'AI가 쓸 수 있는 보고서를 만들지 못했어요. 사건의 결제 정보와 경보를 보고 판정해 주세요.'

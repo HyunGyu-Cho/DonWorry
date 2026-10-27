@@ -11,7 +11,9 @@ from app.config import Settings
 
 
 # AI가 부르고 싶은 증거 조회 창구 하나 (Ollama · OpenAI tool calling과 같은 모양)
+# id는 진짜 AI가 붙인 호출 번호 (창구 결과와 짝짓기용). 가짜 AI는 비워 둔다
 class ToolCall(BaseModel):
+    id: str = ""
     name: str
     arguments: dict[str, object] = {}
 
@@ -38,10 +40,16 @@ class LlmError(Exception):
     pass
 
 
-# LLM 제공자 경계 (AGENTS 6절). service는 어떤 제공자인지 모른다. Ollama · OpenAI는 2-20
+# LLM 제공자 경계 (AGENTS 6절). service는 어떤 제공자인지 모른다. 진짜 AI는 openai_compat.py
 # tools가 비어 있으면 창구 없이 바로 답한다 (Spring 주소가 없는 테스트 · 단독 실행)
+# answer_schema가 있으면 그 JSON 모양으로만 답하게 건다 (형식 고정, #88). 못 거는 제공자는 무시
 class LlmClient(Protocol):
-    async def complete(self, messages: Messages, tools: list[ToolSpec]) -> LlmReply: ...
+    async def complete(
+        self,
+        messages: Messages,
+        tools: list[ToolSpec],
+        answer_schema: dict[str, object] | None = None,
+    ) -> LlmReply: ...
 
 
 # 가짜 AI — 판단 없이 사건 종류별로 정해진 순서대로 창구를 부른 뒤, 받은 증거로 보고서를 조립한다
@@ -51,8 +59,12 @@ class MockLlmClient:
         self.invalid_answers = invalid_answers
         self.delay_seconds = delay_seconds
 
+    # 가짜 AI는 형식 고정(answer_schema)을 무시한다 — 재시도 시연(invalid_answers)이 그대로 보이게
     async def complete(
-        self, messages: list[LlmMessage], tools: list[ToolSpec] | None = None
+        self,
+        messages: list[LlmMessage],
+        tools: list[ToolSpec] | None = None,
+        answer_schema: dict[str, object] | None = None,
     ) -> LlmReply:
         if self.delay_seconds > 0:
             await asyncio.sleep(self.delay_seconds)
@@ -104,7 +116,27 @@ def _payment_ids(messages: list[LlmMessage]) -> list[str]:
     return []
 
 
+# 제공자별 기본 주소. Ollama는 내 PC 안(127.0.0.1)에서만 — 포트를 밖에 열지 않는다
+DEFAULT_BASE_URLS = {
+    "ollama": "http://127.0.0.1:11434/v1",
+    "openai": "https://api.openai.com/v1",
+}
+
+
 def create_llm_client(settings: Settings) -> LlmClient:
     if settings.llm_provider == "mock":
         return MockLlmClient(settings.mock_invalid_answers, settings.mock_delay_seconds)
-    raise ValueError(f"지원하지 않는 LLM 제공자: {settings.llm_provider} (2-20에서 추가)")
+    if settings.llm_provider not in DEFAULT_BASE_URLS:
+        raise ValueError(
+            f"지원하지 않는 LLM 제공자: {settings.llm_provider} (mock · ollama · openai)"
+        )
+    if settings.llm_provider == "openai" and not settings.llm_api_key:
+        raise ValueError("openai는 AI_SERVER_LLM_API_KEY가 필요합니다 (.env에 직접 입력)")
+    from app.agent.openai_compat import OpenAiCompatibleClient
+
+    return OpenAiCompatibleClient(
+        base_url=settings.llm_base_url or DEFAULT_BASE_URLS[settings.llm_provider],
+        model=settings.llm_model,
+        api_key=settings.llm_api_key,
+        timeout_seconds=settings.llm_timeout_seconds,
+    )

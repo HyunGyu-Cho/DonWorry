@@ -59,6 +59,8 @@ donworry:
     # 보고서 내용을 채우는 쪽. fake = Spring 안의 템플릿으로 바로 완료, ai-server = ai-server에 조사를 맡김
     # 결과 받기(2-17) 전에는 ai-server로 바꾸면 보고서가 "생성 중"에서 멈춘다
     writer: ${DONWORRY_REPORT_WRITER:fake}
+    # 시도를 시작하고 이 시간 안에 결과가 없으면 ai-server에 직접 묻고, 그래도 없으면 시도 실패 (#68 · #88)
+    result-timeout: ${DONWORRY_REPORT_RESULT_TIMEOUT:PT2M}
   ai-server:
     base-url: ${DONWORRY_AI_SERVER_URL:http://localhost:8000}
     # ai-server의 AI_SERVER_SERVICE_KEY와 같은 값. 저장소에 올리지 않고 환경 변수로만 넣는다
