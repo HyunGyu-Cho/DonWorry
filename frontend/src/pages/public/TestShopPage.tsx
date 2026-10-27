@@ -1,11 +1,13 @@
-import { Alert, Button, Result, Spin } from 'antd'
+import { Alert, Button, Radio, Result, Spin } from 'antd'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { createTestOrder, getTestProducts } from '../../api/checkout'
 import { PublicShell } from '../../components/public/PublicShell'
+import { DEFAULT_DEMO_ENVIRONMENT, DEMO_ENVIRONMENTS } from '../../config/demoEnvironments'
 import { RawDetails } from '../../components/explain/RawDetails'
 import type { TestProduct } from '../../types/checkout'
 import { CARD_GUIDE } from '../../utils/checkoutView'
+import { chosenDemoEnvironment, saveDemoEnvironment } from '../../utils/demoEnvironment'
 import { koreanWon } from '../../utils/humanize'
 
 const FOOT = '시연용 테스트 상점이에요. 실제 주문 · 결제는 일어나지 않아요.'
@@ -24,6 +26,9 @@ export function TestShopPage() {
   const [products, setProducts] = useState<TestProduct[] | null | 'error'>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
+  const [environment, setEnvironment] = useState(
+    () => (chosenDemoEnvironment() ?? DEFAULT_DEMO_ENVIRONMENT).id,
+  )
 
   useEffect(() => {
     let alive = true
@@ -38,6 +43,8 @@ export function TestShopPage() {
   const order = async (productId: string) => {
     setBusy(productId)
     setFailed(false)
+    // 결제창이 이 접속 환경으로 결제한다
+    saveDemoEnvironment(environment)
     try {
       const { sessionToken } = await createTestOrder(productId)
       navigate(`/checkout/${encodeURIComponent(sessionToken)}`)
@@ -54,6 +61,24 @@ export function TestShopPage() {
         케이크를 골라 [결제하기]를 누르면 돈워리 결제창으로 넘어가요. 상점이 실제 가게(CakeShop)라고
         생각하고 눌러 보세요.
       </p>
+      <div className="dw-shop-environment">
+        <b>접속 환경</b>
+        <span className="dw-muted dw-small">
+          어디서 · 어떤 기기로 결제한 것처럼 보낼지 골라요 (시연 설정이 켜진 서버에서만 적용)
+        </span>
+        <Radio.Group
+          value={environment}
+          onChange={(e) => setEnvironment(String(e.target.value))}
+          options={DEMO_ENVIRONMENTS.map((env) => ({
+            value: env.id,
+            label: (
+              <span>
+                {env.label} <span className="dw-muted dw-small">· {env.description}</span>
+              </span>
+            ),
+          }))}
+        />
+      </div>
       {products === null && (
         <div className="dw-error-view" role="status">
           <Spin size="large" />

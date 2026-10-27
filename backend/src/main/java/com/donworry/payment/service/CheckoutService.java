@@ -33,6 +33,7 @@ public class CheckoutService {
     private final PaymentEvaluationFlowService flowService;
     private final MerchantDirectory merchantDirectory;
     private final CheckoutSessionUse checkoutSessionUse;
+    private final CheckoutClient checkoutClient;
 
     // 결제 준비 + 결제창 발급. 토큰 원문은 여기서 한 번만 돌려준다
     @Transactional
@@ -70,9 +71,13 @@ public class CheckoutService {
     }
 
     // 결제창을 쓰고 카드를 붙인 뒤(커밋) FDS 평가 · 승인을 한다 — 같은 결제창으로 두 번 결제할 수 없다
-    public CheckoutResultResponse pay(String token, String cardToken, String clientIp, String deviceId) {
+    // demoIp · demoDevice는 테스트 상점 "접속 환경" — 시연 설정이 켜졌을 때만 쓴다 (#98 F-5)
+    public CheckoutResultResponse pay(
+            String token, String cardToken, String clientIp, String deviceId, String demoIp, String demoDevice) {
         DemoCard card = DemoCard.of(cardToken).orElseThrow(() -> new PaymentException(PaymentErrorCode.UNKNOWN_CARD));
-        CheckoutSession session = checkoutSessionUse.use(hash(token), card, clientIp, deviceId);
+        CheckoutClient.Client client =
+                checkoutClient.resolve(new CheckoutClient.Signals(clientIp, deviceId, demoIp, demoDevice));
+        CheckoutSession session = checkoutSessionUse.use(hash(token), card, client.ip(), client.deviceId());
         PaymentAuthorizationResult result = flowService.authorizeReady(session.getPaymentId());
         String outcome = outcome(result);
         String[] copy = COPY.get(outcome);

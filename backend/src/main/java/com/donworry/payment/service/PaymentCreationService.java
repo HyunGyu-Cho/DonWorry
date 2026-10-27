@@ -1,5 +1,6 @@
 package com.donworry.payment.service;
 
+import com.donworry.identity.api.IpLocator;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.repository.PaymentRepository;
 import java.time.Instant;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentCreationService {
 
     private final PaymentRepository paymentRepository;
+    private final IpLocator ipLocator;
 
     // 후속 평가·승인 흐름이 롤백돼도 최초 접수 기록은 남긴다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -58,11 +60,15 @@ public class PaymentCreationService {
                 ? null
                 : (int) paymentRepository.countCapturedWithDevice(
                         payment.getMerchantId(), payment.getCustomerRef(), payment.getDeviceId());
+        // 접속 IP의 나라 · 회선 종류 (#98) — 이름표에 없으면 null (R05 확인 불가)
+        var location = ipLocator.locate(payment.getClientIp());
         return new Features(
                 payment.getMerchantId(),
                 payment.getCardFingerprint(),
                 payment.getDeviceId(),
                 payment.getClientIp(),
+                location.map(IpLocator.IpLocation::countryCode).orElse(null),
+                location.map(IpLocator.IpLocation::ipType).orElse(null),
                 payment.getBuyerEmail(),
                 hasPriorCaptured,
                 cardCount,
@@ -74,6 +80,8 @@ public class PaymentCreationService {
             String cardFingerprint,
             String deviceId,
             String clientIp,
+            String clientCountry,
+            String clientIpType,
             String buyerEmail,
             Boolean hasPriorCapturedPayment,
             Integer cardCompletedPayments,

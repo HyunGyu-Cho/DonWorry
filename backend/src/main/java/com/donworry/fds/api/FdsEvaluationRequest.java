@@ -20,6 +20,9 @@ public record FdsEvaluationRequest(
         // 결제창이 수집한 기기 · 접속 IP. R02 · R05 · R06 · R07
         String deviceId,
         String clientIp,
+        // 접속 IP의 나라(ISO) · 회선 종류(DOMESTIC · FOREIGN · ANONYMOUS …) — P5가 찾아 넘김, 모르면 null. R05 (#98)
+        String clientCountry,
+        String clientIpType,
         // 구매자 이메일 — R07 차단 목록
         String buyerEmail,
         // 같은 가맹점 · 같은 구매자의 매입 완료 결제가 있는지 — R02 · R03은 있을 때만 판단
@@ -38,6 +41,8 @@ public record FdsEvaluationRequest(
                 customerRef,
                 amount,
                 paymentRequestedAt,
+                null,
+                null,
                 null,
                 null,
                 null,

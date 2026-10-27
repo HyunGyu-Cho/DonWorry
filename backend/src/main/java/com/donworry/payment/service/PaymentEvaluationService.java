@@ -48,6 +48,8 @@ public class PaymentEvaluationService {
                 .cardFingerprint(input.cardFingerprint())
                 .deviceId(input.deviceId())
                 .clientIp(input.clientIp())
+                .clientCountry(input.clientCountry())
+                .clientIpType(input.clientIpType())
                 .buyerEmail(input.buyerEmail())
                 .hasPriorCapturedPayment(input.hasPriorCapturedPayment())
                 .cardCompletedPayments(input.cardCompletedPayments())

@@ -86,6 +86,9 @@ class PaymentFdsInputTests {
         assertThat(request.cardFingerprint()).isEqualTo("demo-fp-new");
         assertThat(request.deviceId()).isEqualTo("DEV-TEST-96");
         assertThat(request.clientIp()).isEqualTo("121.134.55.10");
+        // 접속 IP의 나라 · 회선은 P5가 IP 이름표로 찾아 넘긴다 (#98 F-5)
+        assertThat(request.clientCountry()).isEqualTo("KR");
+        assertThat(request.clientIpType()).isEqualTo("DOMESTIC");
         assertThat(request.buyerEmail()).isEqualTo("minsu@example.com");
         // 김민수는 시드 이력(매입 완료 5건)이 있고, 이 카드로는 끝낸 결제가 없다
         assertThat(request.hasPriorCapturedPayment()).isTrue();

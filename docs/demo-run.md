@@ -37,6 +37,7 @@ ai-server/.env  AI_SERVER_SERVICE_KEY=내가-정한-키
 | --- | --- | --- |
 | `DONWORRY_REPORT_WRITER` | `ai-server` | AI 조사를 AI 서버에 맡김 |
 | `DONWORRY_CARD_COMPANY_DELAY` | `PT5S` | 판정 뒤 "조치 진행 중" 5초 |
+| `DONWORRY_DEMO_FAKE_CLIENT_IP` | `true` | 테스트 상점 "접속 환경"(국내 · 새 휴대폰 · 해외 VPN · Tor)을 결제창이 믿음. 운영은 `false` (#98) |
 | `DONWORRY_REPORT_RESULT_TIMEOUT` | `PT5M` | AI 조사 결과를 5분까지 기다림 (진짜 AI는 몇 분 걸림) |
 | `AI_SERVER_LLM_PROVIDER` | `mock` | 가짜 AI가 보고서를 씀 — 진짜 AI는 4절 |
 | `AI_SERVER_MOCK_DELAY_SECONDS` | `1` | 가짜 AI가 단계마다 1초 쉼 → 조사 과정이 한 줄씩 보임 |
