@@ -10,8 +10,15 @@ class Settings(BaseSettings):
         env_file=os.environ.get("AI_SERVER_ENV_FILE", ".env") or None, env_prefix="AI_SERVER_"
     )
 
+    # mock = 가짜 AI(테스트 · CI), ollama = 내 PC의 Qwen, openai = OpenAI (#88)
     llm_provider: str = "mock"
+    # openai만 필요. 저장소 · 로그에 남기지 않고 .env에 직접 넣는다
     llm_api_key: str = ""
+    llm_model: str = "qwen2.5:7b"
+    # 비우면 제공자별 기본 주소 (ollama = 127.0.0.1:11434)
+    llm_base_url: str = ""
+    # AI 한 번 답하는 데 기다리는 시간(초). CPU로 돌리는 7b 모델은 1분 넘게 걸릴 수 있다
+    llm_timeout_seconds: float = 180.0
 
     # Spring ↔ ai-server 서비스 간 키 (X-Service-Key). 비어 있으면 조사 API를 모두 막는다
     # 결과를 Spring에 보낼 때도 같은 키를 쓴다 (2-17)

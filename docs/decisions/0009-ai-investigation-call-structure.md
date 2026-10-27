@@ -1,7 +1,7 @@
 # 0009. AI 조사 호출 구조 (Spring ↔ FastAPI)
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-26 개정: 조사 요청에 사건 종류 · AI가 쓰는 칸 3유형 (#60) · 결과 수신 · 완료 통지(임시) (#64) · 시간 초과 · 재시작 · 새 정보 대체 (#68) · 증거 조회 Tool 7종 (#70) · AI의 Tool 호출 (#72)
+- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-26 개정: 조사 요청에 사건 종류 · AI가 쓰는 칸 3유형 (#60) · 결과 수신 · 완료 통지(임시) (#64) · 시간 초과 · 재시작 · 새 정보 대체 (#68) · 증거 조회 Tool 7종 (#70) · AI의 Tool 호출 (#72) · 2026-10-27 개정: 모델 제공자 (#88)
 - **관련:** Notion fds 정본 — 02 기획 2.5 · 2.6 · 2.7, 03 설계 3.5 · 3.6 · 3.7 · 3.9⑤ · 3.11, 공통 페이지 §5.3 · §5.4, [ADR-0012](0012-payment-settlement-dependency.md) (ADR-0001 대체), 화면 타입 `frontend/src/types/case.ts`
 - **영향 받는 담당:** P4 현규, P3 수민(조사 요청 · 판정 검증), P1 주환(인증 설정 · 보안 이벤트 조회), P2 · P5(Tool이 읽는 공개 api 제공), CakeShop(주문 정보), 화면 담당(보고서 응답 형식)
 
@@ -208,6 +208,20 @@ sequenceDiagram
 - **화면 조사 상태(`GET /api/investigation/cases/{caseId}/report/run`):** 모든 시도의 기록을 시각 순으로 번호를 다시 매겨 준다. 조사 중이면 맨 끝에 "AI가 조사하는 중…"(`RUNNING`) 한 줄을 붙이고 `currentStepNo`가 그 줄을 가리킨다. 시작 시각은 마지막 기록이 끝난 때
 - **보고서 `trace`:** 완료 때 같은 기록으로 만든다. 결과 콜백의 `steps`는 ai-server 단계 기록이 하나도 없을 때(옛 ai-server · 알림이 모두 실패)만 쓴다 — 같은 단계가 두 번 들어가지 않는다
 - 버린 안: 결과 콜백의 `steps`만으로 과정을 보여 주기(지금까지) — 끝나야 보여서 조사 중 화면이 비어 있다. 화면이 ai-server를 직접 부르기 — 화면은 Spring만 안다 (결정 1)
+
+## 모델 제공자 (#88, 2-20)
+
+**진짜 AI는 OpenAI 호환 주소(`/chat/completions`) 하나로 부른다. 기본은 내 PC의 Ollama Qwen, 설정 한 줄로 OpenAI.**
+
+- **경계:** `LlmClient.complete(messages, tools) → LlmReply` 그대로. 구현 `OpenAiCompatibleClient`(`app/agent/openai_compat.py`)가 Ollama `/v1` · OpenAI를 같은 코드로 부른다. 조사 흐름(LangGraph) · 형식 검사 · 3번 재시도는 바뀌지 않는다
+- **설정 (`ai-server/.env`):** `AI_SERVER_LLM_PROVIDER` = `mock`(기본, 테스트 · CI) · `ollama` · `openai`, `AI_SERVER_LLM_MODEL`(기본 `qwen2.5:7b`), `AI_SERVER_LLM_BASE_URL`(비우면 Ollama `http://127.0.0.1:11434/v1` · OpenAI 공식 주소), `AI_SERVER_LLM_API_KEY`(openai만, 비면 시작 시 오류), `AI_SERVER_LLM_TIMEOUT_SECONDS`(기본 180)
+- **Ollama 주소는 127.0.0.1만.** 포트를 밖에 열지 않는다 (10/26 결정)
+- **키:** 요청 머리말(`Authorization`)에만 싣는다. 오류 메시지 · 단계 기록 · 보고서에 남기지 않는다
+- **창구 결과 짝짓기:** chat/completions는 창구 결과마다 `tool_call_id`가 필요하다. AI가 준 호출 번호(`ToolCall.id`)를 쓰고, 없으면 같은 순서로 번호를 만든다 — 그래프는 호출 순서대로 결과를 붙이므로 순서로 짝이 맞는다
+- **AI 답 다듬기:** 보고서를 ` ```json ` 으로 감싸 보내면 껍데기만 벗기고 형식 검사에 넘긴다. 창구 인자가 JSON 문자열(OpenAI)이든 객체(Ollama)든 받고, 못 읽으면 빈 인자로 부른다 (Spring이 사건 범위로 다시 막는다)
+- **실패:** 연결 실패 · 시간 초과 · 4xx · 5xx · 모양이 다른 응답은 `LlmError` → "AI 호출 실패"(`LLM_ERROR`). 형식이 틀린 답(`LLM_INVALID_ANSWER`, 다시 묻기)과 구분한다
+- **결과 대기 시간:** CPU로 도는 7b는 보고서 1건에 몇 분 걸린다. Spring `donworry.report.result-timeout`을 `DONWORRY_REPORT_RESULT_TIMEOUT`(`.env` 예시 `PT5M`)으로 바꿀 수 있게 했다 (기본 PT2M 유지)
+- 버린 안: LangChain 모델 클래스(`ChatOllama` · `ChatOpenAI`) — 기능은 많지만 우리 메시지 모양(`LlmMessage`)과 서로 바꾸는 코드가 더 들고 의존성이 늘어난다. Ollama 고유 주소(`/api/chat`) — 문맥 길이를 요청마다 줄 수 있지만 OpenAI와 코드가 갈라진다 (문맥 길이는 `OLLAMA_CONTEXT_LENGTH`로 해결)
 
 ## 패키지 구성
 
