@@ -145,7 +145,7 @@ export function NotificationsPage() {
       <div className="dw-defense" style={{ marginBottom: 16 }}>
         <div>
           <b>구매자 메일</b>
-          <span>결제 완료 · 확인 중 · 취소 · 진행 불가. 사유와 점수는 쓰지 않아요</span>
+          <span>결제 완료 · 취소 · 진행 불가. 검토 여부 · 사유 · 점수는 쓰지 않아요</span>
         </div>
         <div>
           <b>본인 확인 요청</b>
@@ -156,7 +156,7 @@ export function NotificationsPage() {
         </div>
         <div>
           <b>사장님 메일</b>
-          <span>보안 확인 중 · 결과 · 자동 차단 · 자금 부족 예상</span>
+          <span>검토 중(주문은 진행) · 결과 · 자동 차단 · 자금 부족 예상</span>
         </div>
       </div>
       <Card>

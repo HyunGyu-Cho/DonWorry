@@ -14,4 +14,6 @@ public interface NotificationRepository extends Repository<Notification, Long> {
     Optional<Notification> findFirstByPaymentIdAndKindOrderByCreatedAtDesc(Long paymentId, String kind);
 
     List<Notification> findAllByOrderByCreatedAtDesc();
+
+    List<Notification> findByPaymentIdInOrderByCreatedAtDesc(java.util.Collection<Long> paymentIds);
 }

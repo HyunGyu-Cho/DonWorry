@@ -1,5 +1,6 @@
 // P5 결제창 Mock — 프로토타입 v4.2 결제창 (모의 카드 4장)
-// 결과 규칙은 시연용: 처음 쓰는 카드 + 50만 원 이상 → 확인 중, 해외 카드 + 50만 원 이상 → 결제 불가, 거절 카드 → 카드사 거절
+// 결과 규칙은 시연용: 해외 카드 + 50만 원 이상 → 결제 불가, 거절 카드 → 카드사 거절, 나머지는 결제 완료
+// 처음 쓰는 카드 + 고액은 뒤에서 매입 보류 · 검토하지만 구매자에게는 결제 완료 (S-3 #86)
 // 실제 결과는 백엔드 FDS · 모의 승인기가 정한다 (2-29)
 // 테스트가 직접 불러오므로 import.meta.env를 읽는 mockMode는 쓰지 않는다
 import { CheckoutAlreadyPaidError, CheckoutExpiredError } from '../checkoutErrors.ts'
@@ -83,10 +84,6 @@ function findSession(token: string, now: Date): MockSession {
 // 구매자 안내 — 점수 · 사유는 쓰지 않고 청구 여부와 다음에 할 일만
 const COPY: Record<CheckoutOutcome, [string, string]> = {
   PAID: ['결제가 완료되었습니다', '주문이 확정되었습니다. CakeShop에서 픽업 일정을 확인해 주세요.'],
-  CHECKING: [
-    '결제를 확인하고 있습니다',
-    '카드 승인은 완료되었고, 안전 확인 후 최종 처리됩니다. 이메일로 본인 확인 요청을 보냈습니다.',
-  ],
   BLOCKED: [
     '결제를 진행할 수 없습니다',
     '카드에 청구되지 않았습니다. 다른 결제 수단을 이용하시거나 CakeShop 고객센터로 문의해 주세요.',
@@ -100,7 +97,6 @@ const COPY: Record<CheckoutOutcome, [string, string]> = {
 export function decideOutcome(cardToken: string, amount: number): CheckoutOutcome {
   if (cardToken === 'demo-card-decline') return 'DECLINED'
   if (amount >= HIGH_AMOUNT && cardToken === 'demo-card-foreign') return 'BLOCKED'
-  if (amount >= HIGH_AMOUNT && cardToken === 'demo-card-new') return 'CHECKING'
   return 'PAID'
 }
 

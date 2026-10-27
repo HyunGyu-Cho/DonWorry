@@ -11,7 +11,8 @@ export const OWNER_RESULT: Record<
   OwnerSecurityResult,
   { label: string; color: string; note: string }
 > = {
-  CHECKING: { label: '보안 확인 중', color: 'gold', note: '카드 승인 완료 · 매입 보류' },
+  // 판매는 막지 않는다 — 사기로 드러나면 손해는 돈워리가 부담 (S-3 #86)
+  CHECKING: { label: '검토 중', color: 'gold', note: '결제 완료 · 돈워리 검토 중' },
   ACCEPTED: { label: '결제 진행', color: 'green', note: '확인 후 매입 완료' },
   REJECTED: { label: '결제 반려', color: 'red', note: '승인 취소 · 청구 안 됨' },
   AUTO_BLOCKED: { label: '자동 차단', color: 'default', note: '결제 전에 중단' },

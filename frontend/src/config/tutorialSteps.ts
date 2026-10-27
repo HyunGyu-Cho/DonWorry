@@ -157,14 +157,14 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
   3: [
     {
       title: '홈에서 경고 보기',
-      todo: '맨 위 "보안 확인 중인 주문" 경고의 [주문 보기]를 눌러 보세요.',
-      look: ['보안 확인 중인 주문은 결과가 나올 때까지 만들지 않아요'],
+      todo: '맨 위 "돈워리가 검토 중인 결제" 안내의 [주문 보기]를 눌러 보세요.',
+      look: ['검토 중이어도 주문은 그대로 — 사기로 드러나면 손해는 돈워리가 부담해요'],
       path: '/owner/home',
       target: 'home-checking',
     },
     {
       title: '보안 확인 결과',
-      todo: '[보안 확인 중] 탭을 보고, 왼쪽 [정산 캘린더]를 눌러 보세요.',
+      todo: '[검토 중] 탭을 보고, 왼쪽 [정산 캘린더]를 눌러 보세요.',
       look: ['사장님 화면에는 점수 · Rule · 구매자 정보가 나오지 않아요'],
       path: '/owner/results',
       target: 'nav-owner-settlements',
@@ -182,7 +182,10 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
     {
       title: '14일 자금 예측',
       todo: '빨간 막대와 "왜 모자라나요?"를 보고 [대출 상품 보기]를 눌러 보세요.',
-      look: ['보안 확인 중인 결제는 정산 일정에 넣지 않아요', '임대료 날 처음 0원 아래로 내려가요'],
+      look: [
+        '검토 중인 결제는 검토가 끝나야 정산 일정에 들어가요',
+        '임대료 날 처음 0원 아래로 내려가요',
+      ],
       path: '/owner/funds',
       target: 'fund-loans',
     },

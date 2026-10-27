@@ -1,10 +1,13 @@
 package com.donworry.payment.service;
 
 import com.donworry.payment.api.PaymentActions.Result;
+import com.donworry.payment.entity.Notification;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentStatus;
+import com.donworry.payment.repository.NotificationRepository;
 import com.donworry.payment.repository.PaymentRepository;
 import com.donworry.settlement.api.CaptureRequested;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -18,6 +21,7 @@ class PaymentActionTransaction {
 
     private final PaymentRepository paymentRepository;
     private final ApplicationEventPublisher events;
+    private final NotificationRepository notificationRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Result apply(Long paymentId, String actionType) {
@@ -29,6 +33,12 @@ class PaymentActionTransaction {
         if ("VOID".equals(actionType)) {
             if (status == PaymentStatus.HELD) {
                 payment.voidHeld();
+                // 구매자에게 "결제가 취소되었습니다(청구 안 됨)" 안내 — 사유는 쓰지 않는다. 실제 발송은 2-23
+                if (payment.getBuyerEmail() != null) {
+                    String title = payment.getOrderTitle() == null ? "주문" : payment.getOrderTitle();
+                    notificationRepository.save(Notification.buyerPayment(
+                            paymentId, payment.getBuyerEmail(), "결제가 취소되었습니다 · " + title, Instant.now()));
+                }
                 return new Result(true, paymentId, null);
             }
             return status == PaymentStatus.VOIDED

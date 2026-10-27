@@ -431,6 +431,11 @@ class CaseFlowTests {
                         .value("VOIDED"))
                 .andExpect(jsonPath("$[?(@.paymentId == " + first.paymentId() + ")].status")
                         .value("ACCEPTED"));
+        // 승인 취소된 결제의 구매자에게 "결제가 취소되었습니다" 안내 기록 (발송은 2-23, #86)
+        mvc.perform(get("/api/payment/notifications").param("paymentId", String.valueOf(first.paymentId())))
+                .andExpect(jsonPath("$[?(@.kind == 'PAYMENT')].subject")
+                        .value(org.hamcrest.Matchers.hasItem("결제가 취소되었습니다 · 테스트 케이크")))
+                .andExpect(jsonPath("$[?(@.kind == 'PAYMENT')].status").value("PENDING"));
     }
 
     private RequestBuilder decide(Long caseId, int evidenceVersion, Long reportId, List<Map<String, Object>> items) {

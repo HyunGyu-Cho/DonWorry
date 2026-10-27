@@ -82,21 +82,18 @@ public class CheckoutService {
         return new CheckoutResultResponse(String.valueOf(payment.getPaymentId()), outcome, copy[0], copy[1], returnUrl);
     }
 
-    // 구매자에게 보이는 결과 — 점수 · 사유는 보이지 않는다
-    private static String outcome(PaymentAuthorizationResult result) {
-        PaymentStatus status = result.status();
-        return switch (status) {
-            case DENIED -> "BLOCKED";
-            case DECLINED -> "DECLINED";
-            case PENDING -> result.nextStep() == PaymentRules.NextStep.REQUEST_CAPTURE ? "PAID" : "CHECKING";
-            case CAPTURED -> "PAID";
-            default -> "CHECKING";
-        };
+    // 구매자에게 보이는 결과 — 카드 승인이 났으면 매입 보류(검토 중)여도 "결제 완료" (S-3, #86)
+    // 검토는 뒤에서 하고, 사기로 드러나면 손해는 돈워리가 부담한다. 점수 · 사유 · 검토 여부는 보이지 않는다
+    // 승인이 없으면(FDS 거절 · 평가 실패) 결제 불가, 카드사가 거절하면 카드사 거절
+    static String outcome(PaymentAuthorizationResult result) {
+        if (result.status() == PaymentStatus.DECLINED) {
+            return "DECLINED";
+        }
+        return result.authorizationRef() != null ? "PAID" : "BLOCKED";
     }
 
     private static final java.util.Map<String, String[]> COPY = java.util.Map.of(
             "PAID", new String[] {"결제가 완료되었습니다", "주문이 확정되었습니다. CakeShop에서 픽업 일정을 확인해 주세요."},
-            "CHECKING", new String[] {"결제를 확인하고 있습니다", "카드 승인은 완료되었고, 안전 확인 후 최종 처리됩니다. 이메일로 본인 확인 요청을 보냈습니다."},
             "BLOCKED", new String[] {"결제를 진행할 수 없습니다", "카드에 청구되지 않았습니다. 다른 결제 수단을 이용하시거나 CakeShop 고객센터로 문의해 주세요."},
             "DECLINED", new String[] {"카드사에서 승인하지 않았습니다", "카드에 청구되지 않았습니다. 카드사에 문의하시거나 다른 카드로 결제해 주세요."});
 
