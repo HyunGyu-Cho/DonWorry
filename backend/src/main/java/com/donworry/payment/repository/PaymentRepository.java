@@ -75,6 +75,25 @@ public interface PaymentRepository extends Repository<Payment, Long> {
             @Param("customerRef") String customerRef,
             @Param("deviceId") String deviceId);
 
+    // FDS 입력 (#98): 같은 가맹점 · 같은 고객이 이 기간에 한 결제 시도 수 — 카드를 붙인 결제만 (R04, 이번 포함)
+    @Query("select count(p) from Payment p where p.merchantId = :merchantId and p.customerRef = :customerRef"
+            + " and p.cardFingerprint is not null and p.createdAt > :from and p.createdAt <= :to")
+    long countAttempts(
+            @Param("merchantId") Long merchantId,
+            @Param("customerRef") String customerRef,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
+    // FDS 입력 (#98): 같은 카드가 이 기간에 카드사에서 거절된 수 — 이번 결제 제외 (R08)
+    @Query("select count(p) from Payment p where p.cardFingerprint = :cardFingerprint and p.paymentId <> :paymentId"
+            + " and p.status = com.donworry.payment.entity.PaymentStatus.DECLINED"
+            + " and p.createdAt > :from and p.createdAt <= :to")
+    long countDeclinesWithCard(
+            @Param("cardFingerprint") String cardFingerprint,
+            @Param("paymentId") Long paymentId,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
     // 사장님 보안 확인 결과 (#86) — 우리 가게 결제, 최근 먼저
     List<Payment> findByMerchantIdOrderByCreatedAtDesc(Long merchantId);
 }

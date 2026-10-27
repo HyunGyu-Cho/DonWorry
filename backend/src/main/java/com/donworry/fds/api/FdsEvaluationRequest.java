@@ -30,7 +30,14 @@ public record FdsEvaluationRequest(
         // 이 구매자가 이 카드로 매입까지 끝낸 결제 수 — R03
         Integer cardCompletedPayments,
         // 이 구매자가 이 기기로 매입까지 끝낸 결제 수 — R02 (#98)
-        Integer deviceCompletedPayments) {
+        Integer deviceCompletedPayments,
+        // 시간 창 안의 기록 (#98) — 기간은 FdsCountWindows. P5가 자기 결제 기록으로 센다
+        // 같은 가맹점 · 같은 구매자의 결제 시도 수(이번 포함) — R04
+        Integer recentCustomerAttempts,
+        // 같은 카드가 카드사에서 거절된 수(이번 제외) — R08
+        Integer recentCardDeclines,
+        // 같은 IP에서 쓴 서로 다른 카드 수(이번 포함, 거절 · 차단 시도 포함) — R06
+        Integer recentIpCards) {
 
     public FdsEvaluationRequest(
             UUID evaluationRequestId, Long paymentId, String customerRef, long amount, Instant paymentRequestedAt) {
@@ -41,6 +48,9 @@ public record FdsEvaluationRequest(
                 customerRef,
                 amount,
                 paymentRequestedAt,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

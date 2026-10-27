@@ -9,7 +9,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// 결제 Rule 계산 — R01 고액 · R02 새 기기 · R03 새 카드 · R05 고위험 국가 IP (#96 · #98). 나머지는 묶음 ② · ③
+// 결제 Rule 계산 — R01 고액 · R02 새 기기 · R03 새 카드 · R04 반복 결제 · R05 고위험 국가 IP · R08 거절 후 재시도 (#96 · #98)
+// 시간 창 기록은 P5가 세어 넘긴다 (P2는 payments를 읽지 않음). R06 · R07은 F-9 · F-10
 // 기준값 · 점수는 fds_rules에서 읽는다. 판단할 값이 없으면 UNAVAILABLE(0점)로 남긴다 — 점수를 추정하지 않는다
 final class PaymentRuleSet {
 
@@ -35,6 +36,8 @@ final class PaymentRuleSet {
                 case "NEW_DEVICE" -> hits.add(newDevice(rule, request));
                 case "NEW_CARD" -> hits.add(newCard(rule, request));
                 case "HIGH_RISK_COUNTRY_IP" -> hits.add(highRiskCountry(rule, request));
+                case "RAPID_REPEAT" -> hits.add(rapidRepeat(rule, request));
+                case "DECLINE_RETRY" -> hits.add(declineRetry(rule, request));
                 default -> {
                     // 아직 계산하지 않는 Rule (묶음 ② · ③) — 기록 없이 0점
                 }
@@ -87,6 +90,34 @@ final class PaymentRuleSet {
         boolean matched = listed instanceof List<?> countries && countries.contains(country);
         String text = countryName(country) + " IP" + (isAnonymous(request) ? " (VPN · Tor)" : "");
         return hit(rule, matched, rule.getScore(), jsonText("country", country, text));
+    }
+
+    // R04: 같은 가맹점 · 같은 구매자가 기간 안에 기준 횟수 이상 시도(이번 포함)하면 +30 (#98 F-8)
+    private static Hit rapidRepeat(FdsRule rule, FdsEvaluationRequest request) {
+        Integer attempts = request.recentCustomerAttempts();
+        if (attempts == null) {
+            return unavailable(rule, "최근 결제 기록 모름");
+        }
+        long min = number(threshold(rule).getOrDefault("minAttempts", 3));
+        String text = windowText(rule, 10) + " 안 결제 시도 " + attempts + "번 (이번 포함)";
+        return hit(rule, attempts >= min, rule.getScore(), json("attempts", attempts, text));
+    }
+
+    // R08: 같은 카드가 기간 안에 기준 횟수 이상 카드사 거절된 뒤 또 시도하면 +35 (#98 F-8)
+    private static Hit declineRetry(FdsRule rule, FdsEvaluationRequest request) {
+        Integer declines = request.recentCardDeclines();
+        if (request.cardFingerprint() == null || declines == null) {
+            return unavailable(rule, "카드 정보 없음");
+        }
+        long min = number(threshold(rule).getOrDefault("minDeclines", 2));
+        String text = "이 카드 " + windowText(rule, 10) + " 안 카드사 거절 " + declines + "번";
+        return hit(rule, declines >= min, rule.getScore(), json("declines", declines, text));
+    }
+
+    // 기준값 windowMinutes → "10분" · "1시간"
+    private static String windowText(FdsRule rule, long fallback) {
+        long minutes = number(threshold(rule).getOrDefault("windowMinutes", fallback));
+        return minutes % 60 == 0 ? (minutes / 60) + "시간" : minutes + "분";
     }
 
     private static boolean isAnonymous(FdsEvaluationRequest request) {

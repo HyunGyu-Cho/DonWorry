@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsEvaluator;
+import com.donworry.fds.api.FdsPaymentEvaluations;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.repository.PaymentRepository;
 import jakarta.servlet.http.Cookie;
@@ -48,6 +49,15 @@ class PaymentFdsInputTests {
 
     @MockitoSpyBean
     FdsEvaluator evaluator;
+
+    @Autowired
+    PaymentEvaluationFlowService flow;
+
+    @Autowired
+    FdsPaymentEvaluations evaluations;
+
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     // 결제창에서 카드를 고르면 결제창이 모은 IP · 기기와 카드 · 구매자 정보가 FDS 요청까지 간다
     @Test
@@ -108,6 +118,64 @@ class PaymentFdsInputTests {
 
         save(captured(2001L, customer));
         assertThat(creation.features(target).hasPriorCapturedPayment()).isTrue();
+    }
+
+    // R04: 10분 안 3번째 시도(이번 포함)면 +30, 20분 전 시도는 세지 않는다 (#98 F-8)
+    @Test
+    void R04_10분안3번째시도30점_10분지난시도안셈() {
+        String customer = "c-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        save(attempt(3001L, customer, "fp-" + UUID.randomUUID(), now.minusSeconds(20 * 60)));
+        save(attempt(3001L, customer, "fp-" + UUID.randomUUID(), now.minusSeconds(5 * 60)));
+        Long second = save(attempt(3001L, customer, "fp-" + UUID.randomUUID(), now.minusSeconds(2 * 60)));
+        Long target = save(attempt(3001L, customer, "fp-" + UUID.randomUUID(), now));
+
+        flow.authorizeReady(target);
+
+        assertThat(matched(target)).contains("RAPID_REPEAT");
+        assertThat(observed(target, "RAPID_REPEAT")).contains("결제 시도 3번");
+        // 2분 전 결제만 보면 10분 안 시도는 2번(20분 전 제외) — 아직 걸리지 않는다
+        assertThat(creation.features(second).recentCustomerAttempts()).isEqualTo(2);
+    }
+
+    // R08: 같은 카드가 10분 안에 카드사 거절 2번 뒤 또 시도하면 +35 (#98 F-8)
+    @Test
+    void R08_같은카드10분거절2번뒤재시도_35점() {
+        String fingerprint = "fp-" + UUID.randomUUID();
+        Instant now = Instant.now();
+        save(declined(attempt(3002L, "c-" + UUID.randomUUID(), fingerprint, now.minusSeconds(6 * 60))));
+        save(declined(attempt(3002L, "c-" + UUID.randomUUID(), fingerprint, now.minusSeconds(3 * 60))));
+        Long target = save(attempt(3002L, "c-" + UUID.randomUUID(), fingerprint, now));
+
+        flow.authorizeReady(target);
+
+        assertThat(matched(target)).contains("DECLINE_RETRY");
+        assertThat(observed(target, "DECLINE_RETRY")).contains("카드사 거절 2번");
+    }
+
+    // 결제창에서 카드를 붙인 결제 (= 시도)
+    private static Payment attempt(long merchantId, String customer, String fingerprint, Instant createdAt) {
+        Payment payment = Payment.pending(merchantId, customer, "T-" + UUID.randomUUID(), 12_000L, createdAt);
+        payment.attachCheckout("10.99.0.1", null, fingerprint, "9999", "KR");
+        return payment;
+    }
+
+    private static Payment declined(Payment payment) {
+        payment.declineAuthorization("LOST_OR_STOLEN");
+        return payment;
+    }
+
+    private java.util.List<String> matched(Long paymentId) {
+        return evaluations.latestForPayment(paymentId).orElseThrow().matchedRuleCodes();
+    }
+
+    private String observed(Long paymentId, String ruleCode) {
+        return jdbc.queryForObject(
+                "SELECT h.observed_value FROM fds_rule_hits h JOIN fds_evaluations e ON e.evaluation_id = h.evaluation_id"
+                        + " WHERE e.payment_id = ? AND h.rule_code = ?",
+                String.class,
+                paymentId,
+                ruleCode);
     }
 
     private Long save(Payment payment) {

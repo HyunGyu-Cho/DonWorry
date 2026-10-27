@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +51,20 @@ class CheckoutToCaseFlowTests {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    // 이 흐름 테스트들은 같은 김민수 · 같은 시연 카드 · 같은 접속 주소로 몇 분 안에 여러 번 결제한다
+    // 반복 결제 · 거절 후 재시도 · 카드 테스팅(시간 창 Rule)이 서로의 결제를 세지 않게 이 클래스에서만 끈다 (#98)
+    @BeforeEach
+    void disableWindowRules() {
+        jdbc.update(
+                "UPDATE fds_rules SET enabled = FALSE WHERE rule_code IN ('RAPID_REPEAT', 'DECLINE_RETRY', 'CARD_TESTING')");
+    }
+
+    @AfterEach
+    void enableWindowRules() {
+        jdbc.update(
+                "UPDATE fds_rules SET enabled = TRUE WHERE rule_code IN ('RAPID_REPEAT', 'DECLINE_RETRY', 'CARD_TESTING')");
+    }
 
     // 평가 실패 테스트가 깨뜨린 고액 결제 기준값을 시드 값으로 되돌린다 (#96)
     @AfterEach
