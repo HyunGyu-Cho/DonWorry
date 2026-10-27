@@ -49,6 +49,9 @@ class CaseFlowTests {
     HeldPaymentFixture heldPaymentFixture;
 
     @Autowired
+    com.donworry.payment.api.PaymentLookup paymentLookup;
+
+    @Autowired
     MockMvc mvc;
 
     @Autowired
@@ -399,6 +402,35 @@ class CaseFlowTests {
 
     private HeldPaymentFixture.Held createHeld(long merchantId, String customerRef, long amount, int riskScore) {
         return heldPaymentFixture.held(merchantId, customerRef, amount, riskScore);
+    }
+
+    // ㉣ 판정 → 결제 조치 (#82): 승인 취소는 결제가 VOIDED, 매입 허용은 정산 매입을 거쳐 CAPTURED가 된 뒤 사건 종료
+    @Test
+    void decide_voidAndCapture_reflectedOnPayments() throws Exception {
+        String customer = customer();
+        HeldPaymentFixture.Held first = createHeld(customer, 300_000L, 65);
+        HeldPaymentFixture.Held second = createHeld(customer, 500_000L, 72);
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+        var payments = detail.payments();
+
+        mvc.perform(decide(
+                        first.caseId(),
+                        detail.securityCase().evidenceVersion(),
+                        latestReportId(detail),
+                        List.of(
+                                item(payments.get(0).casePaymentId(), "REJECT"),
+                                item(payments.get(1).casePaymentId(), "ACCEPT"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.securityCase.status").value("CLOSED"));
+
+        assertThat(paymentLookup.find(first.paymentId()).orElseThrow().status()).isEqualTo("VOIDED");
+        assertThat(paymentLookup.find(second.paymentId()).orElseThrow().status())
+                .isEqualTo("CAPTURED");
+        mvc.perform(get("/api/security-cases/handoffs"))
+                .andExpect(jsonPath("$[?(@.paymentId == " + first.paymentId() + ")].paymentStatus")
+                        .value("VOIDED"))
+                .andExpect(jsonPath("$[?(@.paymentId == " + first.paymentId() + ")].status")
+                        .value("ACCEPTED"));
     }
 
     private RequestBuilder decide(Long caseId, int evidenceVersion, Long reportId, List<Map<String, Object>> items) {

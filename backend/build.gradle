@@ -69,6 +69,8 @@ tasks.withType(Test).configureEach {
     // 테스트를 돌린 창에 남은 DONWORRY_* 환경 변수(시연용 ai-server 설정 등)가 테스트 설정을 바꾸지 않게 뺀다
     // 테스트에 필요한 값은 @SpringBootTest(properties) · 테스트 설정 파일로만 넣는다
     environment = environment.findAll { name, value -> !name.toUpperCase().startsWith('DONWORRY_') }
+    // 시연용 모의 카드사 처리 시간(기본 5초)은 테스트에서 기다리지 않는다 (#82)
+    systemProperty 'donworry.demo.card-company-delay', 'PT0S'
 }
 
 // check는 DB 없이 돈다. Docker가 필요한 테스트는 mariaDbTest로 분리

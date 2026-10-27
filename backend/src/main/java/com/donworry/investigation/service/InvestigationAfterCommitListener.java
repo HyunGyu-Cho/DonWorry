@@ -3,8 +3,11 @@ package com.donworry.investigation.service;
 import com.donworry.investigation.service.FinancialActionGateway.Receipt;
 import com.donworry.investigation.service.InvestigationEvents.CaseEvidenceChanged;
 import com.donworry.investigation.service.InvestigationEvents.HandoffRequested;
-import lombok.RequiredArgsConstructor;
+import java.time.Duration;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -12,13 +15,28 @@ import org.springframework.transaction.event.TransactionalEventListener;
 // 실패하면 EVENT_PUBLICATION에 미완료로 남는다. 자동 재발행은 이벤트 공통 설정 작업에서 정한다
 @Slf4j
 @Component
-@RequiredArgsConstructor
 class InvestigationAfterCommitListener {
 
     private final ReportGateway reportGateway;
     private final FinancialActionGateway financialActionGateway;
     private final CaseStatusService caseStatusService;
     private final HandoffService handoffService;
+    private final Executor handoffExecutor;
+
+    // 카드사 처리 시간이 있으면(시연) 조치를 따로 돌려 판정 응답을 바로 돌려준다 — 그동안 사건은 "조치 진행 중" (#82)
+    // 0초면(테스트 · 지연 없음) 지금처럼 같은 흐름에서 끝낸다
+    InvestigationAfterCommitListener(
+            ReportGateway reportGateway,
+            FinancialActionGateway financialActionGateway,
+            CaseStatusService caseStatusService,
+            HandoffService handoffService,
+            @Value("${donworry.demo.card-company-delay:PT0S}") Duration cardCompanyDelay) {
+        this.reportGateway = reportGateway;
+        this.financialActionGateway = financialActionGateway;
+        this.caseStatusService = caseStatusService;
+        this.handoffService = handoffService;
+        this.handoffExecutor = cardCompanyDelay.isZero() ? Runnable::run : Executors.newVirtualThreadPerTaskExecutor();
+    }
 
     @TransactionalEventListener
     void on(CaseEvidenceChanged event) {
@@ -28,9 +46,14 @@ class InvestigationAfterCommitListener {
 
     // P5 호출은 P3 트랜잭션 밖에서 한다 — P5 접수와 P3 반영의 트랜잭션을 섞지 않는다
     // 접수 여부를 모르면(예외 · UNKNOWN) 인계는 REQUESTED로 두고 예외를 다시 던진다
-    // 리스너가 실패해야 EVENT_PUBLICATION이 미완료로 남아 같은 멱등키로 다시 보낼 수 있다 (fds 정본 03 §3.8)
+    // 같은 흐름에서 돌 때는 리스너가 실패해 EVENT_PUBLICATION이 미완료로 남는다 (fds 정본 03 §3.8)
+    // 따로 돌 때는 실패를 기록만 한다 — 인계는 REQUESTED로 남고 다시 보내기는 이벤트 공통 설정 작업에서
     @TransactionalEventListener
     void on(HandoffRequested event) {
+        handoffExecutor.execute(() -> handoff(event));
+    }
+
+    private void handoff(HandoffRequested event) {
         handoffService.commandFor(event.handoffId()).ifPresent(command -> {
             Receipt receipt;
             try {

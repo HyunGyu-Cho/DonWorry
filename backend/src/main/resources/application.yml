@@ -50,6 +50,9 @@ fds:
     seed-enabled: ${FDS_MOCK_SEED_ENABLED:true}
 
 donworry:
+  demo:
+    # 모의 카드사가 승인 취소 · 매입을 처리하는 시간 (#82). 그동안 사건은 "조치 진행 중" — 시연용, 테스트는 0초
+    card-company-delay: ${DONWORRY_CARD_COMPANY_DELAY:PT5S}
   report:
     # 보고서 내용을 채우는 쪽. fake = Spring 안의 템플릿으로 바로 완료, ai-server = ai-server에 조사를 맡김
     # 결과 받기(2-17) 전에는 ai-server로 바꾸면 보고서가 "생성 중"에서 멈춘다

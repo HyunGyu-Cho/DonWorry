@@ -162,6 +162,22 @@ public class Payment {
         status = PaymentStatus.DECLINED;
     }
 
+    // 직원 판정 승인 취소 (#82) — 매입 보류된 결제만. 카드 승인 기록(authorizationRef)은 남긴다
+    public void voidHeld() {
+        if (status != PaymentStatus.HELD) {
+            throw new IllegalStateException("매입 보류(HELD) 결제만 승인 취소할 수 있습니다");
+        }
+        status = PaymentStatus.VOIDED;
+    }
+
+    // 직원 판정 매입 허용 (#82) — 보류를 풀고 매입 요청 전 상태(승인된 PENDING)로. 매입 완료는 정산 이벤트로
+    public void releaseHold() {
+        if (status != PaymentStatus.HELD) {
+            throw new IllegalStateException("매입 보류(HELD) 결제만 매입을 진행할 수 있습니다");
+        }
+        status = PaymentStatus.PENDING;
+    }
+
     public void completeCapture() {
         if (authorizationRef == null
                 || authorizationRef.isBlank()
