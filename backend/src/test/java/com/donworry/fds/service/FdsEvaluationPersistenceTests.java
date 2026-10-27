@@ -34,22 +34,18 @@ class FdsEvaluationPersistenceTests {
     }
 
     @Test
-    // P5 Mock 결제 세 건에서 마지막 고액 반복 결제를 REVIEW로 저장한다.
-    void evaluate_threeMockPayments_persistsReviewWithRuleHits() {
-        var firstRequestedAt = Instant.parse("2026-10-22T01:00:00Z");
+    // 시나리오 ①: 평소 4만 원 고객이 처음 쓰는 카드로 65만 원 → 시드 Rule 3개 55점 REVIEW로 저장 (#82)
+    void evaluate_scenarioOne_persistsReviewWithRuleHits() {
+        var requestedAt = Instant.parse("2026-10-27T01:00:00Z");
 
-        evaluator.evaluate(request(1L, "ORDER-001", 50_000L, firstRequestedAt));
-        evaluator.evaluate(request(2L, "ORDER-002", 70_000L, firstRequestedAt.plusSeconds(5 * 60)));
-        var result = evaluator.evaluate(request(3L, "ORDER-003", 150_000L, firstRequestedAt.plusSeconds(9 * 60)));
+        var result = evaluator.evaluate(
+                new FdsEvaluationRequest(UUID.randomUUID(), 3L, "hong-gildong", 650_000L, requestedAt, 40_000L, 0));
 
         assertThat(result.result()).isEqualTo(FdsResult.REVIEW);
-        assertThat(result.riskScore()).isEqualTo(60);
-        assertThat(evaluationRepository.findAll()).hasSize(3).anySatisfy(evaluation -> {
-            assertThat(evaluation.getCustomerRef()).isEqualTo("hong-gildong");
-            assertThat(evaluation.getPaymentRequestedAt()).isEqualTo(firstRequestedAt.plusSeconds(9 * 60));
-            assertThat(evaluation.getRiskScore()).isEqualTo(60);
-            assertThat(evaluation.getResult()).isEqualTo(FdsResult.REVIEW);
-            assertThat(evaluation.getRuleHits()).hasSize(2);
+        assertThat(result.riskScore()).isEqualTo(55);
+        assertThat(evaluationRepository.findAll()).singleElement().satisfies(evaluation -> {
+            assertThat(evaluation.getPaymentRequestedAt()).isEqualTo(requestedAt);
+            assertThat(evaluation.getRuleHits()).hasSize(3);
         });
     }
 

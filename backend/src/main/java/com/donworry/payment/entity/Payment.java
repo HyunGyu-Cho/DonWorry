@@ -49,6 +49,38 @@ public class Payment {
     @Column(name = "created_at", nullable = false, columnDefinition = "DATETIME(6)")
     private Instant createdAt;
 
+    // 상점 결제 준비 요청에서 받는 값 (cakeshop-contract 3절, #82)
+    @Column(name = "order_title", length = 100)
+    private String orderTitle;
+
+    @Column(name = "pickup_at", columnDefinition = "DATETIME(6)")
+    private Instant pickupAt;
+
+    @Column(name = "buyer_name", length = 50)
+    private String buyerName;
+
+    @Column(name = "buyer_email", length = 254)
+    private String buyerEmail;
+
+    @Column(name = "customer_joined_at", columnDefinition = "DATETIME(6)")
+    private Instant customerJoinedAt;
+
+    // 결제창이 직접 수집하는 값 — 카드 번호 원문은 받지 않고 지문 · 끝 4자리 · 발급국만
+    @Column(name = "client_ip", length = 45)
+    private String clientIp;
+
+    @Column(name = "device_id", length = 100)
+    private String deviceId;
+
+    @Column(name = "card_fingerprint", length = 64)
+    private String cardFingerprint;
+
+    @Column(name = "card_last4", columnDefinition = "CHAR(4)")
+    private String cardLast4;
+
+    @Column(name = "card_country", columnDefinition = "CHAR(2)")
+    private String cardCountry;
+
     public static Payment pending(
             Long merchantId, String customerRef, String orderRef, Long amount, Instant createdAt) {
         return Payment.builder()
@@ -58,6 +90,40 @@ public class Payment {
                 .amount(amount)
                 .createdAt(createdAt)
                 .build();
+    }
+
+    // 상점이 결제를 준비할 때 (결제창을 열기 전) — 카드는 결제창에서 고른다
+    public static Payment ready(Order order, Instant createdAt) {
+        Objects.requireNonNull(order, "order");
+        Payment payment = pending(order.merchantId(), order.customerRef(), order.orderRef(), order.amount(), createdAt);
+        payment.orderTitle = order.orderTitle();
+        payment.pickupAt = order.pickupAt();
+        payment.buyerName = order.buyerName();
+        payment.buyerEmail = order.buyerEmail();
+        payment.customerJoinedAt = order.customerJoinedAt();
+        return payment;
+    }
+
+    // 결제 준비 요청 값 묶음
+    public record Order(
+            Long merchantId,
+            String customerRef,
+            String orderRef,
+            String orderTitle,
+            Long amount,
+            String buyerName,
+            String buyerEmail,
+            Instant customerJoinedAt,
+            Instant pickupAt) {}
+
+    // 결제창에서 고른 카드 · 접속 정보 — FDS 평가 전에만 붙인다
+    public void attachCheckout(String clientIp, String deviceId, String cardFingerprint, String last4, String country) {
+        requireUnapprovedPending();
+        this.clientIp = clientIp;
+        this.deviceId = deviceId;
+        this.cardFingerprint = Objects.requireNonNull(cardFingerprint, "cardFingerprint");
+        this.cardLast4 = last4;
+        this.cardCountry = country;
     }
 
     @Builder(access = AccessLevel.PRIVATE)

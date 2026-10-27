@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.donworry.HeldPaymentFixture;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseStatus;
@@ -32,7 +33,6 @@ import com.donworry.investigation.report.repository.AiReportRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
-import com.donworry.investigation.service.mock.MockPaymentInfoStore;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -65,7 +65,7 @@ import tools.jackson.databind.json.JsonMapper;
             "donworry.report.result-timeout=PT1H"
         })
 @AutoConfigureMockMvc
-@Import(MariaDbTestContainerConfig.class)
+@Import({MariaDbTestContainerConfig.class, HeldPaymentFixture.class})
 class ReportResultFlowTests {
 
     static final String KEY = "test-key";
@@ -89,7 +89,7 @@ class ReportResultFlowTests {
     CasePaymentRepository casePaymentRepository;
 
     @Autowired
-    MockPaymentInfoStore mockPaymentInfoStore;
+    HeldPaymentFixture heldPaymentFixture;
 
     @MockitoBean
     AiServerClient aiServerClient;
@@ -109,9 +109,7 @@ class ReportResultFlowTests {
                 .thenReturn(new Outcome(Kind.ACCEPTED, null));
         securityCase = securityCaseRepository.save(
                 SecurityCase.open(1L, "customer-" + UUID.randomUUID(), CaseType.PAYMENT_FRAUD, Instant.now()));
-        paymentId = mockPaymentInfoStore
-                .registerHeld(650_000L, 55, List.of("HIGH_AMOUNT", "NEW_CARD"), Instant.now())
-                .paymentId();
+        paymentId = heldPaymentFixture.payment(650_000L, 55, List.of("HIGH_AMOUNT", "NEW_CARD"));
         casePaymentRepository.save(CasePayment.link(securityCase, paymentId, Instant.now()));
     }
 

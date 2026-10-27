@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
+import com.donworry.HeldPaymentFixture;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.entity.Decision;
 import com.donworry.investigation.repository.ActionHandoffRepository;
 import com.donworry.investigation.service.FinancialActionGateway.Receipt;
-import com.donworry.investigation.service.mock.MockPaymentInfoStore;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -26,7 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 // P5 접수 결과가 늦게 · 여러 번 · 실패로 오는 경우를 확인한다 — 금융 조치 경계는 응답을 모르는(UNKNOWN) 것으로 바꿔 둔다
 @Tag("mariadb")
 @SpringBootTest
-@Import(MariaDbTestContainerConfig.class)
+@Import({MariaDbTestContainerConfig.class, HeldPaymentFixture.class})
 class HandoffReceiptTests {
 
     @MockitoBean
@@ -51,7 +51,7 @@ class HandoffReceiptTests {
     JdbcTemplate jdbcTemplate;
 
     @Autowired
-    MockPaymentInfoStore mockPaymentInfoStore;
+    HeldPaymentFixture heldPaymentFixture;
 
     Long caseId;
     UUID idempotencyKey;
@@ -114,9 +114,7 @@ class HandoffReceiptTests {
 
     // 결제 정보가 있어야 가짜 작성기 보고서가 SUCCEEDED로 만들어진다 (없으면 FAILED)
     private Long receiveHeld() {
-        Long paymentId = mockPaymentInfoStore
-                .registerHeld(100_000L, 65, List.of("NEW_CARD"), Instant.now())
-                .paymentId();
+        Long paymentId = heldPaymentFixture.payment(100_000L, 65, List.of("NEW_CARD"));
         return caseIntakeService.receive(
                 new HeldPayment(paymentId, 1L, "customer-" + UUID.randomUUID(), 100_000L, "AUTH", null, Instant.now()));
     }

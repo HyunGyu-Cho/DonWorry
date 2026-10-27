@@ -3,6 +3,7 @@ package com.donworry.investigation.report.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
+import com.donworry.HeldPaymentFixture;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
@@ -13,7 +14,6 @@ import com.donworry.investigation.report.repository.AiReportRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
-import com.donworry.investigation.service.mock.MockPaymentInfoStore;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +32,7 @@ import org.springframework.context.annotation.Import;
 // 보고서 저장이 별도 트랜잭션으로 커밋되므로 롤백 테스트가 아니다. 테스트마다 새 Case를 만든다
 @Tag("mariadb")
 @SpringBootTest
-@Import(MariaDbTestContainerConfig.class)
+@Import({MariaDbTestContainerConfig.class, HeldPaymentFixture.class})
 class ReportServiceTests {
 
     @Autowired
@@ -48,15 +48,13 @@ class ReportServiceTests {
     CasePaymentRepository casePaymentRepository;
 
     @Autowired
-    MockPaymentInfoStore mockPaymentInfoStore;
+    HeldPaymentFixture heldPaymentFixture;
 
     // 결제 정보가 있는 결제 하나가 묶인 Case (증거 버전 1)
     private SecurityCase caseWithPayment() {
         SecurityCase securityCase = securityCaseRepository.save(
                 SecurityCase.open(1L, "customer-" + UUID.randomUUID(), CaseType.PAYMENT_FRAUD, Instant.now()));
-        Long paymentId = mockPaymentInfoStore
-                .registerHeld(650_000L, 55, List.of("HIGH_AMOUNT", "NEW_CARD"), Instant.now())
-                .paymentId();
+        Long paymentId = heldPaymentFixture.payment(650_000L, 55, List.of("HIGH_AMOUNT", "NEW_CARD"));
         casePaymentRepository.save(CasePayment.link(securityCase, paymentId, Instant.now()));
         return securityCase;
     }

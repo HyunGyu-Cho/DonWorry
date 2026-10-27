@@ -103,6 +103,10 @@ class PaymentAuthorizationFlowTests {
         if (verdict == FdsResult.ALLOW) {
             verify(events).publishEvent(new CaptureRequested(101L, 1L, "order", 2000L));
             verifyNoMoreInteractions(events);
+        } else if (verdict == FdsResult.REVIEW) {
+            // 매입 보류면 investigation에 보류를 알린다 (#82)
+            verify(events).publishEvent(org.mockito.ArgumentMatchers.any(com.donworry.payment.api.PaymentHeld.class));
+            verifyNoMoreInteractions(events);
         } else {
             verifyNoInteractions(events);
         }

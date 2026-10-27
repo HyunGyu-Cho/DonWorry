@@ -75,7 +75,9 @@ class PaymentAuthorizationServiceTests {
             verify(events).publishEvent(new CaptureRequested(10L, 1L, "order", 1000L));
             verifyNoMoreInteractions(events);
         } else {
-            verifyNoInteractions(events);
+            // 매입 보류면 investigation에 보류를 알린다 (#82)
+            verify(events).publishEvent(org.mockito.ArgumentMatchers.any(com.donworry.payment.api.PaymentHeld.class));
+            verifyNoMoreInteractions(events);
         }
     }
 

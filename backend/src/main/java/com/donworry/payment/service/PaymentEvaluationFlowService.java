@@ -28,12 +28,24 @@ public class PaymentEvaluationFlowService {
         return authorizationService.authorize(createEvaluationContext(input));
     }
 
+    // 결제창에서 카드를 고른 준비된 결제 (#82) — 저장은 이미 됐고 FDS 평가 · 승인만 한다
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public PaymentAuthorizationResult authorizeReady(Long paymentId) {
+        var payment = creationService.snapshot(paymentId);
+        return authorizationService.authorize(evaluationContext(payment, creationService.features(paymentId)));
+    }
+
     private PaymentAuthorizationContext createEvaluationContext(PaymentEvaluationFlowInput input) {
         if (input == null) {
             throw new IllegalArgumentException("input must not be null");
         }
         var payment = creationService.createPendingSnapshot(
                 input.merchantId(), input.customerRef(), input.orderRef(), input.amount());
+        return evaluationContext(payment, creationService.features(payment.paymentId()));
+    }
+
+    private PaymentAuthorizationContext evaluationContext(
+            PaymentCreationSnapshot payment, PaymentCreationService.Features features) {
         if (payment.status() != PaymentStatus.PENDING || payment.authorizationRef() != null) {
             throw new IllegalStateException("최초 저장한 결제가 승인 전 PENDING 상태가 아닙니다");
         }
@@ -44,6 +56,8 @@ public class PaymentEvaluationFlowService {
                 .customerRef(payment.customerRef())
                 .amount(payment.amount())
                 .paymentRequestedAt(payment.createdAt())
+                .customerAverageAmount(features == null ? null : features.customerAverageAmount())
+                .cardCompletedPayments(features == null ? null : features.cardCompletedPayments())
                 .build();
         var result = evaluationService.evaluateAndDecide(state, evaluationInput);
         return new PaymentAuthorizationContext(payment, evaluationInput.evaluationRequestId(), result);

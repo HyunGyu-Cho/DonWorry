@@ -96,8 +96,7 @@ class PaymentAuthorizationPersistenceTests {
     void createAndAuthorize_withRealEvaluation_commitsIndependently(boolean review) {
         String customer = UUID.randomUUID().toString();
         if (review) {
-            flow.createAndEvaluate(input(customer, 50_000L));
-            flow.createAndEvaluate(input(customer, 70_000L));
+            capturedHistory(customer);
         }
         when(authorizer.authorize(any())).thenAnswer(invocation -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive())
@@ -105,7 +104,7 @@ class PaymentAuthorizationPersistenceTests {
             return success(invocation.getArgument(0));
         });
         var result = new TransactionTemplate(transactionManager).execute(status -> {
-            var authorized = flow.createAndAuthorize(input(customer, 150_000L));
+            var authorized = flow.createAndAuthorize(input(customer, 600_000L));
             status.setRollbackOnly();
             return authorized;
         });
@@ -116,7 +115,7 @@ class PaymentAuthorizationPersistenceTests {
                 review ? PaymentStatus.HELD : PaymentStatus.PENDING,
                 "MOCK-AUTH-" + result.paymentId());
         assertEvaluationPreserved(result.paymentId());
-        verify(authorizer).authorize(new AuthorizationCommand(result.paymentId(), 150_000L));
+        verify(authorizer).authorize(new AuthorizationCommand(result.paymentId(), 600_000L));
     }
 
     // DENY·ERROR 문맥 대역으로 실제 DB 반영을 확인하되 승인기는 호출하지 않는다.
@@ -163,8 +162,7 @@ class PaymentAuthorizationPersistenceTests {
     @Test
     void createAndAuthorize_whenCommitFails_rollsBackBothFields() {
         String customer = UUID.randomUUID().toString();
-        flow.createAndEvaluate(input(customer, 50_000L));
-        flow.createAndEvaluate(input(customer, 70_000L));
+        capturedHistory(customer);
         var paymentId = new AtomicLong();
         var failure = new IllegalStateException("injected before-commit failure");
         when(authorizer.authorize(any())).thenAnswer(invocation -> {
@@ -189,7 +187,7 @@ class PaymentAuthorizationPersistenceTests {
             });
             return success(command);
         });
-        assertThatThrownBy(() -> flow.createAndAuthorize(input(customer, 150_000L)))
+        assertThatThrownBy(() -> flow.createAndAuthorize(input(customer, 600_000L)))
                 .isSameAs(failure);
         assertStored(paymentId.get(), PaymentStatus.PENDING, null);
         assertEvaluationPreserved(paymentId.get());
@@ -264,6 +262,17 @@ class PaymentAuthorizationPersistenceTests {
             releaseFirst.countDown();
             executor.shutdownNow();
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    // 이 고객의 매입 완료 이력 (평균 4만 원) — 평소보다 큰 금액 Rule이 판단할 수 있게 (#82)
+    private void capturedHistory(String customer) {
+        for (int i = 0; i < 2; i++) {
+            var past = com.donworry.payment.entity.Payment.pending(
+                    999L, customer, UUID.randomUUID().toString(), 40_000L, Instant.now());
+            past.recordAuthorizationSuccess("PAST-" + UUID.randomUUID(), false);
+            past.completeCapture();
+            payments.save(past);
         }
     }
 }
