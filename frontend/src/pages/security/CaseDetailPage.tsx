@@ -13,7 +13,7 @@ import { getLoginEvents, getStaffAccounts, getStaffSessions } from '../../api/id
 import { getApprovals, getStaffCase, requestCaseActions } from '../../api/investigation'
 import { CaseActionForbiddenError, StaffCaseForbiddenError } from '../../api/investigationErrors'
 import { getPaymentContext } from '../../api/payment'
-import { getCaseReport, getReportRun } from '../../api/report'
+import { getCaseReport, getReportRun, retryReport } from '../../api/report'
 import { useAuth } from '../../auth/useAuth'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -354,6 +354,7 @@ export function CaseDetailPage() {
   const { toast } = useFeedback()
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [now, setNow] = useState(() => new Date())
+  const [retrying, setRetrying] = useState(false)
   const manager = user?.role === 'SECURITY_MANAGER'
   const base = manager ? '/manager/cases' : '/security/cases'
 
@@ -395,6 +396,22 @@ export function CaseDetailPage() {
     }, 1000)
     return () => clearTimeout(timer)
   }, [running, loaded, id, toast])
+
+  // [AI 조사 다시 하기] (2-19e) — 조사 중으로 바뀌면 위 1초 폴링이 이어받는다. 사건 상태도 다시 읽는다
+  const retry = useCallback(async () => {
+    setRetrying(true)
+    try {
+      await retryReport(id)
+      await load()
+      void toast.success('AI 조사를 다시 시작했어요. 단계가 끝날 때마다 아래에 그려져요.')
+    } catch {
+      void toast.error(
+        'AI 조사를 다시 시작하지 못했어요. 화면을 새로고침해 지금 상태를 확인해 주세요.',
+      )
+    } finally {
+      setRetrying(false)
+    }
+  }, [id, load, toast])
 
   // 조치가 결제에 반영될 때까지 2초마다 다시 본다 (조치 요청 중 → 종료)
   const acting =
@@ -611,6 +628,10 @@ export function CaseDetailPage() {
               run={run}
               reportPath={`${base}/${sc.caseId}/report`}
               now={now}
+              onRetry={
+                run?.status === 'FAILED' && sc.status !== 'CLOSED' ? () => void retry() : undefined
+              }
+              retrying={retrying}
               doneOf={
                 loaded.kind === 'staff'
                   ? (label) => recommendationDone(label, loaded.staffCase.actions)

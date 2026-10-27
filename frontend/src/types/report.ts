@@ -93,7 +93,9 @@ export type ReportToolName =
   | 'get_order_context'
   | 'find_similar_cases'
 // LLM_FAILED = AI 답이 구조 검증에서 떨어져 다시 쓰는 단계 (ai-server 안에서 최대 3회)
-export type ReportStepKind = 'REQUEST' | 'TOOL' | 'LLM' | 'LLM_FAILED' | 'VALIDATE' | 'SAVE'
+// RETRY = 최종 실패 뒤 직원이 [AI 조사 다시 하기]를 누름 — 새 버전의 첫 단계 (2-19e)
+export type ReportStepKind =
+  'RETRY' | 'REQUEST' | 'TOOL' | 'LLM' | 'LLM_FAILED' | 'VALIDATE' | 'SAVE'
 export type ReportStepStatus = 'RUNNING' | 'DONE' | 'FAILED'
 
 export type ReportStep = {

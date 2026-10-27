@@ -691,6 +691,9 @@
   border-top: 1px solid rgba(255, 255, 255, 0.2);
   padding-top: 8px;
 }
+.dw-case-ai-failed {
+  margin-bottom: 12px;
+}
 .dw-case-ai {
   display: flex;
   gap: 18px;

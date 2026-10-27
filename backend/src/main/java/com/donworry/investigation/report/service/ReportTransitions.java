@@ -6,6 +6,7 @@ import static com.donworry.investigation.report.entity.ReportStatus.RUNNING;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.entity.AiReport;
+import com.donworry.investigation.report.entity.ReportStatus;
 import com.donworry.investigation.report.repository.AiReportRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
@@ -53,6 +54,30 @@ public class ReportTransitions {
         AiReport saved = aiReportRepository.save(AiReport.pending(caseId, reportVersion, evidenceVersion, now));
         String caseType = securityCase.get().getCaseType().name();
         return Optional.of(new ReportTarget(saved.getId(), caseId, caseType, reportVersion, evidenceVersion));
+    }
+
+    // 직원 다시 하기 (2-19e) — 최신 보고서가 실패면 같은 증거 버전으로 다음 보고서 버전을 잡는다
+    // 실패한 버전은 그대로 둔다 (끝난 보고서는 바꾸지 않음). 동시에 두 번 누르면 UNIQUE 위반 — 부르는 쪽이 합류로 처리
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ReportTarget reserveRetry(Long caseId, Instant now) {
+        SecurityCase securityCase = securityCaseRepository
+                .findById(caseId)
+                .orElseThrow(() -> new ReportException(ReportErrorCode.REPORT_NOT_FOUND));
+        AiReport latest = aiReportRepository.findByCaseIdOrderByReportVersionAsc(caseId).stream()
+                .reduce((first, second) -> second)
+                .orElseThrow(() -> new ReportException(ReportErrorCode.REPORT_NOT_FOUND));
+        // 증거가 바뀌었으면 다시 하기가 아니라 새 정보 조사가 이미 시작됐어야 한다
+        boolean retryable = latest.getStatus() == ReportStatus.FAILED
+                && !securityCase.isClosed()
+                && latest.getEvidenceVersion() == securityCase.getEvidenceVersion();
+        if (!retryable) {
+            throw new ReportException(ReportErrorCode.RETRY_NOT_ALLOWED);
+        }
+        int reportVersion = latest.getReportVersion() + 1;
+        AiReport saved = aiReportRepository.save(
+                AiReport.pending(caseId, reportVersion, latest.getEvidenceVersion(), micros(now)));
+        String caseType = securityCase.getCaseType().name();
+        return new ReportTarget(saved.getId(), caseId, caseType, reportVersion, latest.getEvidenceVersion());
     }
 
     // ai-server가 접수(202)했을 때. 결과가 먼저 와서 이미 끝났으면 false (덮지 않음)

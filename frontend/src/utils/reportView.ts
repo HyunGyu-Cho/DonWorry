@@ -9,6 +9,7 @@ import type {
 } from '../types/report.ts'
 
 export const STEP_ICON: Record<ReportStepKind, string> = {
+  RETRY: '🔁',
   REQUEST: '📨',
   TOOL: '🔧',
   LLM: '🧠',

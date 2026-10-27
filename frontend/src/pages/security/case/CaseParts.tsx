@@ -132,8 +132,16 @@ export function AiSummaryCard(props: {
   now: Date
   // 이미 한 조치와 같은 권고인지 (✓ 완료 표시)
   doneOf?: (label: string) => boolean
+  // 최신 조사가 최종 실패면 [AI 조사 다시 하기] (2-19e)
+  onRetry?: () => void
+  retrying?: boolean
 }) {
-  const { report, run, reportPath, now, doneOf } = props
+  const { report, run, reportPath, now, doneOf, onRetry, retrying } = props
+  const retryButton = onRetry && (
+    <Button size="small" onClick={onRetry} loading={retrying}>
+      AI 조사 다시 하기
+    </Button>
+  )
   // 조사 중이면 결론 대신 과정을 실시간으로 (보고서 화면은 끝난 뒤에 생긴다)
   if (run?.status === 'RUNNING') {
     return (
@@ -166,6 +174,7 @@ export function AiSummaryCard(props: {
             showIcon
             message={REPORT_FAILED_TITLE}
             description={REPORT_FAILED_DETAIL}
+            action={retryButton}
           />
         </Card>
       )
@@ -187,6 +196,16 @@ export function AiSummaryCard(props: {
         </Link>
       }
     >
+      {/* 지난 보고서는 있지만 새 정보로 다시 한 조사가 실패했을 때 */}
+      {run?.status === 'FAILED' && (
+        <Alert
+          className="dw-case-ai-failed"
+          type="warning"
+          showIcon
+          message={`새 정보로 다시 한 조사(v${run.reportVersion})가 실패했어요. 아래는 지난 보고서예요.`}
+          action={retryButton}
+        />
+      )}
       <div className="dw-case-ai">
         <div
           className={`dw-pa-score-num dw-pa-score-num--${report.riskScore >= 70 ? 'bad' : 'warn'}`}

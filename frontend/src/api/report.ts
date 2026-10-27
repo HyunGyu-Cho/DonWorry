@@ -40,6 +40,15 @@ async function realGetReportRun(caseId: string): Promise<ReportRun | null> {
 // 사건의 최신 조사 진행 상태. 화면은 RUNNING인 동안 1초마다 다시 부른다
 export const getReportRun = isMock('report') ? mockGetReportRun : realGetReportRun
 
+// RPT_005: 최신 보고서가 실패가 아님 (조사 중 · 완료) 또는 사건 종료 (2-19e)
+async function realRetryReport(caseId: string): Promise<ReportRun | null> {
+  return api<ReportRun>(`/investigation/cases/${caseId}/report/retry`, { method: 'POST' })
+}
+
+// 최종 실패한 사건을 같은 증거로 새 버전에서 다시 조사한다. 바뀐 조사 상태를 돌려준다
+// Mock에는 실패한 사건이 없어 버튼이 나오지 않는다 — 지금 상태만 돌려준다
+export const retryReport = isMock('report') ? mockGetReportRun : realRetryReport
+
 // 시연 버튼(튜토리얼 ①) — 구매자 답변이 도착한 것처럼 사건 201을 다시 조사. Mock에서만 (실제는 2-23 본인 확인 응답 → 재조사)
 export const demoBuyerAnswered: (() => Promise<void>) | null = isMock('report')
   ? mockStartBuyerRerun

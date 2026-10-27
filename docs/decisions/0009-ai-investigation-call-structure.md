@@ -106,7 +106,12 @@ sequenceDiagram
 
 - **새 행을 만들지 않는 경우** (설계 3.5 중복 실행 방지)
   - 같은 Case에 **같은 증거 버전으로** `PENDING` · `RUNNING` 행이 있음 — 이미 조사 중이다 (아래 "이상" 규칙에 포함)
-  - 요청한 증거 버전 **이상**을 분석한 행이 이미 있음(상태 무관) — 중복 · 재전달 요청이다. `FAILED`여도 다시 만들지 않는다 (3회 제한 유지). 직원의 수동 재실행은 MVP 범위 밖
+  - 요청한 증거 버전 **이상**을 분석한 행이 이미 있음(상태 무관) — 중복 · 재전달 요청이다. `FAILED`여도 자동으로는 다시 만들지 않는다 (3회 제한 유지). 직원이 직접 다시 하는 길은 바로 아래
+- **직원 [AI 조사 다시 하기] (#80, 2-19e).** 최신 행이 `FAILED`이고, 그 증거 버전이 Case 현재 증거 버전과 같고, Case가 종료되지 않았을 때만 받는다. 실패한 행은 그대로 두고 **같은 증거 버전으로 다음 `report_version`**을 `PENDING`으로 만들어 처음부터 다시 3번 시도한다
+  - 주소: 화면용 `POST /api/investigation/cases/{caseId}/report/retry` → 바뀐 조사 상태(`report/run`과 같은 모양). 조건이 맞지 않으면 `409 RPT_005`. 동시에 두 번 누르면 UNIQUE 합류 규칙으로 하나만 남는다
+  - 새 버전의 첫 단계로 `RETRY` "v1 조사가 실패해 직원이 다시 요청함"을 남긴다 — 같은 증거로 버전이 늘어난 이유를 과정 탭에서 볼 수 있다
+  - 이로써 "버전이 늘면 증거가 바뀐 것"이라는 뜻이 "증거가 바뀌었거나 직원이 다시 요청한 것"으로 넓어진다
+  - 버린 안: 실패한 행을 `PENDING`으로 되돌려 시도 횟수만 다시 세기 — 버전 숫자는 그대로지만 끝난 보고서가 바뀌고(결정 2 조건부 UPDATE와 충돌) 실패 기록이 사라진다
 - **조사 중 새 증거 버전이 오면 대체한다 (#68 개정).** 낡은 증거로 `PENDING` · `RUNNING`인 행을 `SUPERSEDED`로 닫고(조건부 UPDATE), 현재 시도 토큰을 지운 뒤 바로 다음 `report_version`을 `PENDING`으로 만든다. 대체된 시도의 늦은 결과는 토큰이 없어 무시되고, 행도 끝난 상태라 바뀌지 않는다. P3의 "최신 보고서"는 늘 새 버전이라 판정 규칙은 그대로다 (`ReportGateway` 상태 문자열에 `SUPERSEDED` 추가)
   - 이전에는 진행 중이면 요청을 넘기고 끝난 뒤 비교했다. 그러면 직원이 낡은 증거의 결과를 기다린 뒤 다시 기다려야 했다
 - **완료 후 비교는 두 단계로 한다** (대체와 함께 안전장치로 남긴다). ① 종료 상태(`SUCCEEDED` · `FAILED`)를 먼저 커밋하고, ② 별도 트랜잭션에서 현재 Case 증거 버전을 읽어 그 행의 `evidence_version`과 비교한다. 다르면 다음 `report_version`을 `PENDING`으로 만든다
@@ -239,7 +244,7 @@ investigation/report/
 
 ## 영향
 
-- API: Spring `/internal/ai/tools/*`(GET 6종) · `/internal/ai/reports/{reportId}/result`(POST) · `/internal/ai/reports/{reportId}/steps`(POST, #78), FastAPI `POST /investigations` · `GET /investigations/{reportId}`
+- API: Spring `/internal/ai/tools/*`(GET 6종) · `/internal/ai/reports/{reportId}/result`(POST) · `/internal/ai/reports/{reportId}/steps`(POST, #78), 화면용 `/api/investigation/cases/{caseId}/report/retry`(POST, #80), FastAPI `POST /investigations` · `GET /investigations/{reportId}`
 - DB: `ai_reports`는 설계 3.9⑤ 8개 컬럼 그대로. `UNIQUE(case_id, report_version)`. `case_id`는 `security_cases`에 대한 논리 참조
 - 보안: `identity/security/SecurityConfig`에서 `/internal/ai/**`를 서비스 키 인증으로 분리해야 한다 — P1과 협의
 - P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)

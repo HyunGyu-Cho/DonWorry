@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReportStepRecorder {
 
     public static final String REQUEST = "REQUEST";
+    public static final String RETRY = "RETRY";
     public static final String LLM = "LLM";
     public static final String LLM_FAILED = "LLM_FAILED";
     public static final String VALIDATE = "VALIDATE";
@@ -84,6 +85,7 @@ public class ReportStepRecorder {
         return switch (step.getKind()) {
             case AiReportStep.KIND_TOOL -> tool != null ? tool.label() : step.getToolName();
             case REQUEST -> "조사 요청 접수";
+            case RETRY -> "직원이 다시 조사 요청";
             case SAVE -> "보고서 저장";
             default -> step.getSummary();
         };
@@ -93,6 +95,7 @@ public class ReportStepRecorder {
         return switch (step.getKind()) {
             case AiReportStep.KIND_TOOL -> tool != null ? tool.label() : step.getToolName();
             case REQUEST -> "사건이 생기자 Spring이 ai-server에 조사를 맡김";
+            case RETRY -> "AI 조사가 실패해 직원이 [AI 조사 다시 하기]를 누름";
             case LLM -> "증거를 보고 판단 요청";
             case SAVE -> "검사를 통과한 보고서를 저장";
             default -> "보고서 형식 검사";

@@ -166,6 +166,8 @@ const STATUS_CHANGE_TEXT: Record<string, string> = {
   APPROVED: '관리자 승인 · 판정 반영',
   REJECTED: '관리자 거절 · 다시 판정 대기',
   DECISION_PENDING: 'AI 조사 완료 · 판정 대기',
+  // 새 정보가 들어오거나 직원이 [AI 조사 다시 하기]를 눌러 다시 조사 (2-19e)
+  INVESTIGATING: 'AI 다시 조사 중',
 }
 
 // 결제 사건 기록 한 줄 → 제목 · 덧붙일 말 (상태 변경은 eventData.to로 나눈다)
