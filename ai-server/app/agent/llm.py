@@ -55,9 +55,14 @@ class LlmClient(Protocol):
 # 가짜 AI — 판단 없이 사건 종류별로 정해진 순서대로 창구를 부른 뒤, 받은 증거로 보고서를 조립한다
 # 같은 대화에서 보고서를 낸 횟수가 invalid_answers보다 적으면 형식이 틀린 답 (재시도 시연)
 class MockLlmClient:
-    def __init__(self, invalid_answers: int = 0, delay_seconds: float = 0.0) -> None:
+    def __init__(
+        self, invalid_answers: int = 0, delay_seconds: float = 0.0, ungrounded_answers: int = 0
+    ) -> None:
         self.invalid_answers = invalid_answers
         self.delay_seconds = delay_seconds
+        # 형식은 맞지만 증거에 없는 숫자를 쓰는 답 수 (근거 검사 시연, #92)
+        # 형식 틀린 답 다음부터 센다
+        self.ungrounded_answers = ungrounded_answers
 
     # 가짜 AI는 형식 고정(answer_schema)을 무시한다 — 재시도 시연(invalid_answers)이 그대로 보이게
     async def complete(
@@ -79,6 +84,9 @@ class MockLlmClient:
         if answered < self.invalid_answers:
             # 실제 LLM이 자주 하는 실수처럼 필수 항목 하나를 빠뜨린다
             del draft["checks"]
+        elif answered < self.invalid_answers + self.ungrounded_answers:
+            # 실제 LLM처럼 그럴듯한 숫자를 지어낸다 — 근거 검사가 잡아야 한다
+            draft["summary"] = f"{draft['summary']} 평소 결제의 37.5배입니다."
         return LlmReply(content=json.dumps(draft, ensure_ascii=False))
 
 
@@ -125,7 +133,11 @@ DEFAULT_BASE_URLS = {
 
 def create_llm_client(settings: Settings) -> LlmClient:
     if settings.llm_provider == "mock":
-        return MockLlmClient(settings.mock_invalid_answers, settings.mock_delay_seconds)
+        return MockLlmClient(
+            settings.mock_invalid_answers,
+            settings.mock_delay_seconds,
+            settings.mock_ungrounded_answers,
+        )
     if settings.llm_provider not in DEFAULT_BASE_URLS:
         raise ValueError(
             f"지원하지 않는 LLM 제공자: {settings.llm_provider} (mock · ollama · openai)"

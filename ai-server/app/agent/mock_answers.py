@@ -225,6 +225,7 @@ def _payment_fraud(results: Results) -> dict[str, object]:
         point = next((p for p in risk_points if p["title"] == RULE_NAMES[code]), None)
         if extra is not None and point is not None:
             point["detail"] = f"{point['detail']} — {extra['detail']}"
+            point["source"] = f"{point['source']}, {source}"
             history_risk.remove(extra)
     risk_points += history_risk
     normal_points += history_normal
@@ -255,7 +256,9 @@ def _payment_fraud(results: Results) -> dict[str, object]:
         for row in evidence
     ]
     rule_text = " · ".join(names) if names else "탐지 규칙"
-    summary = f"{rule_text}에 걸린 결제 {len(evidence)}건, 합계 {total:,}원입니다."
+    # 사건 결제 창구를 안 불렀으면 합계를 모른다 — "0원"으로 지어내지 않는다 (#92)
+    summary = f"{rule_text}에 걸린 결제 {len(evidence)}건"
+    summary += f", 합계 {total:,}원입니다." if payments else "입니다."
     if not_mine:
         summary += ' 구매자가 본인 확인에 "결제하지 않았어요"라고 답했습니다.'
     elif mine:
@@ -372,14 +375,17 @@ def _advice_reason(high: bool, not_mine: bool, mine: bool) -> str:
     return "본인 확인 전이라 판단을 미룹니다"
 
 
-# "결제 1 (300,000원) · 65점"처럼 그 규칙이 걸린 결제를 적는다
+# "300,000원 결제 · 65점"처럼 그 규칙이 걸린 결제를 적는다
+# 순번("결제 1")은 결제 번호로 오해돼 쓰지 않는다 (#92)
 # 번호는 화면 결제별 권고의 "결제 N"과 같은 순서 (원본 결제 번호는 문장에 넣지 않는다)
 def _rule_detail(code: str, evidence: list[dict[str, object]], amounts: dict) -> str:
     parts = []
-    for index, row in enumerate(evidence, start=1):
+    for row in evidence:
         hits = row.get("ruleHits")
         if isinstance(hits, list) and code in hits:
             amount = amounts.get(str(row.get("paymentId")))
-            money = f" ({amount:,}원)" if isinstance(amount, int) else ""
-            parts.append(f"결제 {index}{money} · {row.get('riskScore')}점")
+            target = (
+                f"{amount:,}원 결제" if isinstance(amount, int) else f"결제 {row.get('paymentId')}"
+            )
+            parts.append(f"{target} · {row.get('riskScore')}점")
     return ", ".join(parts) or "적중 결제 정보 없음"

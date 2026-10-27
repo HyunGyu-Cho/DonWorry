@@ -7,6 +7,7 @@ from typing import Literal, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from app.agent.grounding import TOOL_LABELS, check_grounding
 from app.agent.investigator import InvalidAnswer, InvestigationAgent
 from app.agent.llm import LlmError, LlmMessage, LlmReply
 from app.agent.tools import TOOL_NAMES, TOOL_SPECS, StepReporter, ToolRunner
@@ -24,6 +25,8 @@ class InvestigationState(TypedDict, total=False):
     nudged: bool
     attempt: int
     last_reason: str
+    # 형식 검사를 통과한 초안 — 근거 검사까지 통과해야 report가 된다 (#92)
+    draft: ReportDraft | None
     report: ReportDraft
     error: FailureInfo
 
@@ -59,6 +62,7 @@ class InvestigationGraph:
         builder.add_node("call_tools", self._call_tools)
         builder.add_node("too_many_tools", self._too_many_tools)
         builder.add_node("validate", self._validate)
+        builder.add_node("ground", self._ground)
         builder.add_node("give_up", self._give_up)
         builder.add_edge(START, "ask_ai")
         builder.add_conditional_edges(
@@ -80,7 +84,12 @@ class InvestigationGraph:
         builder.add_conditional_edges(
             "validate",
             self._after_validate,
-            {"통과": END, "형식_틀림_다시": "ask_ai", "3번_모두_실패": "give_up"},
+            {"형식_통과": "ground", "형식_틀림_다시": "ask_ai", "3번_모두_실패": "give_up"},
+        )
+        builder.add_conditional_edges(
+            "ground",
+            self._after_ground,
+            {"통과": END, "근거_부족_다시": "ask_ai", "3번_모두_실패": "give_up"},
         )
         builder.add_edge("give_up", END)
         return builder.compile()
@@ -175,16 +184,50 @@ class InvestigationGraph:
             await self._report(state, failed)
             return {
                 "attempt": attempt,
+                "draft": None,
                 "last_reason": invalid.reason,
                 "steps": [*state["steps"], failed],
                 "messages": self.agent.correction(state["messages"], invalid),
             }
         passed = self._step("VALIDATION", True, "구조 검증 통과", checked_at, clock)
         await self._report(state, passed)
-        return {"attempt": attempt, "report": report, "steps": [*state["steps"], passed]}
+        return {"attempt": attempt, "draft": report, "steps": [*state["steps"], passed]}
+
+    # 근거 검사 (#92) — 출처 · 숫자 · 결제 번호가 받은 증거에 있는지. 틀린 곳을 짚어 다시 쓰게 한다
+    # 시도 횟수는 형식 검사와 같은 3번 안에서 센다 (validate가 이미 셌다)
+    async def _ground(self, state: InvestigationState) -> InvestigationState:
+        draft = state["draft"]
+        # 창구 없이 조사했으면(Spring 주소 없음 · 단독 실행) 비교할 증거가 없어 검사하지 않는다
+        if self.tools is None:
+            return {"report": draft}
+        checked_at, clock = self.now(), time.monotonic()
+        checked = check_grounding(draft, state["messages"], state["request"].payment_ids)
+        if checked.problems:
+            reason = ", ".join(checked.problems[:3])
+            retry = state["attempt"] < self.max_llm_attempts
+            detail = f"근거 검사 실패: {reason}" + (" → 다시 시도" if retry else "")
+            failed = self._step("VALIDATION", False, detail, checked_at, clock)
+            await self._report(state, failed)
+            raw = state["reply"].content
+            return {
+                "draft": None,
+                "last_reason": f"근거 부족: {reason}",
+                "steps": [*state["steps"], failed],
+                "messages": self.agent.grounding_correction(
+                    state["messages"], raw, checked.problems
+                ),
+            }
+        detail = "근거 검사 통과"
+        if checked.unused:
+            names = ", ".join(TOOL_LABELS.get(name, name) for name in checked.unused)
+            detail += f" · 받고도 안 쓴 증거: {names}"
+        passed = self._step("VALIDATION", True, detail, checked_at, clock)
+        await self._report(state, passed)
+        return {"report": draft, "steps": [*state["steps"], passed]}
 
     async def _give_up(self, state: InvestigationState) -> InvestigationState:
-        reason = f"{self.max_llm_attempts}번 모두 형식이 맞지 않음 (마지막: {state['last_reason']})"
+        last = state["last_reason"]
+        reason = f"{self.max_llm_attempts}번 모두 보고서 검사를 통과하지 못함 (마지막: {last})"
         error = FailureInfo(
             code="LLM_INVALID_ANSWER", reason=reason, llm_attempts=self.max_llm_attempts
         )
@@ -211,10 +254,17 @@ class InvestigationGraph:
 
     def _after_validate(
         self, state: InvestigationState
-    ) -> Literal["통과", "형식_틀림_다시", "3번_모두_실패"]:
+    ) -> Literal["형식_통과", "형식_틀림_다시", "3번_모두_실패"]:
+        if state.get("draft") is not None:
+            return "형식_통과"
+        return "3번_모두_실패" if state["attempt"] >= self.max_llm_attempts else "형식_틀림_다시"
+
+    def _after_ground(
+        self, state: InvestigationState
+    ) -> Literal["통과", "근거_부족_다시", "3번_모두_실패"]:
         if "report" in state:
             return "통과"
-        return "3번_모두_실패" if state["attempt"] >= self.max_llm_attempts else "형식_틀림_다시"
+        return "3번_모두_실패" if state["attempt"] >= self.max_llm_attempts else "근거_부족_다시"
 
     # ── 도움 ──
 
