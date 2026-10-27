@@ -9,6 +9,7 @@ import com.donworry.fds.repository.FdsRuleRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -52,6 +53,17 @@ class FdsEvaluationTransactionService {
                     null);
         }
         return responseOf(evaluationRepository.saveAndFlush(evaluation));
+    }
+
+    // 룰 계산이 실패한 요청을 ERROR 평가로 남긴다 (#96 F-2). 실패한 계산의 트랜잭션과 따로 커밋한다
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public FdsEvaluationResponse recordError(FdsEvaluationRequest request, String errorCode) {
+        var existing = evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId());
+        if (existing.isPresent()) {
+            return responseOf(existing.get());
+        }
+        var evaluatedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        return responseOf(evaluationRepository.saveAndFlush(FdsEvaluation.failed(request, errorCode, evaluatedAt)));
     }
 
     private FdsEvaluationResponse responseOf(FdsEvaluation evaluation) {

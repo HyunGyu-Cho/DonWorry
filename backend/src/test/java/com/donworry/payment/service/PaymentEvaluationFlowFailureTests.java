@@ -77,7 +77,7 @@ class PaymentEvaluationFlowFailureTests {
         verifyNoMoreInteractions(evaluator);
     }
 
-    // 대역의 DENY·ERROR 응답은 판단으로 반환하며 DB 결제는 승인 전 PENDING으로 유지한다
+    // 대역의 DENY·ERROR 응답은 판단으로 반환하며 DB 결제는 승인 전 PENDING으로 유지한다 (ERROR는 승인 요청 판단, #96)
     @ParameterizedTest
     @EnumSource(
             value = FdsResult.class,
@@ -104,7 +104,7 @@ class PaymentEvaluationFlowFailureTests {
                 .isEqualTo(
                         verdict == FdsResult.DENY
                                 ? PaymentRules.NextStep.NONE
-                                : PaymentRules.NextStep.RECORD_FDS_ERROR);
+                                : PaymentRules.NextStep.REQUEST_AUTHORIZATION);
         verify(evaluator).evaluate(any());
         verifyNoMoreInteractions(evaluator);
     }

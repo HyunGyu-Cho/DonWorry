@@ -205,6 +205,7 @@ public class ReportToolService {
         }
         List<Map<String, Object>> rows = new ArrayList<>();
         int maxScore = 0;
+        int failed = 0;
         List<String> rules = new ArrayList<>();
         for (Long paymentId : asked) {
             Optional<PaymentInfo> info = paymentInfoReader.find(paymentId);
@@ -215,11 +216,16 @@ public class ReportToolService {
             row.put("ruleHits", info.map(PaymentInfo::ruleHits).orElse(List.of()));
             rows.add(row);
             maxScore = Math.max(maxScore, info.map(PaymentInfo::riskScore).orElse(0));
+            // FDS 평가가 실패해 매입 보류된 결제 (#96 F-2)
+            if ("ERROR".equals(info.map(PaymentInfo::fdsResult).orElse(null))) {
+                failed++;
+            }
             info.map(PaymentInfo::ruleHits).orElse(List.of()).stream()
                     .filter(rule -> !rules.contains(rule))
                     .forEach(rules::add);
         }
         String summary = "결제 " + rows.size() + "건 · 최고 " + maxScore + "점"
+                + (failed == 0 ? "" : " · FDS 평가 실패 " + failed + "건")
                 + (rules.isEmpty() ? "" : " · " + String.join(", ", rules));
         return new Answer(rows, summary);
     }

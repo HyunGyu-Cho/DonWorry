@@ -49,7 +49,7 @@ class PaymentAuthorizationServiceTests {
     @ParameterizedTest
     @EnumSource(
             value = FdsResult.class,
-            names = {"ALLOW", "REVIEW"})
+            names = {"ALLOW", "REVIEW", "ERROR"})
     void authorize_whenSuccessful_updatesStateAndReference(FdsResult verdict) {
         var context = context(verdict);
         var command = new AuthorizationCommand(10L, 1000L);
@@ -85,7 +85,7 @@ class PaymentAuthorizationServiceTests {
     @ParameterizedTest
     @EnumSource(
             value = FdsResult.class,
-            names = {"ALLOW", "REVIEW"})
+            names = {"ALLOW", "REVIEW", "ERROR"})
     void authorize_whenDeclined_recordsDeclineWithoutReference(FdsResult verdict) {
         var context = context(verdict);
         when(authorizer.authorize(any()))
@@ -100,20 +100,13 @@ class PaymentAuthorizationServiceTests {
         verifyNoInteractions(events);
     }
 
-    // 차단과 평가 오류에서는 승인기를 호출하지 않는다.
-    @ParameterizedTest
-    @EnumSource(
-            value = FdsResult.class,
-            names = {"DENY", "ERROR"})
-    void authorize_whenNoAuthorizationRequired_skipsAuthorizer(FdsResult verdict) {
-        var context = context(verdict);
+    // 차단에서는 승인기를 호출하지 않는다. 평가 오류는 승인 후 보류한다 (#96 F-2)
+    @Test
+    void authorize_whenDenied_skipsAuthorizer() {
+        var context = context(FdsResult.DENY);
         var result = service.authorize(context);
-        assertThat(result.status()).isEqualTo(verdict == FdsResult.DENY ? PaymentStatus.DENIED : PaymentStatus.PENDING);
-        assertThat(result.nextStep())
-                .isEqualTo(
-                        verdict == FdsResult.DENY
-                                ? PaymentRules.NextStep.NONE
-                                : PaymentRules.NextStep.RECORD_FDS_ERROR);
+        assertThat(result.status()).isEqualTo(PaymentStatus.DENIED);
+        assertThat(result.nextStep()).isEqualTo(PaymentRules.NextStep.NONE);
         assertThat(payment.getAuthorizationRef()).isNull();
         verifyNoInteractions(authorizer, events);
     }

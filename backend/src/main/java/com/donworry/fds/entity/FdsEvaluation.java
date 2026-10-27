@@ -108,6 +108,19 @@ public class FdsEvaluation {
                 .build();
     }
 
+    // 룰 계산이 실패한 평가 (#96 F-2) — 점수 없이 오류 코드만, 결제는 P5가 매입 보류로 처리한다
+    public static FdsEvaluation failed(FdsEvaluationRequest request, String errorCode, Instant evaluatedAt) {
+        return FdsEvaluation.builder()
+                .evaluationRequestId(request.evaluationRequestId())
+                .paymentId(request.paymentId())
+                .customerRef(request.customerRef())
+                .paymentRequestedAt(request.paymentRequestedAt())
+                .result(FdsResult.ERROR)
+                .evaluatedAt(evaluatedAt)
+                .errorCode(errorCode)
+                .build();
+    }
+
     public void addRuleHit(String ruleCode, FdsRuleHitOutcome outcome, int appliedScore, String ruleNameSnapshot) {
         addRuleHit(ruleCode, outcome, appliedScore, ruleNameSnapshot, null, null, null, null);
     }

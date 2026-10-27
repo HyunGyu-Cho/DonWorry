@@ -59,7 +59,10 @@ export function paymentFlowCards(
     .map((p) => ({
       key: p.casePaymentId,
       at: p.requestedAt ?? p.linkedAt,
-      badge: `직원 확인 · ${p.riskScore ?? '?'}점`,
+      badge:
+        p.fdsResult === 'ERROR'
+          ? 'FDS 평가 실패 · 직원 확인'
+          : `직원 확인 · ${p.riskScore ?? '?'}점`,
       title: p.amount === null ? '금액 확인 불가' : `${koreanWon(p.amount)} 결제`,
       rules: p.hitRuleCodes.map(ruleName),
       alone: aloneOf(p.hitRuleCodes[0]),

@@ -11,11 +11,11 @@ flowchart TD
     A["CakeShop 결제 접수"] --> B["PENDING 영속 저장"]
     B --> F["P2 FDS 평가"]
     F -->|DENY| D["DENIED · 승인 없음"]
-    F -->|ERROR 또는 기술 실패| E["승인 금지 · 오류 기록 및 복구"]
-    F -->|ALLOW 또는 REVIEW| U["모의 카드 승인"]
+    F -->|기술 실패 (평가 호출 예외)| E["승인 금지 · 오류 기록 및 복구"]
+    F -->|ALLOW · REVIEW · ERROR| U["모의 카드 승인"]
     U -->|업무 거절| N["DECLINED · Case 없음"]
     U -->|ALLOW 승인 성공| C["PENDING 유지 · CAPTURE 요청"]
-    U -->|REVIEW 승인 성공| H["HELD 저장 · HELD 이벤트"]
+    U -->|REVIEW · ERROR 승인 성공| H["HELD 저장 · HELD 이벤트"]
     H --> P["P3 Case · P4 조사 · 직원 판정"]
     P -->|ACCEPT| C2["CAPTURE 요청"]
     P -->|REJECT| V["P5 VOID 요청 영속 접수"]
@@ -35,8 +35,8 @@ flowchart TD
 | VOIDED | P5의 실제 승인 취소 성공 확인 |
 | EXPIRED | 카드 승인 만료 확인. 주문 기한 만료와 다름 |
 
-FDS의 ERROR와 기술 타임아웃은 DENIED/DECLINED가 아니다. 초기 PENDING 기록과 확인 가능한 오류를 남기며,
-최종 유효 판정을 얻기 전 승인하지 않는다. 복구·재시도 세부 기준은 C2에서 정한다. 카드 승인 기술 실패도 업무 거절 DECLINED로 바꾸지 않는다. 기존 내부 규칙의 UNKNOWN 판단과 P6 완료 이벤트 계약은 별개다.
+FDS의 ERROR와 기술 타임아웃은 DENIED/DECLINED가 아니다. ERROR(P2가 룰 계산 실패를 기록한 평가)는 #96부터 REVIEW처럼 카드 승인 후 매입 보류(HELD) → 사건으로 직원이 확인한다 — 자동 매입은 없다 ([ADR-0023](../decisions/0023-payment-fds-rules-r01-r08.md)).
+평가 호출 자체가 예외로 끝난 기술 실패는 초기 PENDING 기록을 남기고 승인하지 않는다. 복구·재시도 세부 기준은 C2에서 정한다. 카드 승인 기술 실패도 업무 거절 DECLINED로 바꾸지 않는다. 기존 내부 규칙의 UNKNOWN 판단과 P6 완료 이벤트 계약은 별개다.
 P2가 전달한 판정을 사용하며 점수 계산을 P5에 복제하지 않는다. 점수 임계값·경계는 P2 계약과 코드에서 관리한다.
 
 ALLOW의 CAPTURE에는 직원 판정·Case가 필요 없다. REVIEW 승인 실패에는 HELD·Case를 만들지 않는다.
@@ -51,7 +51,7 @@ ACCEPT 접수 이후에도 실제 매입 성공 전까지 HELD를 유지하는 �
 - [PaymentRules](../../backend/src/main/java/com/donworry/payment/service/PaymentRules.java): 저장·호출·발행 없이 다음 상태와 다음 단계를 반환하는 순수 규칙이다.
 - 입력 State는 결제 상태와 승인 사실(NOT_REQUESTED/SUCCEEDED/DECLINED/UNKNOWN)을 함께 받는다. ALLOW 승인 후의 PENDING을 신규 접수로 오인하지 않는다.
 - FDS 결과는 점수가 아닌 내부 FdsVerdict를 입력받는다. P2 DTO·승인 결과의 변환과 채택 평가 고정은 W2에서 연결한다.
-- FDS ERROR는 RECORD_FDS_ERROR, 승인 기술 실패는 UNKNOWN과 RECONCILE_AUTHORIZATION을 반환한다. 실제 오류 기록·조회·복구는 아직 수행하지 않는다.
+- FDS ERROR는 REQUEST_AUTHORIZATION(승인 후 HELD · NOTIFY_HELD, #96), 승인 기술 실패는 UNKNOWN과 RECONCILE_AUTHORIZATION을 반환한다. 실제 오류 기록·조회·복구는 아직 수행하지 않는다.
 - 직원 판정은 HELD에서 CAPTURE/VOID 요청 종류만 반환한다. 판정 후 상태·영속 접수·실행 결과는 이 메서드로 변경하지 않는다.
 - 승인된 결제·승인 불명·종료 결제에서 FDS/신규 승인 단계를 재시작하면 예외로 거절한다. 실제 요청 멱등성과 동시성은 저장 계층 작업이다.
 - State와 내부 enum은 payment 내부 구현용이다. 공유 DTO·DB 컬럼·Spring Bean 등록을 추가하지 않는다.
@@ -130,7 +130,7 @@ record PaymentEvaluationResult(
 4. 응답의 FdsResult를 switch로 P5 FdsVerdict에 명시적으로 매핑한다. 점수로 판정을 다시 계산하지 않는다.
 5. `PaymentRules.afterFds(state, verdict)`를 호출하고 원 응답과 Decision을 함께 반환한다.
 
-ALLOW·REVIEW는 PENDING 유지·REQUEST_AUTHORIZATION, DENY는 DENIED·NONE, ERROR는 PENDING 유지·RECORD_FDS_ERROR다. 오류 기록·승인 요청은 필요한 다음 단계의 판단이며 실제 저장·실행은 하지 않는다. State에는 paymentId가 없으므로 #100 연결 서비스는 같은 저장 스냅샷에서 State와 평가 입력을 구성한다.
+ALLOW·REVIEW·ERROR는 PENDING 유지·REQUEST_AUTHORIZATION, DENY는 DENIED·NONE이다 (ERROR는 #96부터, 이전에는 RECORD_FDS_ERROR). 오류 기록·승인 요청은 필요한 다음 단계의 판단이며 실제 저장·실행은 하지 않는다. State에는 paymentId가 없으므로 #100 연결 서비스는 같은 저장 스냅샷에서 State와 평가 입력을 구성한다.
 
 #### #100 최초 저장·평가 흐름 연결 설계와 구현
 
@@ -169,7 +169,7 @@ record PaymentEvaluationFlowResult(
 
 연결 흐름 전체를 쓰기 트랜잭션으로 감싸지 않는다. `PaymentEvaluationFlowService.createAndEvaluate()`는 `NOT_SUPPORTED`로 호출자 트랜잭션을 일시 중단한다. 최초 저장은 `REQUIRES_NEW`, P2 평가는 자체 트랜잭션에서 처리하도록 구성했다. 통합 테스트에서 평가 직전 최초 저장의 커밋과 호출자 트랜잭션 중단, 호출자 롤백 후 결제·실제 P2 평가 보존을 확인했다. 기존 P2는 기본 전파의 `@Transactional`을 사용하므로 연결 서비스에 어노테이션을 생략하는 것만으로는 호출자의 트랜잭션을 차단할 수 없다.
 
-P2가 ERROR 응답을 반환하면 해당 응답과 RECORD_FDS_ERROR 판단을 정상 반환한다. 호출 예외·null 응답·요청 UUID 불일치는 기존 평가 서비스의 예외를 전달하며, 자동 재시도하지 않는다. 평가 실패에도 최초 PENDING은 남는다. 예외 발생 시 결제 ID를 호출자에게 반환하는 복구 계약은 이번 범위에 없으므로, 이 메서드를 그대로 외부 재시도 API로 노출하지 않는다.
+P2가 ERROR 응답을 반환하면 해당 응답과 REQUEST_AUTHORIZATION 판단을 정상 반환한다 (#96). 호출 예외·null 응답·요청 UUID 불일치는 기존 평가 서비스의 예외를 전달하며, 자동 재시도하지 않는다. 평가 실패에도 최초 PENDING은 남는다. 예외 발생 시 결제 ID를 호출자에게 반환하는 복구 계약은 이번 범위에 없으므로, 이 메서드를 그대로 외부 재시도 API로 노출하지 않는다.
 
 `createAndEvaluate()`는 DENY의 DENIED 판단을 반환하지만 DB 결제 상태를 변경하지 않는다. 이 평가 전용 메서드는 승인 실행·오류 이력 저장·이벤트 발행을 수행하지 않는다. 동일 입력으로 다시 호출하면 별도 결제가 생성되며, 주문 중복 방지·UUID 영속 보존·재시작 후 복구는 후속 계약으로 남긴다. #95에서 합의한 P2의 동일 요청 UUID 입력 충돌 검증도 P2 후속 과제로 유지한다.
 
@@ -179,7 +179,7 @@ P2가 ERROR 응답을 반환하면 해당 응답과 RECORD_FDS_ERROR 판단을 �
 
 #### #118 모의 승인·상태 저장 연결
 
-`createAndAuthorize(input)`는 기존 생성·평가 helper의 문맥을 별도 `PaymentAuthorizationService`에 넘긴다. 행 잠금과 REQUIRES_NEW 아래 승인 전 PENDING을 확인하고 DENY→DENIED, 업무 거절→DECLINED, ALLOW 성공→승인 참조가 있는 PENDING, REVIEW 성공→HELD를 저장한다. ERROR는 승인 없이 PENDING을 유지한다.
+`createAndAuthorize(input)`는 기존 생성·평가 helper의 문맥을 별도 `PaymentAuthorizationService`에 넘긴다. 행 잠금과 REQUIRES_NEW 아래 승인 전 PENDING을 확인하고 DENY→DENIED, 업무 거절→DECLINED, ALLOW 성공→승인 참조가 있는 PENDING, REVIEW · ERROR 성공→HELD를 저장한다 (ERROR는 #96부터).
 
 기본 모의 승인기는 모든 유효 입력에 성공하며 외부 금융 부작용이 없다. 기술 실패는 롤백·예외 전달로 처리하며 기존 순수 규칙의 UNKNOWN 분기로 변환하지 않는다. 처리된 결제는 재승인 대신 충돌 예외로 거절한다. #118에서는 REQUEST_CAPTURE·NOTIFY_HELD가 반환 판단에만 사용됐다. #122에서는 REQUEST_CAPTURE에 따라 같은 승인 트랜잭션 안에서 CaptureRequested를 발행한다. NOTIFY_HELD 통지는 후속이다. 반환값은 승인 단계 스냅샷이며 비동기 완료 반영 후의 최신 상태가 아니다.
 

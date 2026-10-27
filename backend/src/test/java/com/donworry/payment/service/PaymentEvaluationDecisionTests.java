@@ -34,7 +34,7 @@ class PaymentEvaluationDecisionTests {
         "ALLOW,PENDING,REQUEST_AUTHORIZATION",
         "REVIEW,PENDING,REQUEST_AUTHORIZATION",
         "DENY,DENIED,NONE",
-        "ERROR,PENDING,RECORD_FDS_ERROR"
+        "ERROR,PENDING,REQUEST_AUTHORIZATION"
     })
     void evaluateAndDecide_whenValidResponse_returnsEvaluationAndDecision(
             FdsResult result, PaymentStatus status, PaymentRules.NextStep nextStep) {

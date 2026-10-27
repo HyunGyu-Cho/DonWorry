@@ -119,12 +119,13 @@ class PaymentAuthorizationPersistenceTests {
         verify(authorizer).authorize(new AuthorizationCommand(result.paymentId(), 600_000L));
     }
 
-    // DENY·ERROR 문맥 대역으로 실제 DB 반영을 확인하되 승인기는 호출하지 않는다.
+    // DENY 문맥은 승인기를 호출하지 않고, ERROR 문맥은 승인 후 매입 보류로 커밋한다 (#96 F-2)
     @ParameterizedTest
     @EnumSource(
             value = FdsResult.class,
             names = {"DENY", "ERROR"})
-    void authorize_withNonApprovalVerdict_persistsExpectedState(FdsResult verdict) {
+    void authorize_withDenyOrError_persistsExpectedState(FdsResult verdict) {
+        when(authorizer.authorize(any())).thenAnswer(invocation -> success(invocation.getArgument(0)));
         var original = evaluatedContext();
         var response = new FdsEvaluationResponse(
                 original.evaluationRequestId(),
@@ -139,11 +140,16 @@ class PaymentAuthorizationPersistenceTests {
                 new PaymentEvaluationResult(
                         response, original.evaluationResult().decision()));
         authorization.authorize(context);
-        assertStored(
-                context.payment().paymentId(),
-                verdict == FdsResult.DENY ? PaymentStatus.DENIED : PaymentStatus.PENDING,
-                null);
-        verifyNoInteractions(authorizer);
+        if (verdict == FdsResult.DENY) {
+            assertStored(context.payment().paymentId(), PaymentStatus.DENIED, null);
+            verifyNoInteractions(authorizer);
+        } else {
+            assertStored(
+                    context.payment().paymentId(),
+                    PaymentStatus.HELD,
+                    "MOCK-AUTH-" + context.payment().paymentId());
+            verify(authorizer).authorize(any());
+        }
     }
 
     // 업무 거절을 커밋한 결제는 같은 문맥을 다시 받아도 재승인하지 않는다.

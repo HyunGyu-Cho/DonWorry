@@ -212,7 +212,18 @@ def _payment_fraud(results: Results) -> dict[str, object]:
             "source": "get_fds_evidence",
         }
         for code in rules
-    ] or [
+    ]
+    # FDS 평가가 실패해 매입 보류된 결제 (#96 F-2) — 점수가 없으니 "0점"으로 쓰지 않는다
+    if any(r.get("fdsResult") == "ERROR" for r in evidence):
+        risk_points.insert(
+            0,
+            {
+                "title": "FDS 평가 실패로 보류",
+                "detail": "점수를 계산하지 못해 매입을 멈췄습니다. 직원이 직접 판단합니다",
+                "source": "get_fds_evidence",
+            },
+        )
+    risk_points = risk_points or [
         {
             "title": f"FDS 점수 {score}점",
             "detail": "적중한 탐지 규칙은 없지만 점수가 보류 구간입니다",
@@ -392,5 +403,6 @@ def _rule_detail(code: str, evidence: list[dict[str, object]], amounts: dict) ->
             target = (
                 f"{amount:,}원 결제" if isinstance(amount, int) else f"결제 {row.get('paymentId')}"
             )
-            parts.append(f"{target} · {row.get('riskScore')}점")
+            score = row.get("riskScore")
+            parts.append(f"{target} · {score}점" if score is not None else f"{target} · 점수 없음")
     return ", ".join(parts) or "적중 결제 정보 없음"

@@ -125,6 +125,33 @@ class FdsEvaluationServiceTests {
     }
 
     @Test
+    // 룰 계산 중 예외가 나도 결제 흐름에 예외를 던지지 않고 ERROR 평가(점수 없음 · 오류 코드)를 남긴다 (#96 F-2)
+    void FDS평가_룰계산중예외_ERROR평가저장_예외없음() {
+        var request = request(5L, 650_000L, Instant.parse("2026-10-27T01:00:00Z"));
+        var error = com.donworry.fds.api.FdsEvaluationResponse.builder()
+                .evaluationRequestId(request.evaluationRequestId())
+                .evaluationId(9L)
+                .result(FdsResult.ERROR)
+                .evaluatedAt(Instant.parse("2026-10-27T01:00:01Z"))
+                .errorCode(FdsEvaluationService.RULE_EVALUATION_FAILED)
+                .build();
+        when(transactionService.evaluate(request)).thenThrow(new NumberFormatException("broken threshold"));
+        when(transactionService.recordError(request, FdsEvaluationService.RULE_EVALUATION_FAILED))
+                .thenReturn(error);
+
+        assertThat(evaluator.evaluate(request)).isSameAs(error);
+
+        // 저장되는 ERROR 평가는 점수 · 원점수가 없고 오류 코드가 있다
+        stubSave(9L);
+        var recorded = transactionEvaluator.recordError(request, FdsEvaluationService.RULE_EVALUATION_FAILED);
+        assertThat(recorded.result()).isEqualTo(FdsResult.ERROR);
+        assertThat(recorded.riskScore()).isNull();
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        assertThat(evaluationCaptor.getValue().getRawScore()).isNull();
+        assertThat(evaluationCaptor.getValue().getErrorCode()).isEqualTo("FDS_RULE_EVALUATION_FAILED");
+    }
+
+    @Test
     // 같은 요청 ID로 재호출하면 기존 평가 결과를 반환한다.
     void evaluate_existingRequestId_returnsStoredEvaluation() {
         var request = request(1L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"));

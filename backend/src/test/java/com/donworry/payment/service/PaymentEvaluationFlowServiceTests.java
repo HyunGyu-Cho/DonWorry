@@ -80,9 +80,8 @@ class PaymentEvaluationFlowServiceTests {
         assertThat(decision.nextStep())
                 .isEqualTo(
                         switch (verdict) {
-                            case ALLOW, REVIEW -> PaymentRules.NextStep.REQUEST_AUTHORIZATION;
+                            case ALLOW, REVIEW, ERROR -> PaymentRules.NextStep.REQUEST_AUTHORIZATION;
                             case DENY -> PaymentRules.NextStep.NONE;
-                            case ERROR -> PaymentRules.NextStep.RECORD_FDS_ERROR;
                         });
     }
 

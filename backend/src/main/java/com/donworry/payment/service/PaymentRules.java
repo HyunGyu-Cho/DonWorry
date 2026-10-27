@@ -37,7 +37,6 @@ public final class PaymentRules {
     public enum NextStep {
         NONE,
         REQUEST_AUTHORIZATION,
-        RECORD_FDS_ERROR,
         NOTIFY_HELD,
         REQUEST_CAPTURE,
         REQUEST_VOID,
@@ -79,10 +78,10 @@ public final class PaymentRules {
         requireUnapprovedPending(state);
         Objects.requireNonNull(verdict, "verdict");
         return switch (verdict) {
-            case ALLOW, REVIEW -> new Decision(state, NextStep.REQUEST_AUTHORIZATION);
+            // 평가 실패(ERROR)도 승인은 받고 매입만 보류해 직원이 확인한다 — 자동 매입 없음 (#96 F-2, ADR-0023)
+            case ALLOW, REVIEW, ERROR -> new Decision(state, NextStep.REQUEST_AUTHORIZATION);
             case DENY ->
                 new Decision(new State(PaymentStatus.DENIED, AuthorizationStatus.NOT_REQUESTED), NextStep.NONE);
-            case ERROR -> new Decision(state, NextStep.RECORD_FDS_ERROR);
         };
     }
 
@@ -91,12 +90,12 @@ public final class PaymentRules {
         requireUnapprovedPending(state);
         Objects.requireNonNull(verdict, "verdict");
         Objects.requireNonNull(outcome, "outcome");
-        if (verdict != FdsVerdict.ALLOW && verdict != FdsVerdict.REVIEW) {
-            throw new IllegalArgumentException("ALLOW 또는 REVIEW일 때만 승인 결과를 처리할 수 있습니다");
+        if (verdict == FdsVerdict.DENY) {
+            throw new IllegalArgumentException("DENY는 승인 요청을 하지 않으므로 승인 결과를 처리할 수 없습니다");
         }
         return switch (outcome) {
             case SUCCEEDED ->
-                verdict == FdsVerdict.REVIEW
+                verdict != FdsVerdict.ALLOW
                         ? new Decision(
                                 new State(PaymentStatus.HELD, AuthorizationStatus.SUCCEEDED), NextStep.NOTIFY_HELD)
                         : new Decision(
