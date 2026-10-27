@@ -152,7 +152,7 @@ GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'%';
 > GRANT ALL PRIVILEGES ON donworry_personal.* TO 'donworry'@'127.0.0.1';
 > ```
 >
-> 3절의 개인 설정 파일에 `url: jdbc:mariadb://localhost:3307/donworry_personal`을 적습니다.
+> 3절의 `backend/.env`에 `DONWORRY_DB_NAME=donworry_personal`을 적습니다.
 
 테이블은 백엔드를 실행할 때 Flyway가 `backend/src/main/resources/db/migration/`의 파일을 순서대로 적용해 만듭니다.
 테이블 추가 순서, 로컬 DB 초기화, 오류 해결은 **[Flyway 문서](docs/flyway/README.md)** 를 봅니다.
@@ -160,23 +160,25 @@ GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'%';
 > **Flyway 전환(#23) 이전에 앱을 띄운 적이 있다면** `Found non-empty schema` 에러로 기동이 멈춥니다. 한 번 초기화가 필요합니다.
 > 직접 설치한 MariaDB를 쓰고 있다면 `docker compose down -v`로는 해결되지 않습니다. 앱이 어느 DB에 붙었는지부터 확인합니다 → [작업 가이드 2·3절](docs/flyway/05-guide.md#2-내-앱이-어느-db에-붙었는지-확인)
 
-### 3. 개인 설정 (필요할 때만)
+### 3. 설정 파일 (.env)
 
-내 PC의 DB가 기본값(`localhost:3307` / `donworry` / `donworry`)과 다르거나, 2절처럼 개인용 DB(`donworry_personal`)를 쓸 때 개인 설정 파일을 만듭니다. 이 파일은 Git에 올라가지 않습니다.
+폴더마다 예시 파일을 복사해 `.env`로 씁니다. `.env`는 Git에 올라가지 않고, 테스트는 읽지 않습니다 (#84).
 
 ```powershell
 # Windows PowerShell
-cd backend
-copy src\main\resources\application-local.yml.example src\main\resources\application-local.yml
+copy backend\.env.example backend\.env
+copy ai-server\.env.example ai-server\.env
+copy frontend\.env.example frontend\.env
 ```
 
 ```bash
 # macOS / Linux
-cd backend
-cp src/main/resources/application-local.yml.example src/main/resources/application-local.yml
+cp backend/.env.example backend/.env && cp ai-server/.env.example ai-server/.env && cp frontend/.env.example frontend/.env
 ```
 
-바꿀 값(포트·비밀번호)만 남기고 나머지 줄은 지워도 됩니다.
+DB가 기본값(`localhost:3307` / `donworry` / `donworry`)과 다르면 `backend/.env`의 `DONWORRY_DB_*`를 바꿉니다.
+AI 조사를 함께 볼 때는 서비스 키를 두 곳(`backend/.env`, `ai-server/.env`)에 같은 값으로 넣습니다.
+시연 전체 순서는 **[시연 켜는 법](docs/demo-run.md)** 을 봅니다.
 
 ### 4. backend 실행
 
@@ -244,8 +246,8 @@ cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 
 ### 자주 발생하는 문제
 
-- **`docker compose up`이 포트 충돌로 실패** — PC에 직접 설치한 MariaDB나 MySQL이 3307을 쓰고 있습니다. 그 서비스를 중지하거나, 직접 설치한 DB를 쓰고 `application-local.yml`로 접속 정보를 맞춥니다.
-- **`Access denied for user 'donworry'@'localhost'`** — DB 계정 비밀번호가 기본값과 다릅니다. `application-local.yml`에 실제 비밀번호를 넣습니다.
+- **`docker compose up`이 포트 충돌로 실패** — PC에 직접 설치한 MariaDB나 MySQL이 3307을 쓰고 있습니다. 그 서비스를 중지하거나, 직접 설치한 DB를 쓰고 `backend/.env`의 `DONWORRY_DB_*`로 접속 정보를 맞춥니다.
+- **`Access denied for user 'donworry'@'localhost'`** — DB 계정 비밀번호가 기본값과 다릅니다. `backend/.env`의 `DONWORRY_DB_PASSWORD`에 실제 비밀번호를 넣습니다.
 - **3306에 접속했는데 MariaDB가 아님** — 한 PC에 MySQL과 MariaDB가 함께 있으면 MySQL이 3306을 차지합니다. MariaDB 접속 후 `SHOW VARIABLES LIKE 'port';`로 실제 포트를 확인합니다.
 - **Flyway·DB 초기화 관련 오류** (`Found non-empty schema`, `checksum mismatch`, `Schema-validation`, `Unknown server host '127'` 등) — [Flyway 문제 해결](docs/flyway/06-troubleshooting.md)
 - **`Unable to delete directory ...build\test-results`** — OneDrive가 `build/` 폴더를 잠근 경우입니다. `backend/build`를 지우고 다시 실행하고, 반복되면 프로젝트를 OneDrive 밖으로 옮깁니다.
@@ -253,6 +255,8 @@ cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 - **첫 backend CI가 오래 걸림** — 검사는 1분 이내이고 나머지는 캐시 업로드 시간입니다. 자세한 내용은 [CI 문제 해결](docs/ci/06-troubleshooting.md#a2-첫-실행이-5분-넘게-걸림).
 
 ## Quick Start
+
+> 실제 서버로 시연 시나리오 ①을 끝까지 보려면 **[시연 켜는 법](docs/demo-run.md)** 을 따라 합니다 (서버 3개 · `.env`).
 
 설치를 마쳤다면 다음 흐름으로 지금 있는 화면을 확인할 수 있습니다. 업무 기능이 구현되면 이 절을 보강합니다.
 

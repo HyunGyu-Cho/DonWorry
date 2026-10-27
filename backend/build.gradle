@@ -71,6 +71,8 @@ tasks.withType(Test).configureEach {
     environment = environment.findAll { name, value -> !name.toUpperCase().startsWith('DONWORRY_') }
     // 시연용 모의 카드사 처리 시간(기본 5초)은 테스트에서 기다리지 않는다 (#82)
     systemProperty 'donworry.demo.card-company-delay', 'PT0S'
+    // 내 PC의 backend/.env를 읽지 않는다 — 테스트 결과가 PC마다 달라지지 않게 (#84)
+    systemProperty 'donworry.env-file', 'build/tests-read-no-env-file'
 }
 
 // check는 DB 없이 돈다. Docker가 필요한 테스트는 mariaDbTest로 분리

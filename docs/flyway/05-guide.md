@@ -111,7 +111,7 @@ Database: jdbc:mariadb://localhost:3307/donworry (MariaDB 12.3)   ← 직접 설
 | 11.8 | Docker compose | [3-1](#3-1-docker-compose를-쓰는-경우) |
 | 그 외 | 직접 설치한 MariaDB | [3-2](#3-2-직접-설치한-mariadb를-쓰는-경우-windows) |
 
-`backend/src/main/resources/application-local.yml`(개인 설정, Git 제외)이 있으면 그 접속 정보가 우선합니다.
+`backend/.env`(개인 설정, Git 제외)에 `DONWORRY_DB_*`가 있으면 그 접속 정보가 우선합니다 (#84).
 둘 다 3307을 쓰면 어느 쪽에 붙을지 헷갈리므로, 쓰지 않는 쪽은 꺼 둡니다 (Docker 쪽은 `docker compose down`).
 
 ## 3. 로컬 DB 초기화

@@ -2,6 +2,9 @@ import os
 
 import pytest
 
+# 내 PC의 ai-server/.env를 읽지 않는다 — 앱을 import하기 전에 정해야 해서 맨 위에서 (#84)
+os.environ["AI_SERVER_ENV_FILE"] = ""
+
 
 # 테스트가 실행한 창의 환경 변수(AI_SERVER_*)를 읽지 않게 한다
 # 시연하려고 넣어 둔 Spring 주소 · 가짜 AI 실패 횟수가 남아 있으면 결과가 달라진다 (#72에서 발견)

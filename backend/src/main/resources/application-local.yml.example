@@ -1,7 +1,0 @@
-# 내 PC가 기본값(3307 / donworry / donworry)과 다를 때만 채운다
-# 이 파일을 복사해 application-local.yml 로 이름을 바꾼다 (git 제외)
-spring:
-  datasource:
-    url: jdbc:mariadb://localhost:3306/donworry
-    username: donworry
-    password: 내비밀번호
