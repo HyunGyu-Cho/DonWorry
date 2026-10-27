@@ -25,6 +25,8 @@ import org.springframework.stereotype.Service;
 public class ReportToolService {
 
     static final String NOT_READY_NOTE = "데이터 준비 전";
+    // 과거 결제 목록은 최근 10건까지 — AI가 읽는 길이 (요약 · 평균 · 카드별 건수는 이전 결제 전부로)
+    static final int HISTORY_LIMIT = 10;
 
     private final ReportTransitions reportTransitions;
     private final AttemptRegistry attemptRegistry;
@@ -64,6 +66,8 @@ public class ReportToolService {
             case GET_CASE_PAYMENTS -> casePayments(target);
             case GET_FDS_EVIDENCE -> fdsEvidence(target, args);
             case GET_ORDER_CONTEXT -> orderContext(target);
+            case GET_PAYMENT_HISTORY -> paymentHistory(target);
+            case GET_PAYMENT_AUTHENTICATION -> paymentAuthentication(target);
             default -> new Answer(List.of(), NOT_READY_NOTE);
         };
     }
@@ -105,6 +109,91 @@ public class ReportToolService {
                     .orElse("응답 없음"));
         }
         return new Answer(rows, "주문 " + rows.size() + "건 · 구매자 " + String.join(", ", answers));
+    }
+
+    // 같은 고객의 이 결제 이전 결제 (#90) — 요약은 전부, 목록은 최근 10건. 지난 결제 번호는 넣지 않는다 (사건 결제와 헷갈림)
+    private Answer paymentHistory(ReportTarget target) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        List<String> summaries = new ArrayList<>();
+        for (Long paymentId : reportTransitions.casePaymentIds(target.caseId())) {
+            Optional<PaymentLookup.CustomerHistory> found = paymentLookup.customerHistory(paymentId, HISTORY_LIMIT);
+            if (found.isEmpty()) {
+                continue;
+            }
+            PaymentLookup.CustomerHistory history = found.get();
+            Long amount =
+                    paymentInfoReader.find(paymentId).map(PaymentInfo::amount).orElse(null);
+            Double ratio = ratio(amount, history.capturedAverageAmount());
+            List<Map<String, Object>> recent = new ArrayList<>();
+            for (PaymentLookup.PastPayment past : history.recent()) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("amount", past.amount());
+                item.put("orderTitle", past.orderTitle());
+                item.put("cardLast4", past.cardLast4());
+                item.put("status", past.status());
+                item.put("requestedAt", String.valueOf(past.requestedAt()));
+                recent.add(item);
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("paymentId", String.valueOf(paymentId));
+            row.put("amount", amount);
+            row.put("previousPaymentCount", history.totalCount());
+            row.put(
+                    "firstPaymentAt",
+                    history.firstPaymentAt() == null ? null : String.valueOf(history.firstPaymentAt()));
+            row.put("capturedCount", history.capturedCount());
+            row.put("capturedAverageAmount", history.capturedAverageAmount());
+            row.put("capturedMaxAmount", history.capturedMaxAmount());
+            row.put("amountToAverageRatio", ratio);
+            row.put("capturedCountByCardLast4", history.capturedCountByCard());
+            row.put("recentPayments", recent);
+            rows.add(row);
+            summaries.add(
+                    history.capturedCount() == 0
+                            ? "이전 결제 " + history.totalCount() + "건 · 완료된 결제 없음"
+                            : "이전 완료 결제 " + history.capturedCount() + "건 · 평균 " + won(history.capturedAverageAmount())
+                                    + " · 최고 " + won(history.capturedMaxAmount())
+                                    + (ratio == null ? "" : " · 이번 " + ratio + "배"));
+        }
+        return new Answer(rows, summaries.isEmpty() ? "고객 정보 없음" : String.join(", ", summaries));
+    }
+
+    // 이 결제의 카드 (#90) — 끝자리 · 국가 · 이 결제 전 이 카드로 완료된 결제 수 · 승인 번호. 카드 지문은 넣지 않는다
+    private Answer paymentAuthentication(ReportTarget target) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        List<String> summaries = new ArrayList<>();
+        for (Long paymentId : reportTransitions.casePaymentIds(target.caseId())) {
+            Optional<PaymentLookup.CardUsage> found = paymentLookup.cardUsage(paymentId);
+            if (found.isEmpty()) {
+                continue;
+            }
+            PaymentLookup.CardUsage card = found.get();
+            Integer completed = card.completedPaymentsWithCard();
+            boolean authorized = card.authorizationRef() != null;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("paymentId", String.valueOf(paymentId));
+            row.put("cardLast4", card.cardLast4());
+            row.put("cardCountry", card.cardCountry());
+            row.put("completedPaymentsWithCardBefore", completed);
+            row.put("firstUseOfCard", completed == null ? null : completed == 0);
+            row.put("authorized", authorized);
+            row.put("authorizationRef", card.authorizationRef());
+            rows.add(row);
+            String usage = completed == null
+                    ? "카드 이력 모름"
+                    : "이 카드로 완료 " + completed + "건" + (completed == 0 ? "(처음 쓰는 카드)" : "");
+            summaries.add("카드 " + (card.cardLast4() == null ? "모름" : card.cardLast4()) + " · " + usage + " · "
+                    + (authorized ? "승인됨" : "승인 전"));
+        }
+        return new Answer(rows, summaries.isEmpty() ? "카드 정보 없음" : String.join(", ", summaries));
+    }
+
+    // 이번 금액 ÷ 평균, 소수 한 자리. 평균을 모르면 null
+    private static Double ratio(Long amount, Long average) {
+        if (amount == null || average == null || average == 0) {
+            return null;
+        }
+        return Math.round(amount * 10.0 / average) / 10.0;
     }
 
     // paymentIds를 주면 그 결제만 (사건 결제가 아니면 거절), 없으면 사건 결제 전부
