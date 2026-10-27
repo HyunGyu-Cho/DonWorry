@@ -39,7 +39,12 @@ def check_grounding(
     draft: ReportDraft, messages: list[LlmMessage], payment_ids: list[int]
 ) -> GroundingResult:
     results = received(messages)
-    ready = {name for name, body in results.items() if body.get("ready") is True}
+    # 증거 수집 끝 신호(#94)는 증거가 아니다
+    ready = {
+        name
+        for name, body in results.items()
+        if body.get("ready") is True and name != "finish_evidence"
+    }
     numbers, counts = _evidence_numbers(results)
     result = GroundingResult()
 

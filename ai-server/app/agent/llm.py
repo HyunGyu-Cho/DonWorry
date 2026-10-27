@@ -79,6 +79,9 @@ class MockLlmClient:
         for name in TOOL_PLAN[case_type]:
             if name in offered and name not in called:
                 return LlmReply(tool_calls=[ToolCall(name=name)])
+        # 정해진 창구를 다 불렀으면 증거 수집 끝을 알린다 (#94) — 진짜 AI처럼
+        if "finish_evidence" in offered and "finish_evidence" not in called:
+            return LlmReply(tool_calls=[ToolCall(name="finish_evidence")])
         answered = sum(1 for m in messages if m.role == "assistant" and not m.tool_calls)
         draft = compose_answer(case_type, _tool_results(messages), _payment_ids(messages))
         if answered < self.invalid_answers:

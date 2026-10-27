@@ -71,7 +71,8 @@ def test_realClient_runsInvestigation_withToolCallAndFencedJson() -> None:
     assert tools.calls == ["get_fds_evidence"]
     first, second = fake.bodies
     assert first["model"] == "qwen2.5:7b" and first["stream"] is False
-    assert [t["function"]["name"] for t in first["tools"]] == [s.name for s in TOOL_SPECS]
+    offered = [t["function"]["name"] for t in first["tools"]]
+    assert offered == [*(s.name for s in TOOL_SPECS), "finish_evidence"]
     # 창구 결과는 AI가 붙인 호출 번호와 짝지어 돌려보낸다
     assistant, tool = second["messages"][-2:]
     assert assistant["tool_calls"][0]["id"] == "call_a"
@@ -208,3 +209,44 @@ def test_promptExample_passesValidation(case_type: str) -> None:
     assert draft.report_type == case_type
     if case_type == "PAYMENT_FRAUD":
         assert f'"paymentId": "{PAYMENT}"' in example
+
+
+# AI가 증거 수집 끝(finish_evidence)을 부르면 1차 보고서부터 창구 없이 모양을 고정해 묻는다 (#94)
+# 증거 수집 끝은 Spring에 보내지 않고, 창구 횟수(max_tool_calls)에도 세지 않는다
+@pytest.mark.parametrize("together", [False, True])
+def test_finishEvidence_locksFirstReport(together: bool) -> None:
+    bodies: list[dict[str, object]] = []
+
+    def call(call_id: str, name: str) -> dict[str, object]:
+        return {"id": call_id, "type": "function", "function": {"name": name, "arguments": "{}"}}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        body = json.loads(req.content)
+        bodies.append(body)
+        tools_seen = [m for m in body["messages"] if m["role"] == "tool"]
+        if "response_format" in body:
+            evidence = json.loads(tools_seen[0]["content"])
+            draft = compose_answer("PAYMENT_FRAUD", {"get_fds_evidence": evidence}, [PAYMENT])
+            return reply({"role": "assistant", "content": json.dumps(draft, ensure_ascii=False)})
+        if together:
+            calls = [call("a", "get_fds_evidence"), call("b", "finish_evidence")]
+        elif not tools_seen:
+            calls = [call("a", "get_fds_evidence")]
+        else:
+            calls = [call("b", "finish_evidence")]
+        return reply({"role": "assistant", "content": "", "tool_calls": calls})
+
+    tools = FakeTools()
+    agent = InvestigationAgent(client(handler))
+    service = InvestigationService(agent, tools=tools, max_tool_calls=1)
+    result = asyncio.run(service._investigate(request()))
+
+    assert result.status == InvestigationStatus.SUCCEEDED, result.error
+    assert tools.calls == ["get_fds_evidence"]
+    report_ask = bodies[-1]
+    assert "tools" not in report_ask and "response_format" in report_ask
+    assert all("response_format" not in body for body in bodies[:-1])
+    details = [s.detail for s in result.steps]
+    assert details[-3:] == ["AI 판단 — 보고서 작성 (1차)", "구조 검증 통과", "근거 검사 통과"]
+    if not together:
+        assert "AI 판단 — 증거 수집 끝" in details
