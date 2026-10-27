@@ -4,6 +4,7 @@ import com.donworry.investigation.report.dto.ToolCallRequest;
 import com.donworry.investigation.report.dto.ToolResponse;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
+import com.donworry.payment.api.PaymentLookup;
 import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -29,6 +30,7 @@ public class ReportToolService {
     private final AttemptRegistry attemptRegistry;
     private final PaymentInfoReader paymentInfoReader;
     private final ReportStepRecorder reportStepRecorder;
+    private final PaymentLookup paymentLookup;
 
     public ToolResponse call(String toolName, ToolCallRequest request) {
         ReportTool tool =
@@ -61,6 +63,7 @@ public class ReportToolService {
         return switch (tool) {
             case GET_CASE_PAYMENTS -> casePayments(target);
             case GET_FDS_EVIDENCE -> fdsEvidence(target, args);
+            case GET_ORDER_CONTEXT -> orderContext(target);
             default -> new Answer(List.of(), NOT_READY_NOTE);
         };
     }
@@ -81,6 +84,27 @@ public class ReportToolService {
             total += info.map(PaymentInfo::amount).orElse(0L);
         }
         return new Answer(rows, "결제 " + rows.size() + "건 · 합계 " + won(total));
+    }
+
+    // 주문 이름 · 구매자 본인 확인 응답 (#82) — 배송 · 픽업은 CakeShop 연동(2-29)에서
+    private Answer orderContext(ReportTarget target) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        List<String> answers = new ArrayList<>();
+        for (Long paymentId : reportTransitions.casePaymentIds(target.caseId())) {
+            Optional<PaymentInfo> info = paymentInfoReader.find(paymentId);
+            Optional<PaymentLookup.BuyerAnswer> buyer = paymentLookup.latestBuyerAnswer(paymentId);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("paymentId", String.valueOf(paymentId));
+            row.put("orderTitle", info.map(PaymentInfo::orderTitle).orElse(null));
+            row.put("buyerAnswer", buyer.map(PaymentLookup.BuyerAnswer::answer).orElse(null));
+            row.put(
+                    "respondedAt",
+                    buyer.map(b -> String.valueOf(b.respondedAt())).orElse(null));
+            rows.add(row);
+            answers.add(buyer.map(b -> "NOT_MINE".equals(b.answer()) ? "결제하지 않았어요" : "제가 결제했어요")
+                    .orElse("응답 없음"));
+        }
+        return new Answer(rows, "주문 " + rows.size() + "건 · 구매자 " + String.join(", ", answers));
     }
 
     // paymentIds를 주면 그 결제만 (사건 결제가 아니면 거절), 없으면 사건 결제 전부

@@ -6,7 +6,14 @@ import lombok.Builder;
 
 @Builder
 public record PaymentEvaluationInput(
-        UUID evaluationRequestId, Long paymentId, String customerRef, long amount, Instant paymentRequestedAt) {
+        UUID evaluationRequestId,
+        Long paymentId,
+        String customerRef,
+        long amount,
+        Instant paymentRequestedAt,
+        // FDS 입력 (#82) — 고객 평균 매입 금액 · 이 카드로 매입까지 끝낸 결제 수
+        Long customerAverageAmount,
+        Integer cardCompletedPayments) {
 
     public PaymentEvaluationInput {
         if (evaluationRequestId == null) {

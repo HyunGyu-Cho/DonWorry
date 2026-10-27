@@ -32,7 +32,9 @@ class FdsEvaluationQueryServiceTests {
     @Test
     void list_resultFilter_returnsMatchingEvaluationPage() {
         var review = evaluation(101L, FdsResult.REVIEW);
-        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        var queryService = new FdsEvaluationQueryService(
+                evaluationRepository,
+                tools.jackson.databind.json.JsonMapper.builder().build());
         given(evaluationRepository.findAll(
                         org.mockito.ArgumentMatchers.<Specification<FdsEvaluation>>any(),
                         org.mockito.ArgumentMatchers.any(Pageable.class)))
@@ -64,7 +66,9 @@ class FdsEvaluationQueryServiceTests {
                 "{\"amount\":150000}",
                 null,
                 null);
-        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        var queryService = new FdsEvaluationQueryService(
+                evaluationRepository,
+                tools.jackson.databind.json.JsonMapper.builder().build());
         given(evaluationRepository.findById(1L)).willReturn(Optional.of(evaluation));
         given(evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(101L)).willReturn(List.of(evaluation));
 
@@ -83,7 +87,9 @@ class FdsEvaluationQueryServiceTests {
     // 없는 평가 ID는 조회 실패 예외를 반환한다.
     @Test
     void detail_missingEvaluation_throwsNotFoundException() {
-        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        var queryService = new FdsEvaluationQueryService(
+                evaluationRepository,
+                tools.jackson.databind.json.JsonMapper.builder().build());
         given(evaluationRepository.findById(999L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> queryService.detail(999L)).isInstanceOf(FdsEvaluationNotFoundException.class);

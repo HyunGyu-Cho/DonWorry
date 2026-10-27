@@ -3,6 +3,7 @@ package com.donworry.investigation.controller;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
+import com.donworry.investigation.dto.InvestigationViewDtos.HandoffRowResponse;
 import com.donworry.investigation.service.CaseDecisionService;
 import com.donworry.investigation.service.CaseQueryService;
 import com.donworry.investigation.service.CaseReportService;
@@ -29,6 +30,12 @@ public class SecurityCaseController {
     @GetMapping
     public List<CaseSummaryResponse> list(@RequestParam(required = false) Long merchantId) {
         return caseQueryService.list(merchantId);
+    }
+
+    // 조치 센터 — 모든 사건의 금융 조치 인계, 최근 요청 먼저 (#82). 고정 경로라 /{caseId}보다 먼저 잡힌다
+    @GetMapping("/handoffs")
+    public List<HandoffRowResponse> handoffs() {
+        return caseQueryService.handoffs();
     }
 
     @GetMapping("/{caseId}")

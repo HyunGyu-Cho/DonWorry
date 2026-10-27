@@ -1,9 +1,11 @@
 package com.donworry.payment.service;
 
+import com.donworry.payment.api.PaymentHeld;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentRepository;
 import com.donworry.settlement.api.CaptureRequested;
+import java.time.Instant;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -38,8 +40,8 @@ public class PaymentAuthorizationService {
         var decision = PaymentRules.afterFds(state, verdict);
         String declineCode = null;
         if (decision.nextStep() == PaymentRules.NextStep.REQUEST_AUTHORIZATION) {
-            var authorization =
-                    authorizer.authorize(new AuthorizationCommand(payment.getPaymentId(), payment.getAmount()));
+            var authorization = authorizer.authorize(new AuthorizationCommand(
+                    payment.getPaymentId(), payment.getAmount(), payment.getCardFingerprint()));
             if (authorization == null) {
                 throw new IllegalStateException("승인 응답이 없습니다");
             }
@@ -65,6 +67,17 @@ public class PaymentAuthorizationService {
                     .orderId(payment.getOrderRef())
                     .amount(payment.getAmount())
                     .build());
+        }
+        // 매입 보류면 investigation이 사건을 만든다 (#82) — 같은 트랜잭션에서 발행해 커밋된 보류만 전달된다
+        if (decision.nextStep() == PaymentRules.NextStep.NOTIFY_HELD) {
+            events.publishEvent(new PaymentHeld(
+                    payment.getPaymentId(),
+                    payment.getMerchantId(),
+                    payment.getCustomerRef(),
+                    payment.getAmount(),
+                    payment.getAuthorizationRef(),
+                    context.evaluationResult().evaluation().evaluationId(),
+                    Instant.now()));
         }
         // 승인 단계 스냅샷이다. 완료 이벤트가 반영된 최신 결제 상태를 뜻하지 않는다.
         return PaymentAuthorizationResult.builder()

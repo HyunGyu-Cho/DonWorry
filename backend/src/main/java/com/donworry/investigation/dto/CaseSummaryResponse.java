@@ -1,6 +1,7 @@
 package com.donworry.investigation.dto;
 
 import java.time.Instant;
+import java.util.List;
 
 // Case 목록 한 줄 — 화면 CaseSummary와 같은 모양
 public record CaseSummaryResponse(
@@ -17,4 +18,8 @@ public record CaseSummaryResponse(
         Long totalAmount,
         Integer maxRiskScore,
         String latestReportStatus,
-        int decidedCount) {}
+        int decidedCount,
+        // #82: 화면용 대상 이름 · 묶은 기준 · 묶인 결제의 적중 Rule (중복 없이, 점수 큰 순)
+        String subjectLabel,
+        String groupingBasis,
+        List<String> hitRuleCodes) {}

@@ -4,27 +4,36 @@ import com.donworry.fds.api.FdsEvaluationDetail;
 import com.donworry.fds.api.FdsEvaluationDetail.FdsRuleHitDetail;
 import com.donworry.fds.api.FdsEvaluationPage;
 import com.donworry.fds.api.FdsEvaluationSummary;
+import com.donworry.fds.api.FdsPaymentEvaluations;
 import com.donworry.fds.api.FdsResult;
+import com.donworry.fds.api.FdsRuleHitOutcome;
 import com.donworry.fds.entity.FdsEvaluation;
+import com.donworry.fds.entity.FdsRuleHit;
 import com.donworry.fds.repository.FdsEvaluationRepository;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 @Service
 @Transactional(readOnly = true)
-public class FdsEvaluationQueryService {
+public class FdsEvaluationQueryService implements FdsPaymentEvaluations {
 
     private final FdsEvaluationRepository evaluationRepository;
+    private final JsonMapper jsonMapper;
 
-    public FdsEvaluationQueryService(FdsEvaluationRepository evaluationRepository) {
+    public FdsEvaluationQueryService(FdsEvaluationRepository evaluationRepository, JsonMapper jsonMapper) {
         this.evaluationRepository = evaluationRepository;
+        this.jsonMapper = jsonMapper;
     }
 
+    @Override
     public FdsEvaluationPage list(FdsResult result, boolean attentionOnly, String search, int page, int size) {
         var pageable =
                 PageRequest.of(page, size, Sort.by(Sort.Order.desc("evaluatedAt"), Sort.Order.desc("evaluationId")));
@@ -92,8 +101,8 @@ public class FdsEvaluationQueryService {
                         hit.getRuleNameSnapshot(),
                         hit.getOutcome(),
                         hit.getAppliedScore(),
-                        hit.getObservedValue(),
-                        hit.getThresholdSnapshot()))
+                        text(hit.getObservedValue()),
+                        text(hit.getThresholdSnapshot())))
                 .toList();
         var history = evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(evaluation.getPaymentId()).stream()
                 .map(this::summary)
@@ -111,5 +120,52 @@ public class FdsEvaluationQueryService {
                 evaluation.getEvaluatedAt(),
                 evaluation.getErrorCode(),
                 evaluation.getPaymentRequestedAt());
+    }
+
+    // 근거 JSON에 사람 말(text)이 있으면 그 문장을 준다 (#82). 옛 기록은 JSON 그대로
+    private String text(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            var node = jsonMapper.readTree(json);
+            return node.has("text") ? node.get("text").asString() : json;
+        } catch (RuntimeException e) {
+            return json;
+        }
+    }
+
+    @Override
+    public Optional<PaymentEvaluation> latestForPayment(Long paymentId) {
+        return evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(paymentId).stream()
+                .findFirst()
+                .map(evaluation -> new PaymentEvaluation(
+                        evaluation.getEvaluationId(),
+                        evaluation.getRiskScore(),
+                        evaluation.getResult(),
+                        evaluation.getRuleHits().stream()
+                                .filter(hit -> hit.getOutcome() == FdsRuleHitOutcome.MATCH)
+                                .sorted(java.util.Comparator.comparingInt(FdsRuleHit::getAppliedScore)
+                                        .reversed())
+                                .map(FdsRuleHit::getRuleCode)
+                                .toList()));
+    }
+
+    @Override
+    public Optional<FdsEvaluationDetail> find(Long evaluationId) {
+        return evaluationRepository.findById(evaluationId).map(evaluation -> detail(evaluationId));
+    }
+
+    @Override
+    public List<String> matchedRuleCodes(Long evaluationId) {
+        return evaluationRepository
+                .findById(evaluationId)
+                .map(evaluation -> evaluation.getRuleHits().stream()
+                        .filter(hit -> hit.getOutcome() == FdsRuleHitOutcome.MATCH)
+                        .sorted(java.util.Comparator.comparingInt(FdsRuleHit::getAppliedScore)
+                                .reversed())
+                        .map(FdsRuleHit::getRuleCode)
+                        .toList())
+                .orElse(List.of());
     }
 }

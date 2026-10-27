@@ -6,9 +6,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.donworry.HeldPaymentFixture;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.investigation.dto.CaseDetailResponse;
-import com.donworry.investigation.dto.DemoHeldPaymentResponse;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
@@ -42,8 +42,14 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("mariadb")
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(MariaDbTestContainerConfig.class)
+@Import({MariaDbTestContainerConfig.class, HeldPaymentFixture.class})
 class CaseFlowTests {
+
+    @Autowired
+    HeldPaymentFixture heldPaymentFixture;
+
+    @Autowired
+    com.donworry.payment.api.PaymentLookup paymentLookup;
 
     @Autowired
     MockMvc mvc;
@@ -159,7 +165,7 @@ class CaseFlowTests {
     // 판정 항목에 null이 있으면 500이 아니라 400으로 거부한다
     @Test
     void decide_withNullItem_returnsBadRequest() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        HeldPaymentFixture.Held held = createHeld(customer(), 300_000L, 65);
         List<Map<String, Object>> items = new ArrayList<>();
         items.add(null);
 
@@ -170,7 +176,7 @@ class CaseFlowTests {
     @Test
     void list_withMerchantId_returnsOnlyThatMerchant() throws Exception {
         long merchantId = 1_000_000L + System.nanoTime() % 1_000_000L;
-        DemoHeldPaymentResponse mine = createHeld(merchantId, customer(), 300_000L, 65);
+        HeldPaymentFixture.Held mine = createHeld(merchantId, customer(), 300_000L, 65);
         createHeld(customer(), 300_000L, 65);
 
         mvc.perform(get("/api/security-cases").param("merchantId", String.valueOf(merchantId)))
@@ -182,7 +188,7 @@ class CaseFlowTests {
     // HELD 결제 1건이면 Case가 생기고 보고서 v1이 나와 판정 대기가 된다
     @Test
     void heldPayment_createsCaseWithReportAndWaitsDecision() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        HeldPaymentFixture.Held held = createHeld(customer(), 300_000L, 65);
 
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
 
@@ -207,8 +213,8 @@ class CaseFlowTests {
     @Test
     void secondHeldPayment_sameCustomer_mergesIntoCase() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
-        DemoHeldPaymentResponse second = createHeld(customer, 500_000L, 72);
+        HeldPaymentFixture.Held first = createHeld(customer, 300_000L, 65);
+        HeldPaymentFixture.Held second = createHeld(customer, 500_000L, 72);
 
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
 
@@ -239,7 +245,7 @@ class CaseFlowTests {
     @Test
     void decideAllPayments_handoffsAccepted_closesCase() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        HeldPaymentFixture.Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         List<CaseDetailResponse.CasePaymentResponse> payments = detail.payments();
@@ -272,7 +278,7 @@ class CaseFlowTests {
     @Test
     void decidePartially_keepsWaitingAndRejectsSecondDecision() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        HeldPaymentFixture.Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Long casePaymentId = detail.payments().get(0).casePaymentId();
@@ -289,7 +295,7 @@ class CaseFlowTests {
     @Test
     void decide_withStaleEvidenceVersion_returnsConflict() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        HeldPaymentFixture.Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
 
@@ -307,7 +313,7 @@ class CaseFlowTests {
     @Test
     void decide_withOldReport_returnsConflict() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        HeldPaymentFixture.Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Long oldReportId = detail.reports().get(0).reportId();
@@ -324,7 +330,7 @@ class CaseFlowTests {
     // 보고서가 성공했는데 보고서 없이(수동) 판정하면 거부한다
     @Test
     void decide_manualWhileReportSucceeded_returnsBadRequest() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        HeldPaymentFixture.Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
 
         mvc.perform(decide(
@@ -339,7 +345,7 @@ class CaseFlowTests {
     // 종료된 Case에는 더 판정할 수 없다
     @Test
     void decide_onClosedCase_returnsConflict() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        HeldPaymentFixture.Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().get(0).casePaymentId();
         mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
@@ -350,17 +356,6 @@ class CaseFlowTests {
                 .andExpect(jsonPath("$.code").value("INV_002"));
     }
 
-    // REVIEW 구간(50~79점) 밖의 점수는 데모 결제로 만들 수 없다
-    @Test
-    void demoHeldPayment_scoreOutOfReviewRange_returnsBadRequest() throws Exception {
-        mvc.perform(post("/api/demo/held-payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(
-                                Map.of("merchantId", 1, "customerRef", customer(), "amount", 1000, "riskScore", 80))))
-                .andExpect(status().isBadRequest());
-    }
-
-    // 없는 Case는 404와 코드로 응답한다
     @Test
     void detail_unknownCase_returnsNotFound() throws Exception {
         mvc.perform(get("/api/security-cases/{caseId}", Long.MAX_VALUE))
@@ -372,7 +367,7 @@ class CaseFlowTests {
     @Test
     void list_includesCaseSummary() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        HeldPaymentFixture.Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
 
         mvc.perform(get("/api/security-cases"))
@@ -401,28 +396,41 @@ class CaseFlowTests {
                 });
     }
 
-    private DemoHeldPaymentResponse createHeld(String customerRef, long amount, int riskScore) throws Exception {
+    private HeldPaymentFixture.Held createHeld(String customerRef, long amount, int riskScore) {
         return createHeld(1L, customerRef, amount, riskScore);
     }
 
-    private DemoHeldPaymentResponse createHeld(long merchantId, String customerRef, long amount, int riskScore)
-            throws Exception {
-        String body = mvc.perform(post("/api/demo/held-payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(Map.of(
-                                "merchantId",
-                                merchantId,
-                                "customerRef",
-                                customerRef,
-                                "amount",
-                                amount,
-                                "riskScore",
-                                riskScore))))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        return mapper.readValue(body, DemoHeldPaymentResponse.class);
+    private HeldPaymentFixture.Held createHeld(long merchantId, String customerRef, long amount, int riskScore) {
+        return heldPaymentFixture.held(merchantId, customerRef, amount, riskScore);
+    }
+
+    // ㉣ 판정 → 결제 조치 (#82): 승인 취소는 결제가 VOIDED, 매입 허용은 정산 매입을 거쳐 CAPTURED가 된 뒤 사건 종료
+    @Test
+    void decide_voidAndCapture_reflectedOnPayments() throws Exception {
+        String customer = customer();
+        HeldPaymentFixture.Held first = createHeld(customer, 300_000L, 65);
+        HeldPaymentFixture.Held second = createHeld(customer, 500_000L, 72);
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+        var payments = detail.payments();
+
+        mvc.perform(decide(
+                        first.caseId(),
+                        detail.securityCase().evidenceVersion(),
+                        latestReportId(detail),
+                        List.of(
+                                item(payments.get(0).casePaymentId(), "REJECT"),
+                                item(payments.get(1).casePaymentId(), "ACCEPT"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.securityCase.status").value("CLOSED"));
+
+        assertThat(paymentLookup.find(first.paymentId()).orElseThrow().status()).isEqualTo("VOIDED");
+        assertThat(paymentLookup.find(second.paymentId()).orElseThrow().status())
+                .isEqualTo("CAPTURED");
+        mvc.perform(get("/api/security-cases/handoffs"))
+                .andExpect(jsonPath("$[?(@.paymentId == " + first.paymentId() + ")].paymentStatus")
+                        .value("VOIDED"))
+                .andExpect(jsonPath("$[?(@.paymentId == " + first.paymentId() + ")].status")
+                        .value("ACCEPTED"));
     }
 
     private RequestBuilder decide(Long caseId, int evidenceVersion, Long reportId, List<Map<String, Object>> items) {

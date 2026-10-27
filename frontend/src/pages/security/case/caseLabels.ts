@@ -88,6 +88,7 @@ export const historyEventLabel: Record<CaseHistoryEventType, string> = {
   HANDOFF_FAILED: '금융 조치 실패',
   CASE_STATUS_CHANGED: 'Case 상태 변경',
   CASE_CLOSED: 'Case 종료',
+  BUYER_RESPONDED: '구매자 본인 확인 응답',
 }
 
 export const dateTime = (iso: string) => dayjs(iso).format('YYYY.MM.DD HH:mm')

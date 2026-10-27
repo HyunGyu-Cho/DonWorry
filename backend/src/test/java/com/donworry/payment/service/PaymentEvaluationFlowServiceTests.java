@@ -58,6 +58,8 @@ class PaymentEvaluationFlowServiceTests {
 
         var order = inOrder(creation, evaluator);
         order.verify(creation).createPendingSnapshot(999L, "input-customer", "order-1", 10_000L);
+        // FDS 입력용 고객 이력 값 (#82)
+        order.verify(creation).features(any());
         var captor = ArgumentCaptor.forClass(FdsEvaluationRequest.class);
         order.verify(evaluator).evaluate(captor.capture());
         verifyNoMoreInteractions(creation, evaluator);
@@ -101,6 +103,7 @@ class PaymentEvaluationFlowServiceTests {
         when(evaluator.evaluate(any())).thenThrow(failure);
         assertThatThrownBy(() -> service.createAndEvaluate(input())).isSameAs(failure);
         verify(creation).createPendingSnapshot(any(), any(), any(), any());
+        verify(creation).features(any());
         verify(evaluator).evaluate(any());
         verifyNoMoreInteractions(creation, evaluator);
     }

@@ -10,5 +10,7 @@ public enum CaseHistoryEventType {
     HANDOFF_FAILED,
     // CASE_CREATED · CASE_CLOSED 외의 상태 전이 — event_data에 from · to를 남긴다
     CASE_STATUS_CHANGED,
-    CASE_CLOSED
+    CASE_CLOSED,
+    // 구매자 본인 확인 응답 — event_data에 paymentId · answer (#82)
+    BUYER_RESPONDED
 }

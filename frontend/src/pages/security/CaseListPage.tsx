@@ -3,11 +3,10 @@ import { Alert, Button, Card, Table, Tabs, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { demoCreateHeldPayment, getCases } from '../../api/cases'
+import { getCases } from '../../api/cases'
 import { getRules, getStaffAlerts } from '../../api/fdsRules'
 import { getStaffCases } from '../../api/investigation'
 import { isMock } from '../../api/mockMode'
-import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { TermTip } from '../../components/explain/TermTip'
 import { useDemo } from '../../demo/DemoContext'
@@ -80,12 +79,10 @@ async function fetchRows(scope: Scope, merchant: string): Promise<Row[] | null> 
 export function CaseListPage({ scope = 'payment' }: { scope?: Scope }) {
   const navigate = useNavigate()
   const { merchant } = useDemo()
-  const { toast } = useFeedback()
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState(false)
   const [tab, setTab] = useState<TabKey>('ALL')
   const [now, setNow] = useState(() => new Date())
-  const [creating, setCreating] = useState(false)
   const base = scope === 'payment' ? '/security/cases' : '/manager/cases'
 
   const apply = useCallback((result: Row[] | null) => {
@@ -108,20 +105,6 @@ export function CaseListPage({ scope = 'payment' }: { scope?: Scope }) {
       alive = false
     }
   }, [scope, merchant, apply])
-
-  // 실제 백엔드에서만: 매입 보류 결제를 만들어 사건이 생기는 장면을 본다
-  const createHeld = async () => {
-    setCreating(true)
-    try {
-      const caseId = await demoCreateHeldPayment()
-      void toast.success('매입 보류 결제를 만들었습니다. 사건이 자동으로 생겼어요.')
-      navigate(`${base}/${caseId}`)
-    } catch {
-      void toast.error('시연 결제를 만들지 못했습니다.')
-    } finally {
-      setCreating(false)
-    }
-  }
 
   const all = rows ?? []
   const count = (key: TabKey) =>
@@ -195,10 +178,11 @@ export function CaseListPage({ scope = 'payment' }: { scope?: Scope }) {
         }
         actions={
           <>
+            {/* 시연: 구매자가 되어 테스트 상점에서 결제하면 매입 보류 → 사건이 생긴다 (#82) */}
             {scope === 'payment' && !isMock('investigation') && (
-              <Button loading={creating} onClick={() => void createHeld()}>
-                시연: 매입 보류 결제 만들기
-              </Button>
+              <a href="/demo/shop" target="_blank" rel="noreferrer">
+                <Button>시연: 테스트 상점 열기 ↗</Button>
+              </a>
             )}
             <Button icon={<ReloadOutlined />} onClick={() => void load()}>
               새로 고침

@@ -6,6 +6,7 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentRepository;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -44,27 +45,22 @@ class PaymentEvaluationFlowPersistenceTests {
     // 실제 P2 평가가 저장된 결제의 고객·금액·시각으로 실행되고 평가 한 건만 남는다
     @Test
     void createAndEvaluate_withRealEvaluator_persistsMatchingEvaluation() {
-        var result = service.createAndEvaluate(input(UUID.randomUUID().toString(), 150_000L));
+        // 이력 · 카드가 없으면 고액 결제만 판단한다 — 100만 원 이상 35점
+        var result = service.createAndEvaluate(input(UUID.randomUUID().toString(), 1_000_000L));
         assertThat(result.evaluationResult().evaluation().result()).isEqualTo(FdsResult.ALLOW);
         assertThat(result.evaluationResult().evaluation().riskScore()).isEqualTo(35);
         assertStored(result);
     }
 
-    // 동일 고객의 세 번째 고액 결제는 실제 P2에서 REVIEW를 받고 승인 요청 판단만 반환한다
+    // 평소 4만 원인 고객의 60만 원 결제는 고액 20 + 평소보다 큰 금액 20 = 40점 REVIEW, 승인 요청 판단만 반환한다 (#82)
     @Test
-    void createAndEvaluate_withRepeatedHighAmount_returnsReviewWithoutHoldingPayment() {
+    void createAndEvaluate_withSpikeOverHistory_returnsReviewWithoutHoldingPayment() {
         String customer = UUID.randomUUID().toString();
-        var first = service.createAndEvaluate(input(customer, 50_000L));
-        var second = service.createAndEvaluate(input(customer, 70_000L));
-        var third = service.createAndEvaluate(input(customer, 150_000L));
-        assertThat(third.evaluationResult().evaluation().result()).isEqualTo(FdsResult.REVIEW);
-        assertThat(third.evaluationResult().evaluation().riskScore()).isEqualTo(60);
-        assertThat(java.util.List.of(first, second, third))
-                .extracting(r -> r.evaluationResult().evaluation().evaluationRequestId())
-                .doesNotHaveDuplicates();
-        assertStored(first);
-        assertStored(second);
-        assertStored(third);
+        capturedHistory(customer);
+        var result = service.createAndEvaluate(input(customer, 600_000L));
+        assertThat(result.evaluationResult().evaluation().result()).isEqualTo(FdsResult.REVIEW);
+        assertThat(result.evaluationResult().evaluation().riskScore()).isEqualTo(40);
+        assertStored(result);
     }
 
     // 호출자 롤백 이후에도 최초 결제와 실제 P2 평가가 각각 커밋된 채 남는다
@@ -109,5 +105,16 @@ class PaymentEvaluationFlowPersistenceTests {
                 FROM fds_rule_hits WHERE evaluation_id = ? AND rule_code = 'HIGH_AMOUNT'
                 """, Long.class, evaluation.evaluationId()))
                 .isEqualTo(payment.getAmount());
+    }
+
+    // 이 고객의 매입 완료 이력 (평균 4만 원) — 평소보다 큰 금액 Rule이 판단할 수 있게 (#82)
+    private void capturedHistory(String customer) {
+        for (int i = 0; i < 2; i++) {
+            var past = com.donworry.payment.entity.Payment.pending(
+                    999L, customer, UUID.randomUUID().toString(), 40_000L, Instant.now());
+            past.recordAuthorizationSuccess("PAST-" + UUID.randomUUID(), false);
+            past.completeCapture();
+            payments.save(past);
+        }
     }
 }

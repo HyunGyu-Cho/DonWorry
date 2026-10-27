@@ -44,6 +44,8 @@ public class PaymentEvaluationService {
                 .customerRef(input.customerRef())
                 .amount(input.amount())
                 .paymentRequestedAt(input.paymentRequestedAt())
+                .customerAverageAmount(input.customerAverageAmount())
+                .cardCompletedPayments(input.cardCompletedPayments())
                 .build();
 
         return fdsEvaluator.evaluate(request);

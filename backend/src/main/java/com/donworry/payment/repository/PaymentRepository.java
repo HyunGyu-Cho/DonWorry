@@ -18,4 +18,18 @@ public interface PaymentRepository extends Repository<Payment, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.paymentId = :paymentId")
     Optional<Payment> findByIdForUpdate(@Param("paymentId") Long paymentId);
+
+    // FDS 입력 (#82): 이 고객이 매입까지 끝낸 결제의 평균 금액 — 이력이 없으면 null
+    @Query("select avg(p.amount) from Payment p where p.merchantId = :merchantId and p.customerRef = :customerRef"
+            + " and p.status = com.donworry.payment.entity.PaymentStatus.CAPTURED")
+    Double averageCapturedAmount(@Param("merchantId") Long merchantId, @Param("customerRef") String customerRef);
+
+    // FDS 입력 (#82): 이 고객이 이 카드로 매입까지 끝낸 결제 수
+    @Query("select count(p) from Payment p where p.merchantId = :merchantId and p.customerRef = :customerRef"
+            + " and p.cardFingerprint = :cardFingerprint"
+            + " and p.status = com.donworry.payment.entity.PaymentStatus.CAPTURED")
+    long countCapturedWithCard(
+            @Param("merchantId") Long merchantId,
+            @Param("customerRef") String customerRef,
+            @Param("cardFingerprint") String cardFingerprint);
 }
