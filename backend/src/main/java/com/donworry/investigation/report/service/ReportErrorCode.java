@@ -12,7 +12,9 @@ public enum ReportErrorCode {
     // 증거 조회 창구 (2-19)
     TOOL_NOT_FOUND("RPT_002", "없는 조사 도구입니다.", HttpStatus.NOT_FOUND),
     NOT_CURRENT_ATTEMPT("RPT_003", "조사 중인 현재 시도가 아닙니다.", HttpStatus.CONFLICT),
-    PAYMENT_NOT_IN_CASE("RPT_004", "이 사건의 결제가 아닙니다.", HttpStatus.BAD_REQUEST);
+    PAYMENT_NOT_IN_CASE("RPT_004", "이 사건의 결제가 아닙니다.", HttpStatus.BAD_REQUEST),
+    // 최신 보고서가 실패가 아니거나 (조사 중 · 완료) 사건이 종료됨 (2-19e)
+    RETRY_NOT_ALLOWED("RPT_005", "AI 조사를 다시 할 수 없는 상태입니다.", HttpStatus.CONFLICT);
 
     private final String code;
     private final String message;

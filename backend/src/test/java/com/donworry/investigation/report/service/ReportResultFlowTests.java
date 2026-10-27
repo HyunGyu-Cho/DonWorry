@@ -270,17 +270,7 @@ class ReportResultFlowTests {
     // ai-server가 실패를 3번 보내면(첫 시도 포함) "실패" — 실패 이유는 DB에만, P3 · 화면에는 본문 없음
     @Test
     void result_failedThreeTimes_marksFailed() throws Exception {
-        Sent sent = requestInvestigation();
-        for (int attempt = 1; attempt <= 3; attempt++) {
-            send(sent.reportId(), result(sent, "FAILED", null), KEY, 204);
-            if (attempt < 3) {
-                int calls = attempt + 1;
-                await().atMost(Duration.ofSeconds(10))
-                        .untilAsserted(() -> verify(aiServerClient, times(calls))
-                                .requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt(), anyList()));
-                sent = lastSent();
-            }
-        }
+        Sent sent = failThreeTimes();
 
         AiReport failed = report(sent.reportId());
         assertThat(failed.getStatus()).isEqualTo(ReportStatus.FAILED);
@@ -295,6 +285,22 @@ class ReportResultFlowTests {
                         .orElseThrow()
                         .getStatus())
                 .isEqualTo(CaseStatus.DECISION_PENDING);
+    }
+
+    // 조사를 요청하고 ai-server가 실패를 3번 보내 최종 실패로 끝낸다 — 마지막 시도를 돌려준다
+    private Sent failThreeTimes() throws Exception {
+        Sent sent = requestInvestigation();
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            send(sent.reportId(), result(sent, "FAILED", null), KEY, 204);
+            if (attempt < 3) {
+                int calls = attempt + 1;
+                await().atMost(Duration.ofSeconds(10))
+                        .untilAsserted(() -> verify(aiServerClient, times(calls))
+                                .requestInvestigation(anyLong(), any(), anyLong(), anyString(), anyInt(), anyList()));
+                sent = lastSent();
+            }
+        }
+        return sent;
     }
 
     // 이미 끝난 보고서에 결과가 또 오면 무시 (같은 결과가 두 번 와도 한 번만 반영)
@@ -529,5 +535,57 @@ class ReportResultFlowTests {
                 .andExpect(jsonPath("$.steps[1].status").value("FAILED"))
                 .andExpect(jsonPath("$.steps[2].kind").value("REQUEST"))
                 .andExpect(jsonPath("$.steps[2].got").value("ai-server가 조사를 접수함 (2번째 시도)"));
+    }
+
+    // 직원 다시 하기 (2-19e): 최종 실패 뒤 누르면 같은 증거로 v2를 새로 조사 — v1 실패 기록은 그대로
+    @Test
+    void retry_afterFinalFailure_investigatesNewVersion() throws Exception {
+        Sent failed = failThreeTimes();
+        clearInvocations(aiServerClient);
+
+        String base = "/api/investigation/cases/" + securityCase.getId() + "/report";
+        mvc.perform(post(base + "/retry"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RUNNING"))
+                .andExpect(jsonPath("$.reportVersion").value(2))
+                .andExpect(jsonPath("$.steps[0].kind").value("RETRY"))
+                .andExpect(jsonPath("$.steps[0].label").value("직원이 다시 조사 요청"))
+                .andExpect(jsonPath("$.steps[0].got").value("v1 조사가 실패해 직원이 다시 요청함"))
+                .andExpect(jsonPath("$.steps[1].got").value("ai-server가 조사를 접수함"));
+        Sent retried = lastSent();
+        assertThat(retried.reportId()).isNotEqualTo(failed.reportId());
+        assertThat(report(failed.reportId()).getStatus()).isEqualTo(ReportStatus.FAILED);
+        assertThat(report(retried.reportId()).getEvidenceVersion()).isEqualTo(1);
+        assertThat(caseStatus()).isEqualTo(CaseStatus.INVESTIGATING);
+
+        send(retried.reportId(), result(retried, "SUCCEEDED", String.valueOf(paymentId)), KEY, 204);
+        assertThat(report(retried.reportId()).getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
+        assertThat(reportService.findByCase(securityCase.getId()))
+                .extracting(ReportSnapshot::status)
+                .containsExactly("FAILED", "SUCCEEDED");
+        assertThat(caseStatus()).isEqualTo(CaseStatus.DECISION_PENDING);
+    }
+
+    // 조사 중이거나 성공했으면 다시 하기를 받지 않는다 — 새 버전도 생기지 않는다
+    @Test
+    void retry_notFailed_rejected() throws Exception {
+        Sent sent = requestInvestigation();
+        String retry = "/api/investigation/cases/" + securityCase.getId() + "/report/retry";
+        mvc.perform(post(retry))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RPT_005"));
+
+        send(sent.reportId(), result(sent, "SUCCEEDED", String.valueOf(paymentId)), KEY, 204);
+        mvc.perform(post(retry))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RPT_005"));
+        assertThat(reportService.findByCase(securityCase.getId())).hasSize(1);
+    }
+
+    private CaseStatus caseStatus() {
+        return securityCaseRepository
+                .findById(securityCase.getId())
+                .orElseThrow()
+                .getStatus();
     }
 }
