@@ -35,6 +35,7 @@
 - **평가 입력 넓히기 (F-3).** `FdsEvaluationRequest`에 선택 칸 `merchantId` · `cardFingerprint` · `deviceId` · `clientIp` · `buyerEmail` · `hasPriorCapturedPayment` · `cardCompletedPayments`를 둔다 (필수 5개는 ADR-0014 그대로). 폐지된 평소보다 큰 금액용 `customerAverageAmount`는 뺀다. "과거 정상 결제"는 같은 가맹점 · 같은 구매자의 매입 완료(CAPTURED) 1건 이상 — 승인만 된 보류 · 취소 결제를 치면 사기범이 한 번 승인받은 뒤 R02 · R03을 피할 수 있다. P2는 평가 당시 가맹점을 `fds_evaluations.merchant_id`에 남긴다
 - **R02 · R03 (#98 F-4).** 과거 정상 결제가 있는 구매자만 판단한다. R02는 P5가 센 `deviceCompletedPayments`(이 기기로 매입 완료한 결제 수)가 0이면, R03은 `cardCompletedPayments`가 0이면 적중. 과거 정상 결제가 없거나 기기 · 카드를 모르면 확인 불가(0점)로 이유를 남긴다
 - **IP 이름표 · 시연 접속 환경 (#98 F-5).** `identity.api.IpLocator`가 IP → 나라 · 회선 종류를 찾는다 (지금은 `demo_fake_ips`, 나중에 GeoIP 파일). P5가 찾아 FDS 요청 `clientCountry` · `clientIpType`으로 넘기고, P2는 identity를 부르지 않는다. 결제창은 `donworry.demo.fake-client-ip`(`DONWORRY_DEMO_FAKE_CLIENT_IP`, 기본 false)가 켜졌을 때만 테스트 상점이 고른 `X-Demo-Client-IP` · `X-Demo-Device-Id` 헤더를 쓰고, IP는 이름표에 있는 값만 받는다. 시연 브라우저는 김민수의 "평소 기기"가 아니라서(기기 쿠키를 그냥 발급하면 시연 ①이 80점 DENY), 김민수 시드 결제에 평소 기기를 적고 테스트 상점에서 IP + 기기를 함께 고른다. 실제 기기 쿠키 발급은 CakeShop 연동 때
+- **R05 고위험 국가 IP (#98 F-6).** 기준값 `{"countries": [...]}`에 있는 나라면 +40. 시연용 목록은 러시아 · 베트남 · 네덜란드(시연 IP 이름표의 해외 나라에서 고름, 실제 위험 국가 목록 아님). 이름표에 없는 IP는 확인 불가(0점) — 모르는 IP를 국내나 안전으로 치지 않는다
 - 이번 결정은 카탈로그와 판정 구간까지다. R02 · R04 · R05 · R06 · R07 · R08의 계산과 R03의 "과거 정상 결제가 있는 구매자만" 조건은 묶음 ② · ③에서 Rule마다 붙인다. 그전까지 계산하지 않는 Rule은 기록 없이 0점이다
 
 ## 고려한 대안

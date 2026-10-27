@@ -91,11 +91,11 @@ export const MOCK_RULES: FdsRule[] = [
     'R05',
     'HIGH_RISK_COUNTRY_IP',
     '고위험 국가 IP',
-    '접속 IP의 국가가 고위험 국가 목록에 해당',
+    '접속 IP의 국가가 고위험 국가 목록(시연용: 러시아 · 베트남 · 네덜란드)에 해당',
     'SCORE',
     40,
     null,
-    { countries: [] },
+    { countries: ['RU', 'VN', 'NL'] },
   ),
   rule(
     6,

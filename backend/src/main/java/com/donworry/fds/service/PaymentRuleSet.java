@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// 결제 Rule 계산 — R01 고액 · R02 새 기기 · R03 새 카드 (#96 · #98). 나머지는 묶음 ② · ③
+// 결제 Rule 계산 — R01 고액 · R02 새 기기 · R03 새 카드 · R05 고위험 국가 IP (#96 · #98). 나머지는 묶음 ② · ③
 // 기준값 · 점수는 fds_rules에서 읽는다. 판단할 값이 없으면 UNAVAILABLE(0점)로 남긴다 — 점수를 추정하지 않는다
 final class PaymentRuleSet {
 
@@ -34,6 +34,7 @@ final class PaymentRuleSet {
                 case "HIGH_AMOUNT" -> hits.add(highAmount(rule, request.amount()));
                 case "NEW_DEVICE" -> hits.add(newDevice(rule, request));
                 case "NEW_CARD" -> hits.add(newCard(rule, request));
+                case "HIGH_RISK_COUNTRY_IP" -> hits.add(highRiskCountry(rule, request));
                 default -> {
                     // 아직 계산하지 않는 Rule (묶음 ② · ③) — 기록 없이 0점
                 }
@@ -74,6 +75,36 @@ final class PaymentRuleSet {
         }
         return hit(
                 rule, completed == 0, rule.getScore(), json("completed", completed, "이 카드로 완료한 결제 " + completed + "건"));
+    }
+
+    // R05: 접속 IP의 나라가 기준값 countries 목록에 있으면 +40 (#98 F-6). 이름표에 없는 IP는 안전으로 치지 않는다
+    private static Hit highRiskCountry(FdsRule rule, FdsEvaluationRequest request) {
+        String country = request.clientCountry();
+        if (country == null) {
+            return unavailable(rule, "접속 위치 확인 불가 (IP 이름표에 없음)");
+        }
+        Object listed = threshold(rule).get("countries");
+        boolean matched = listed instanceof List<?> countries && countries.contains(country);
+        String text = countryName(country) + " IP" + (isAnonymous(request) ? " (VPN · Tor)" : "");
+        return hit(rule, matched, rule.getScore(), jsonText("country", country, text));
+    }
+
+    private static boolean isAnonymous(FdsEvaluationRequest request) {
+        return "ANONYMOUS".equals(request.clientIpType());
+    }
+
+    // 화면 · AI 보고서에 보일 나라 이름. 모르는 코드는 그대로
+    static String countryName(String code) {
+        return switch (code) {
+            case "KR" -> "한국";
+            case "NL" -> "네덜란드";
+            case "RU" -> "러시아";
+            case "VN" -> "베트남";
+            case "DE" -> "독일";
+            case "GB" -> "영국";
+            case "US" -> "미국";
+            default -> code;
+        };
     }
 
     // 과거 정상 결제가 없으면 "평소"가 없어 새 기기 · 새 카드를 판단하지 않는다 — 안전하다는 뜻이 아니다
@@ -125,6 +156,10 @@ final class PaymentRuleSet {
 
     private static String json(String key, long value, String text) {
         return "{\"" + key + "\":" + value + ",\"text\":\"" + escape(text) + "\"}";
+    }
+
+    private static String jsonText(String key, String value, String text) {
+        return "{\"" + key + "\":\"" + escape(value) + "\",\"text\":\"" + escape(text) + "\"}";
     }
 
     private static String text(String text) {

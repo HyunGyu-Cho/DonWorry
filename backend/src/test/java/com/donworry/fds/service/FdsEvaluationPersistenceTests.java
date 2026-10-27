@@ -55,8 +55,11 @@ class FdsEvaluationPersistenceTests {
             assertThat(evaluation.getPaymentRequestedAt()).isEqualTo(requestedAt);
             assertThat(evaluation.getRawScore()).isEqualTo(55);
             assertThat(evaluation.getMerchantId()).isEqualTo(1L);
-            // R01 · R03 적중 + R02는 기기를 몰라 확인 불가 (#98)
-            assertThat(evaluation.getRuleHits()).hasSize(3);
+            // R01 · R03만 적중 — 기기 · 접속 위치를 모르는 Rule은 확인 불가로 남는다 (#98)
+            assertThat(evaluation.getRuleHits())
+                    .filteredOn(hit -> hit.getOutcome() == com.donworry.fds.api.FdsRuleHitOutcome.MATCH)
+                    .extracting("ruleCode")
+                    .containsExactly("HIGH_AMOUNT", "NEW_CARD");
         });
     }
 

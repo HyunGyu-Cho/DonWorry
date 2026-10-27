@@ -167,6 +167,48 @@ class FdsEvaluationServiceTests {
     }
 
     @Test
+    // R05: 고위험 국가 IP면 +40, 목록 밖 나라는 0점, 이름표에 없는 IP는 확인 불가 (#98 F-6)
+    void R05_고위험국가40점_목록밖0점_이름표없음확인불가() {
+        stubSave(8L);
+        when(ruleRepository.findActiveCatalog())
+                .thenReturn(List.of(rule(
+                        "HIGH_RISK_COUNTRY_IP", 40, java.util.Map.of("countries", List.of("RU", "VN", "NL")), true)));
+
+        var vpn = transactionEvaluator.evaluate(countryRequest("NL", "ANONYMOUS"));
+        var domestic = transactionEvaluator.evaluate(countryRequest("KR", "DOMESTIC"));
+        var unknown = transactionEvaluator.evaluate(countryRequest(null, null));
+
+        assertThat(vpn.riskScore()).isEqualTo(40);
+        assertThat(domestic.riskScore()).isZero();
+        assertThat(unknown.riskScore()).isZero();
+        verify(evaluationRepository, org.mockito.Mockito.times(3)).saveAndFlush(evaluationCaptor.capture());
+        var hits = evaluationCaptor.getAllValues().stream()
+                .map(e -> e.getRuleHits().get(0))
+                .toList();
+        assertThat(hits)
+                .extracting("outcome")
+                .containsExactly(
+                        com.donworry.fds.api.FdsRuleHitOutcome.MATCH,
+                        com.donworry.fds.api.FdsRuleHitOutcome.NO_MATCH,
+                        com.donworry.fds.api.FdsRuleHitOutcome.UNAVAILABLE);
+        assertThat(hits.get(0).getObservedValue()).contains("네덜란드 IP (VPN · Tor)");
+    }
+
+    private FdsEvaluationRequest countryRequest(String country, String ipType) {
+        return FdsEvaluationRequest.builder()
+                .evaluationRequestId(UUID.randomUUID())
+                .paymentId(4L)
+                .merchantId(1L)
+                .customerRef("c-0601")
+                .amount(12_000L)
+                .paymentRequestedAt(Instant.parse("2026-10-27T01:00:00Z"))
+                .clientIp("45.83.64.12")
+                .clientCountry(country)
+                .clientIpType(ipType)
+                .build();
+    }
+
+    @Test
     // 판정 구간 경계 — 0~49 통과 · 50~79 직원 확인 · 80 이상 거절 (#96, ADR-0023)
     void 판정구간_49_50_79_80점_ALLOW_REVIEW_REVIEW_DENY() {
         assertThat(FdsEvaluationTransactionService.resultFor(49)).isEqualTo(FdsResult.ALLOW);
