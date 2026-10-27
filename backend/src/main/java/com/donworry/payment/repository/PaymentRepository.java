@@ -66,6 +66,15 @@ public interface PaymentRepository extends Repository<Payment, Long> {
             @Param("customerRef") String customerRef,
             @Param("cardFingerprint") String cardFingerprint);
 
+    // FDS 입력 (#98): 이 고객이 이 기기로 매입까지 끝낸 결제 수 — R02 기존 미사용 단말기
+    @Query("select count(p) from Payment p where p.merchantId = :merchantId and p.customerRef = :customerRef"
+            + " and p.deviceId = :deviceId"
+            + " and p.status = com.donworry.payment.entity.PaymentStatus.CAPTURED")
+    long countCapturedWithDevice(
+            @Param("merchantId") Long merchantId,
+            @Param("customerRef") String customerRef,
+            @Param("deviceId") String deviceId);
+
     // 사장님 보안 확인 결과 (#86) — 우리 가게 결제, 최근 먼저
     List<Payment> findByMerchantIdOrderByCreatedAtDesc(Long merchantId);
 }

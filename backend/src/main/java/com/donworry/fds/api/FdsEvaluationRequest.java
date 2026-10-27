@@ -25,7 +25,9 @@ public record FdsEvaluationRequest(
         // 같은 가맹점 · 같은 구매자의 매입 완료 결제가 있는지 — R02 · R03은 있을 때만 판단
         Boolean hasPriorCapturedPayment,
         // 이 구매자가 이 카드로 매입까지 끝낸 결제 수 — R03
-        Integer cardCompletedPayments) {
+        Integer cardCompletedPayments,
+        // 이 구매자가 이 기기로 매입까지 끝낸 결제 수 — R02 (#98)
+        Integer deviceCompletedPayments) {
 
     public FdsEvaluationRequest(
             UUID evaluationRequestId, Long paymentId, String customerRef, long amount, Instant paymentRequestedAt) {
@@ -36,6 +38,7 @@ public record FdsEvaluationRequest(
                 customerRef,
                 amount,
                 paymentRequestedAt,
+                null,
                 null,
                 null,
                 null,

@@ -18,7 +18,8 @@ public record PaymentEvaluationInput(
         String clientIp,
         String buyerEmail,
         Boolean hasPriorCapturedPayment,
-        Integer cardCompletedPayments) {
+        Integer cardCompletedPayments,
+        Integer deviceCompletedPayments) {
 
     public PaymentEvaluationInput {
         if (evaluationRequestId == null) {

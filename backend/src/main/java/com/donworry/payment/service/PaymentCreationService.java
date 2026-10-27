@@ -54,6 +54,10 @@ public class PaymentCreationService {
                 ? null
                 : (int) paymentRepository.countCapturedWithCard(
                         payment.getMerchantId(), payment.getCustomerRef(), payment.getCardFingerprint());
+        Integer deviceCount = payment.getDeviceId() == null
+                ? null
+                : (int) paymentRepository.countCapturedWithDevice(
+                        payment.getMerchantId(), payment.getCustomerRef(), payment.getDeviceId());
         return new Features(
                 payment.getMerchantId(),
                 payment.getCardFingerprint(),
@@ -61,7 +65,8 @@ public class PaymentCreationService {
                 payment.getClientIp(),
                 payment.getBuyerEmail(),
                 hasPriorCaptured,
-                cardCount);
+                cardCount,
+                deviceCount);
     }
 
     public record Features(
@@ -71,5 +76,6 @@ public class PaymentCreationService {
             String clientIp,
             String buyerEmail,
             Boolean hasPriorCapturedPayment,
-            Integer cardCompletedPayments) {}
+            Integer cardCompletedPayments,
+            Integer deviceCompletedPayments) {}
 }

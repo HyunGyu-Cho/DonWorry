@@ -51,6 +51,7 @@ public class PaymentEvaluationService {
                 .buyerEmail(input.buyerEmail())
                 .hasPriorCapturedPayment(input.hasPriorCapturedPayment())
                 .cardCompletedPayments(input.cardCompletedPayments())
+                .deviceCompletedPayments(input.deviceCompletedPayments())
                 .build();
 
         return fdsEvaluator.evaluate(request);

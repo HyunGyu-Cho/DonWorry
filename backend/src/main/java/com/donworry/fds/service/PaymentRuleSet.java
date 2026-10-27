@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// 결제 Rule 계산 — 지금은 R01 고액 결제 · R03 기존 결제 이력 없는 카드. 나머지는 묶음 ② · ③ (#96)
+// 결제 Rule 계산 — R01 고액 · R02 새 기기 · R03 새 카드 (#96 · #98). 나머지는 묶음 ② · ③
 // 기준값 · 점수는 fds_rules에서 읽는다. 판단할 값이 없으면 UNAVAILABLE(0점)로 남긴다 — 점수를 추정하지 않는다
 final class PaymentRuleSet {
 
@@ -32,7 +32,8 @@ final class PaymentRuleSet {
             }
             switch (rule.getRuleCode()) {
                 case "HIGH_AMOUNT" -> hits.add(highAmount(rule, request.amount()));
-                case "NEW_CARD" -> hits.add(newCard(rule, request.cardCompletedPayments()));
+                case "NEW_DEVICE" -> hits.add(newDevice(rule, request));
+                case "NEW_CARD" -> hits.add(newCard(rule, request));
                 default -> {
                     // 아직 계산하지 않는 Rule (묶음 ② · ③) — 기록 없이 0점
                 }
@@ -47,13 +48,43 @@ final class PaymentRuleSet {
         return hit(rule, amount >= minAmount, rule.getScore(), json("amount", amount, won(amount)));
     }
 
-    // 이 고객이 이 카드로 매입까지 끝낸 결제가 0건
-    private static Hit newCard(FdsRule rule, Integer completed) {
+    // R02: 과거 정상 결제가 있는 고객이 이 기기로 매입까지 끝낸 결제가 0건 (#98)
+    private static Hit newDevice(FdsRule rule, FdsEvaluationRequest request) {
+        Hit noHistory = noHistory(rule, request);
+        if (noHistory != null) {
+            return noHistory;
+        }
+        Integer completed = request.deviceCompletedPayments();
+        if (request.deviceId() == null || completed == null) {
+            return unavailable(rule, "기기 정보 없음");
+        }
+        return hit(
+                rule, completed == 0, rule.getScore(), json("completed", completed, "이 기기로 완료한 결제 " + completed + "건"));
+    }
+
+    // R03: 과거 정상 결제가 있는 고객이 이 카드로 매입까지 끝낸 결제가 0건 (#98)
+    private static Hit newCard(FdsRule rule, FdsEvaluationRequest request) {
+        Hit noHistory = noHistory(rule, request);
+        if (noHistory != null) {
+            return noHistory;
+        }
+        Integer completed = request.cardCompletedPayments();
         if (completed == null) {
             return unavailable(rule, "카드 정보 없음");
         }
         return hit(
                 rule, completed == 0, rule.getScore(), json("completed", completed, "이 카드로 완료한 결제 " + completed + "건"));
+    }
+
+    // 과거 정상 결제가 없으면 "평소"가 없어 새 기기 · 새 카드를 판단하지 않는다 — 안전하다는 뜻이 아니다
+    private static Hit noHistory(FdsRule rule, FdsEvaluationRequest request) {
+        if (request.hasPriorCapturedPayment() == null) {
+            return unavailable(rule, "과거 결제 이력 모름");
+        }
+        if (!request.hasPriorCapturedPayment()) {
+            return unavailable(rule, "비교할 과거 정상 결제 없음");
+        }
+        return null;
     }
 
     private static Hit hit(FdsRule rule, boolean matched, int score, String observed) {

@@ -55,7 +55,8 @@ class FdsEvaluationPersistenceTests {
             assertThat(evaluation.getPaymentRequestedAt()).isEqualTo(requestedAt);
             assertThat(evaluation.getRawScore()).isEqualTo(55);
             assertThat(evaluation.getMerchantId()).isEqualTo(1L);
-            assertThat(evaluation.getRuleHits()).hasSize(2);
+            // R01 · R03 적중 + R02는 기기를 몰라 확인 불가 (#98)
+            assertThat(evaluation.getRuleHits()).hasSize(3);
         });
     }
 

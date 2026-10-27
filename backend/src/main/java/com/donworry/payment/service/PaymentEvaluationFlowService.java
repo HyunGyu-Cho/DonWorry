@@ -63,6 +63,7 @@ public class PaymentEvaluationFlowService {
                 .buyerEmail(features == null ? null : features.buyerEmail())
                 .hasPriorCapturedPayment(features == null ? null : features.hasPriorCapturedPayment())
                 .cardCompletedPayments(features == null ? null : features.cardCompletedPayments())
+                .deviceCompletedPayments(features == null ? null : features.deviceCompletedPayments())
                 .build();
         var result = evaluationService.evaluateAndDecide(state, evaluationInput);
         return new PaymentAuthorizationContext(payment, evaluationInput.evaluationRequestId(), result);
