@@ -457,6 +457,32 @@ class ReportResultFlowTests {
         assertThat(trace.get(5).toString()).contains("kind=SAVE", "stepNo=6");
     }
 
+    // 과거 결제 · 카드 창구가 열렸다 (#90) — 이력이 없는 고객 · 카드를 모르는 결제면 "없음 · 모름"으로 답하고 지어내지 않는다
+    @Test
+    void tools_paymentHistoryAndCard_ready() throws Exception {
+        Sent sent = requestInvestigation();
+
+        tool("get_payment_history", sent, Map.of(), KEY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ready").value(true))
+                .andExpect(jsonPath("$.data[0].paymentId").value(String.valueOf(paymentId)))
+                .andExpect(jsonPath("$.data[0].previousPaymentCount").value(0))
+                .andExpect(jsonPath("$.data[0].recentPayments").isEmpty());
+        String card = tool("get_payment_authentication", sent, Map.of(), KEY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ready").value(true))
+                .andExpect(jsonPath("$.data[0].authorized").value(true))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(card).doesNotContain("ingerprint");
+
+        String runUrl = "/api/investigation/cases/" + securityCase.getId() + "/report/run";
+        mvc.perform(get(runUrl))
+                .andExpect(jsonPath("$.steps[1].got").value("이전 결제 0건 · 완료된 결제 없음"))
+                .andExpect(jsonPath("$.steps[2].got").value("카드 모름 · 카드 이력 모름 · 승인됨"));
+    }
+
     // 키 없음 · 틀림 401, 없는 창구 404, 옛 시도 409, 다른 사건 결제 400, 끝난 보고서 409
     @Test
     void tools_outsideScope_rejected() throws Exception {

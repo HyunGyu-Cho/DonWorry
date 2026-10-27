@@ -41,8 +41,13 @@ def not_ready(tool: str, note: str = "데이터 준비 전") -> str:
 # Spring 창구 대신 — 부른 순서를 기록하고 정해 둔 증거를 돌려준다
 class FakeTools:
     def __init__(
-        self, score: int = 65, fail: set[str] | None = None, buyer: str | None = None
+        self,
+        score: int = 65,
+        fail: set[str] | None = None,
+        buyer: str | None = None,
+        history: bool = False,
     ) -> None:
+        self.history = history
         self.calls: list[str] = []
         self.score = score
         self.fail = fail or set()
@@ -61,6 +66,19 @@ class FakeTools:
             return ok(name, [{"paymentId": PAYMENT, "amount": 300_000, "paymentStatus": "HELD"}])
         if name == "get_order_context":
             row = {"paymentId": PAYMENT, "orderTitle": "케이크 세트", "buyerAnswer": self.buyer}
+            return ok(name, [row])
+        # 과거 결제 · 카드 창구 (#90) — history=True면 김민수 시연 데이터처럼
+        if self.history and name == "get_payment_history":
+            row = {
+                "paymentId": PAYMENT,
+                "capturedCount": 5,
+                "capturedAverageAmount": 40_000,
+                "amountToAverageRatio": 7.5,
+                "capturedCountByCardLast4": {"4821": 5},
+            }
+            return ok(name, [row])
+        if self.history and name == "get_payment_authentication":
+            row = {"paymentId": PAYMENT, "cardLast4": "1173", "firstUseOfCard": True}
             return ok(name, [row])
         return not_ready(name)
 
@@ -86,10 +104,49 @@ def test_mockAgent_callsToolsInOrder_andWritesFromEvidence() -> None:
     assert report.payment_advice[0].recommendation == "NEEDS_CHECK"
     assert "이 고객의 과거 결제 패턴 (데이터 준비 전)" in report.unknowns
     # 창구 호출 기록은 Spring이 정본 — ai-server 과정에는 AI 판단(물을 때마다) · 형식 검사만
-    assert [s.kind for s in result.steps] == ["LLM_ANSWER"] * 6 + ["VALIDATION"]
-    assert [s.detail for s in result.steps[:6]] == ["AI 판단 — 다음에 볼 증거 고르기"] * 5 + [
-        "AI 판단 — 보고서 작성 (1차)"
-    ]
+    picks = len(TOOL_PLAN["PAYMENT_FRAUD"])
+    assert [s.kind for s in result.steps] == ["LLM_ANSWER"] * (picks + 1) + ["VALIDATION"]
+    assert [s.detail for s in result.steps[: picks + 1]] == [
+        "AI 판단 — 다음에 볼 증거 고르기"
+    ] * picks + ["AI 판단 — 보고서 작성 (1차)"]
+
+
+# 과거 결제 · 카드 창구가 답하면 평소 금액 배수 · 처음 쓰는 카드를 근거로 쓴다 (#90)
+def test_mockAgent_usesHistoryAndCard() -> None:
+    report = investigate(FakeTools(history=True)).report
+
+    # FakeTools의 FDS Rule은 NEW_CARD · HIGH_AMOUNT — 카드는 NEW_CARD 줄에 붙고, 금액 배수는 새 줄
+    titles = [p.title for p in report.risk_points]
+    assert titles == ["처음 쓰는 카드", "고액 결제", "평소의 7.5배 금액"]
+    assert report.risk_points[0].detail.endswith("카드 1173로 결제를 끝낸 적이 없습니다")
+    spike = next(p for p in report.risk_points if p.title == "평소의 7.5배 금액")
+    assert spike.detail == "이전 완료 결제 5건 평균 40,000원, 카드 4821 5건 — 이번은 평균의 7.5배"
+    assert spike.source == "get_payment_history"
+    assert not any("과거 결제" in u or "카드 인증" in u for u in report.unknowns)
+
+
+# FDS가 같은 Rule로 이미 잡았으면 줄을 늘리지 않고 그 줄에 자세한 내용을 붙인다
+def test_mockAgent_mergesHistoryIntoMatchingRule() -> None:
+    class SpikeTools(FakeTools):
+        async def call(self, report_id: int, attempt_id: str, name: str, args: dict) -> str:
+            if name == "get_fds_evidence":
+                self.calls.append(name)
+                row = {
+                    "paymentId": PAYMENT,
+                    "riskScore": 55,
+                    "ruleHits": ["AMOUNT_SPIKE", "NEW_CARD"],
+                }
+                return ok(name, [row])
+            return await super().call(report_id, attempt_id, name, args)
+
+    report = investigate(SpikeTools(history=True)).report
+
+    titles = [p.title for p in report.risk_points]
+    assert titles == ["평소보다 큰 금액", "처음 쓰는 카드"]
+    assert report.risk_points[0].detail.endswith(
+        "평균 40,000원, 카드 4821 5건 — 이번은 평균의 7.5배"
+    )
+    assert report.risk_points[1].detail.endswith("이 고객이 카드 1173로 결제를 끝낸 적이 없습니다")
 
 
 # 위험 점수가 높으면 승인 취소 검토를 권한다

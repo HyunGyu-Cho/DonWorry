@@ -106,6 +106,7 @@ TOOL_PLAN = {
         "get_case_payments",
         "get_order_context",
         "get_payment_history",
+        "get_payment_authentication",
         "find_similar_cases",
     ],
     "STAFF_SPRAY": ["get_security_events", "find_similar_cases"],
@@ -215,6 +216,18 @@ def _payment_fraud(results: Results) -> dict[str, object]:
         }
     ]
     normal_points = []
+    # 고객 과거 결제 · 카드 (#90) — 평소 금액과 비교, 처음 쓰는 카드인지
+    # FDS가 같은 Rule(AMOUNT_SPIKE · NEW_CARD)로 이미 잡았으면 그 줄에 자세한 내용을 붙인다
+    history_risk, history_normal = _history_points(results)
+    merge = {"AMOUNT_SPIKE": "get_payment_history", "NEW_CARD": "get_payment_authentication"}
+    for code, source in merge.items():
+        extra = next((p for p in history_risk if p["source"] == source), None)
+        point = next((p for p in risk_points if p["title"] == RULE_NAMES[code]), None)
+        if extra is not None and point is not None:
+            point["detail"] = f"{point['detail']} — {extra['detail']}"
+            history_risk.remove(extra)
+    risk_points += history_risk
+    normal_points += history_normal
     if not_mine:
         risk_points.insert(
             0,
@@ -263,6 +276,58 @@ def _payment_fraud(results: Results) -> dict[str, object]:
         ),
         "paymentAdvice": advice,
     }
+
+
+# 이 배수 이상이면 "평소보다 큰 금액"으로 본다 (FDS AMOUNT_SPIKE 5배보다 낮게 잡아 참고 근거로)
+SPIKE_RATIO = 3.0
+
+
+def _history_points(results: Results) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    risk: list[dict[str, str]] = []
+    normal: list[dict[str, str]] = []
+    for row in _rows(results, "get_payment_history"):
+        count = row.get("capturedCount")
+        average = row.get("capturedAverageAmount")
+        ratio = row.get("amountToAverageRatio")
+        if not isinstance(count, int) or count == 0 or not isinstance(average, int):
+            continue
+        cards = row.get("capturedCountByCardLast4")
+        card_text = ""
+        if isinstance(cards, dict) and cards:
+            card_text = ", 카드 " + " · ".join(f"{k} {v}건" for k, v in cards.items())
+        detail = f"이전 완료 결제 {count}건 평균 {average:,}원{card_text}"
+        if isinstance(ratio, int | float) and ratio >= SPIKE_RATIO:
+            risk.append(
+                {
+                    "title": f"평소의 {ratio}배 금액",
+                    "detail": f"{detail} — 이번은 평균의 {ratio}배",
+                    "source": "get_payment_history",
+                }
+            )
+        else:
+            normal.append(
+                {"title": "평소와 비슷한 금액", "detail": detail, "source": "get_payment_history"}
+            )
+    for row in _rows(results, "get_payment_authentication"):
+        last4 = row.get("cardLast4") or "모름"
+        if row.get("firstUseOfCard") is True:
+            risk.append(
+                {
+                    "title": f"처음 쓰는 카드 ({last4})",
+                    "detail": f"이 고객이 카드 {last4}로 결제를 끝낸 적이 없습니다",
+                    "source": "get_payment_authentication",
+                }
+            )
+        elif row.get("firstUseOfCard") is False:
+            done = row.get("completedPaymentsWithCardBefore")
+            normal.append(
+                {
+                    "title": f"쓰던 카드 ({last4})",
+                    "detail": f"이 카드로 결제를 {done}번 끝냈습니다",
+                    "source": "get_payment_authentication",
+                }
+            )
+    return risk, normal
 
 
 def _verdict(high: bool, not_mine: bool, mine: bool) -> str:

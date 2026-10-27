@@ -38,12 +38,18 @@ TOOL_SPECS = [
     ),
     ToolSpec(
         name="get_payment_history",
-        description="이 고객의 과거 결제 패턴",
+        description=(
+            "이 결제 이전 같은 고객의 결제: 완료 건수 · 평균 · 최고 금액 · 이번 금액 배수 · "
+            "카드 끝자리별 건수 · 최근 10건 목록"
+        ),
         parameters=_NO_ARGS,
     ),
     ToolSpec(
         name="get_payment_authentication",
-        description="카드 인증 · 승인 정보",
+        description=(
+            "이번 결제 카드: 끝자리 · 발급 국가 · 이 결제 전 이 카드로 완료한 결제 수"
+            "(0이면 처음 쓰는 카드) · 승인 여부"
+        ),
         parameters=_NO_ARGS,
     ),
     ToolSpec(

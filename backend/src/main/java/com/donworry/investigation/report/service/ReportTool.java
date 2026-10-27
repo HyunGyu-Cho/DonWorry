@@ -9,8 +9,8 @@ import java.util.Optional;
 public enum ReportTool {
     GET_CASE_PAYMENTS("get_case_payments", "사건에 묶인 결제 조회", true),
     GET_FDS_EVIDENCE("get_fds_evidence", "FDS 점수 · 적중 Rule 조회", true),
-    GET_PAYMENT_HISTORY("get_payment_history", "고객 과거 결제 조회", false),
-    GET_PAYMENT_AUTHENTICATION("get_payment_authentication", "카드 인증 · 승인 정보 조회", false),
+    GET_PAYMENT_HISTORY("get_payment_history", "고객 과거 결제 조회", true),
+    GET_PAYMENT_AUTHENTICATION("get_payment_authentication", "카드 인증 · 승인 정보 조회", true),
     GET_SECURITY_EVENTS("get_security_events", "로그인 · 기기 기록 조회", false),
     GET_ORDER_CONTEXT("get_order_context", "주문 · 구매자 정보 조회", true),
     FIND_SIMILAR_CASES("find_similar_cases", "비슷한 사건 찾기", false);
