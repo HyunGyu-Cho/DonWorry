@@ -42,7 +42,7 @@ export const SCENARIOS: Scenario[] = [
     title: '정산 자금 부족',
     roleLabel: '사장님',
     loginId: 'boss',
-    summary: '보안 확인 중인 주문 때문에 정산이 늦어져 임대료 날 잔액이 모자라요.',
+    summary: '검토 중인 결제 때문에 정산이 늦어져 임대료 날 잔액이 모자라요.',
     sees: [
       '새 기기 로그인 이메일 확인',
       '보안 확인 결과',

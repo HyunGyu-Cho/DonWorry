@@ -24,18 +24,18 @@ test('checkoutResult_hidesScoreAndReason', async () => {
   }
 })
 
-// HELD를 "결제 완료"로 보이면 사장님이 확인 전에 케이크를 만든다
-test('checkingOutcome_isNotShownAsPaid', async () => {
+// 매입 보류(검토 중)여도 구매자에게는 결제 완료 — 검토한다는 사실 · 이유를 알리지 않는다 (S-3 #86)
+test('heldPayment_isShownAsPaid_withoutReviewHint', async () => {
   const result = await mockPayCheckout('demo-session-31', 'demo-card-new')
-  assert.equal(result.outcome, 'CHECKING')
-  assert.doesNotMatch(result.title, /완료/)
-  assert.match(result.message, /본인 확인/)
+  assert.equal(result.outcome, 'PAID')
+  assert.match(result.title, /완료/)
+  assert.doesNotMatch(result.title + result.message, /확인 중|검토|안전|보안/)
 })
 
-// 시연 규칙: 고액 + 처음 쓰는 카드 → 확인 중, 고액 + 해외 카드 → 결제 불가, 소액은 결제 완료
+// 시연 규칙: 고액 + 해외 카드 → 결제 불가, 거절 카드 → 카드사 거절, 나머지는 결제 완료
 test('decideOutcome_followsDemoRules', () => {
   assert.equal(decideOutcome('demo-card-usual', 650000), 'PAID')
-  assert.equal(decideOutcome('demo-card-new', 650000), 'CHECKING')
+  assert.equal(decideOutcome('demo-card-new', 650000), 'PAID')
   assert.equal(decideOutcome('demo-card-foreign', 890000), 'BLOCKED')
   assert.equal(decideOutcome('demo-card-new', 38000), 'PAID')
   assert.equal(decideOutcome('demo-card-foreign', 38000), 'PAID')

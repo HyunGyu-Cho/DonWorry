@@ -258,7 +258,7 @@ export function buildMockNotifications(now: Date): Notification[] {
       'BUYER',
       'minsu.kim@example.com',
       'CHECK',
-      '[CakeShop] 결제를 확인하고 있습니다 · 단체 행사용 케이크 세트',
+      '[CakeShop] 결제 본인 확인 요청 · 단체 행사용 케이크 세트',
       24,
     ),
     mail(
@@ -266,7 +266,7 @@ export function buildMockNotifications(now: Date): Notification[] {
       'OWNER',
       owner,
       'FDS',
-      '[돈워리] 보안 확인 중인 결제가 있습니다 · 단체 행사용 케이크 세트',
+      '[돈워리] 검토 중인 결제가 있습니다 (주문은 그대로 진행) · 단체 행사용 케이크 세트',
       24,
     ),
     mail(
@@ -329,7 +329,7 @@ export function buildMockOwnerResults(now: Date): OwnerPaymentResult[] {
       '31',
       'CHECKING',
       24,
-      '카드 승인은 완료되었고, 확인이 끝나면 결과를 메일로 알려 드립니다. 아직 케이크를 만들지 마세요.',
+      '카드 승인이 완료된 결제예요. 돈워리가 안전 확인 중이지만 주문은 그대로 진행하셔도 됩니다. 문제가 생기면 손해는 돈워리가 부담해요.',
     ),
     row(
       '18',

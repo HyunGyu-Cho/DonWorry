@@ -20,8 +20,9 @@ async function fetchHome(fds: boolean, finance: boolean, today: string) {
   const [results, mails, forecast, settlements] = await Promise.all([
     fds ? getOwnerResults() : Promise.resolve(null),
     getNotifications({ recipientType: 'OWNER' }),
-    finance ? getFundForecast() : Promise.resolve(null),
-    finance ? getSettlements(today, until) : Promise.resolve(null),
+    // 정산 API가 아직 없거나 실패해도 결제 · 메일 칸은 보여 준다 (정산 칸만 숨김)
+    finance ? getFundForecast().catch(() => null) : Promise.resolve(null),
+    finance ? getSettlements(today, until).catch(() => null) : Promise.resolve(null),
   ])
   return { results, mails, forecast, settlements }
 }
@@ -63,14 +64,12 @@ function OwnerHomeBody(props: {
       {counts && counts.CHECKING > 0 && (
         <Alert
           className="dw-fund-alert"
-          type="warning"
+          type="info"
           showIcon
           message={
-            <b>
-              보안 확인 중인 주문 {counts.CHECKING}건 · 결과가 나올 때까지 케이크를 만들지 마세요
-            </b>
+            <b>돈워리가 검토 중인 결제 {counts.CHECKING}건 · 주문은 그대로 진행하셔도 돼요</b>
           }
-          description="카드 승인은 됐지만 돈워리 보안팀이 확인하고 있어요. 결과는 메일로도 알려 드려요."
+          description="카드 승인이 끝난 결제예요. 검토 끝에 사기로 드러나도 손해는 돈워리가 부담해요. 결과는 메일로도 알려 드려요."
           action={
             <Link to="/owner/results">
               <Button data-tour="home-checking">주문 보기</Button>
@@ -105,7 +104,7 @@ function OwnerHomeBody(props: {
           <HomeTile
             to="/owner/results"
             label="보안 확인 결과"
-            value={`확인 중 ${counts.CHECKING}건`}
+            value={`검토 중 ${counts.CHECKING}건`}
             note={OWNER_RESULT_ORDER.filter((k) => k !== 'CHECKING')
               .map((k) => `${OWNER_RESULT[k].label} ${counts[k]}`)
               .join(' · ')}

@@ -16,7 +16,9 @@ public enum PaymentErrorCode {
     CHECKOUT_EXPIRED("PAY_022", "결제창이 만료됐거나 없습니다.", HttpStatus.GONE),
     CHECKOUT_ALREADY_PAID("PAY_023", "이미 결제한 결제창입니다.", HttpStatus.CONFLICT),
     UNKNOWN_CARD("PAY_025", "없는 시연 카드입니다.", HttpStatus.BAD_REQUEST),
-    UNKNOWN_PRODUCT("PAY_026", "없는 테스트 상품입니다.", HttpStatus.BAD_REQUEST);
+    UNKNOWN_PRODUCT("PAY_026", "없는 테스트 상품입니다.", HttpStatus.BAD_REQUEST),
+    // 사장님 화면은 가맹점 계정으로만 (#86)
+    MERCHANT_LOGIN_REQUIRED("PAY_030", "가맹점 계정으로 로그인해야 합니다.", HttpStatus.FORBIDDEN);
 
     private final String code;
     private final String message;

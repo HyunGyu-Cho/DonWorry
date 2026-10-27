@@ -68,7 +68,7 @@
 - 결제창은 요청의 접속 IP(`X-Forwarded-For`는 신뢰하는 프록시에서만)와 결제창이 심은 기기 식별 쿠키를 FDS 입력으로 저장한다.
 - demo 프로필에서만 `X-Demo-Fake-IP` 헤더를 `demo_fake_ips`로 바꿔 쓴다. 다른 프로필은 이 헤더를 무시한다.
 - 카드 번호는 받지 않는다. 시연에서는 모의 카드 토큰(`cardToken`)만 쓴다.
-- 결과 종류: `PAID`(결제 완료, CAPTURED) · `CHECKING`(결제 확인 중, HELD · PENDING) · `BLOCKED`(결제 불가, DENIED) · `DECLINED`(카드사 거절). 구매자에게 점수 · 사유는 보이지 않는다.
+- 결과 종류: `PAID`(결제 완료 — 카드 승인됨, 매입 보류 · 검토 중 포함) · `BLOCKED`(결제 불가 — FDS 거절 · 평가 실패) · `DECLINED`(카드사 거절). 구매자에게 검토 여부 · 점수 · 사유는 보이지 않는다 (ADR-0020 2026-10-27 개정, #86).
 - ④ `returnUrl?paymentId=...&orderRef=...`로 돌려보낸다. CakeShop은 이 값으로 주문 상태를 바꾸지 않고, 통지 또는 조회 결과를 기다린다.
 
 ## 5. 결과 통지 ⑤ — `POST {merchants.webhook_url}`

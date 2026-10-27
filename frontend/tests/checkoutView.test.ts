@@ -26,7 +26,6 @@ test('outcomeView_chargeTextMatchesOutcome', () => {
   assert.match(OUTCOME_VIEW.PAID.charge, /청구됐어요/)
   assert.match(OUTCOME_VIEW.BLOCKED.charge, /청구되지 않았어요/)
   assert.match(OUTCOME_VIEW.DECLINED.charge, /청구되지 않았어요/)
-  assert.doesNotMatch(OUTCOME_VIEW.CHECKING.charge, /청구됐어요/)
   for (const v of Object.values(OUTCOME_VIEW)) assert.doesNotMatch(v.charge, INTERNAL)
 })
 
@@ -53,7 +52,7 @@ test('testOrder_canRetrySameProduct_andReturnsToTestShop', async () => {
   const [product] = await mockGetTestProducts()
   const first = await mockCreateTestOrder(product.productId)
   const paid = await mockPayCheckout(first.sessionToken, 'demo-card-new')
-  assert.equal(paid.outcome, 'CHECKING')
+  assert.equal(paid.outcome, 'PAID')
   assert.match(paid.returnUrl, /^\/demo\/shop\/result\?/)
   await assert.rejects(
     mockPayCheckout(first.sessionToken, 'demo-card-usual'),

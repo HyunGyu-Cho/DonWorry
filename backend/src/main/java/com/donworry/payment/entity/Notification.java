@@ -79,6 +79,19 @@ public class Notification {
         return notification;
     }
 
+    // 결제 안내 메일 (#86: 승인 취소 안내) — 발송 전이라 PENDING, 링크 없음
+    public static Notification buyerPayment(Long paymentId, String email, String subject, Instant now) {
+        Notification notification = new Notification();
+        notification.paymentId = Objects.requireNonNull(paymentId, "paymentId");
+        notification.recipientType = "BUYER";
+        notification.recipientEmail = Objects.requireNonNull(email, "email");
+        notification.kind = "PAYMENT";
+        notification.subject = subject;
+        notification.status = "PENDING";
+        notification.createdAt = micros(now);
+        return notification;
+    }
+
     // 링크를 새로 발급한다 — 이전 링크는 더 쓸 수 없다 (시연: 메일 대신 화면 버튼으로 연다)
     public void reissueToken(String tokenHash, Instant expiresAt) {
         this.confirmTokenHash = Objects.requireNonNull(tokenHash, "tokenHash");

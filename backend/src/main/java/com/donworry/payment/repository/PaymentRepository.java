@@ -2,6 +2,7 @@ package com.donworry.payment.repository;
 
 import com.donworry.payment.entity.Payment;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -32,4 +33,7 @@ public interface PaymentRepository extends Repository<Payment, Long> {
             @Param("merchantId") Long merchantId,
             @Param("customerRef") String customerRef,
             @Param("cardFingerprint") String cardFingerprint);
+
+    // 사장님 보안 확인 결과 (#86) — 우리 가게 결제, 최근 먼저
+    List<Payment> findByMerchantIdOrderByCreatedAtDesc(Long merchantId);
 }

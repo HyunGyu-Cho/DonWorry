@@ -82,7 +82,9 @@ class CheckoutToCaseFlowTests {
 
         Map<?, ?> result = pay(token, "demo-card-new", 200);
 
-        assertThat(result.get("outcome")).isEqualTo("CHECKING");
+        // 매입 보류여도 구매자에게는 "결제 완료" — 검토는 뒤에서 (S-3, #86)
+        assertThat(result.get("outcome")).isEqualTo("PAID");
+        assertThat(result.get("title")).isEqualTo("결제가 완료되었습니다");
         assertThat(result.get("returnUrl").toString()).startsWith("/demo/shop/result?paymentId=");
         Long paymentId = Long.valueOf(result.get("paymentId").toString());
         assertThat(paymentLookup.find(paymentId).orElseThrow().status()).isEqualTo("HELD");
@@ -218,5 +220,34 @@ class CheckoutToCaseFlowTests {
                         .value("NOT_MINE"))
                 .andExpect(jsonPath("$.reports[?(@.evidenceVersion == " + (before + 1) + ")]")
                         .isNotEmpty());
+    }
+
+    // S-3 (#86): 사장님은 로그인한 가게의 "검토 중"을 보고, 로그인하지 않으면 볼 수 없다
+    @Test
+    void owner_seesCheckingForHeldPayment() throws Exception {
+        Long paymentId = Long.valueOf(
+                pay(order("cake-set"), "demo-card-new", 200).get("paymentId").toString());
+        mvc.perform(get("/api/payment/owner/results"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PAY_030"));
+
+        var login = mvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of("loginId", "boss", "password", "1234"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        var session = (org.springframework.mock.web.MockHttpSession)
+                login.getRequest().getSession(false);
+        mvc.perform(get("/api/payment/owner/results").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.paymentId == '" + paymentId + "')].result")
+                        .value("CHECKING"))
+                .andExpect(jsonPath("$[?(@.paymentId == '" + paymentId + "')].guide")
+                        .value(org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.containsString("주문은 그대로 진행"))));
+        // 시드의 정상 결제(지난 결제 5건)는 보안 확인 결과에 없다
+        mvc.perform(get("/api/payment/owner/results").session(session).param("result", "ACCEPTED"))
+                .andExpect(jsonPath("$[?(@.orderRef == 'DEMO-PAST-1')]").isEmpty());
+        mvc.perform(get("/api/payment/notifications").session(session).param("paymentId", String.valueOf(paymentId)))
+                .andExpect(jsonPath("$[0].kind").value("CHECK"));
     }
 }

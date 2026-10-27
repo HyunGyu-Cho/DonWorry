@@ -24,8 +24,9 @@ export type DemoCard = {
   country: string
 }
 
-// PAID = 결제 완료(CAPTURED), CHECKING = 결제 확인 중(HELD · PENDING), BLOCKED = 결제 불가(DENIED), DECLINED = 카드사 거절
-export type CheckoutOutcome = 'PAID' | 'CHECKING' | 'BLOCKED' | 'DECLINED'
+// PAID = 결제 완료 (카드 승인됨 — 매입 보류 · 검토 중이어도 구매자에게는 완료, S-3 #86)
+// BLOCKED = 결제 불가(FDS 거절 · 평가 실패), DECLINED = 카드사 거절. 검토 여부는 구매자에게 보이지 않는다
+export type CheckoutOutcome = 'PAID' | 'BLOCKED' | 'DECLINED'
 
 export type CheckoutResult = {
   paymentId: string

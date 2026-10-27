@@ -56,7 +56,7 @@ export function OwnerResultsPage() {
   const header = (
     <PageHeader
       title="보안 확인 결과"
-      description="돈워리 보안팀이 확인한 우리 가게 결제의 처리 결과예요. 보안 확인 중인 주문은 결과가 나올 때까지 케이크를 만들지 마세요."
+      description="돈워리 보안팀이 확인한 우리 가게 결제의 처리 결과예요. 검토 중이어도 주문은 그대로 진행하셔도 돼요 — 사기로 드러나면 손해는 돈워리가 부담해요."
     />
   )
   if (error) {

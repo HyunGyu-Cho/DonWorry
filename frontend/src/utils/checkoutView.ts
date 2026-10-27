@@ -7,7 +7,6 @@ type ResultStatus = 'success' | 'info' | 'warning' | 'error'
 // 결과 종류 → 결과 그림 · 청구 여부 한 줄
 export const OUTCOME_VIEW: Record<CheckoutOutcome, { status: ResultStatus; charge: string }> = {
   PAID: { status: 'success', charge: '카드에 청구됐어요' },
-  CHECKING: { status: 'info', charge: '아직 최종 처리 전이에요' },
   BLOCKED: { status: 'warning', charge: '카드에 청구되지 않았어요' },
   DECLINED: { status: 'error', charge: '카드에 청구되지 않았어요' },
 }
@@ -15,7 +14,7 @@ export const OUTCOME_VIEW: Record<CheckoutOutcome, { status: ResultStatus; charg
 // 테스트 상점 안내용 — 카드마다 어떤 결과가 나오는지 (Mock 시연 규칙, 실제는 FDS가 정한다)
 export const CARD_GUIDE: { label: string; result: string }[] = [
   { label: '자주 쓰는 카드', result: '결제 완료' },
-  { label: '처음 쓰는 카드', result: '고액이면 결제 확인 중 (본인 확인 메일)' },
+  { label: '처음 쓰는 카드', result: '결제 완료 (고액이면 돈워리가 뒤에서 확인 · 본인 확인 메일)' },
   { label: '해외 발급 카드', result: '고액이면 결제 진행 불가' },
   { label: '한도 초과 카드', result: '카드사 거절' },
 ]
