@@ -64,7 +64,7 @@ sequenceDiagram
 | `get_payment_history` | — | 고객 과거 결제 패턴 | P5 | 준비 전 (2-22) |
 | `get_payment_authentication` | — | 카드 인증 · 승인 정보 | P5 | 준비 전 (2-29) |
 | `get_security_events` | — | 로그인 · 기기 · 계정 이벤트 (직원 사건에도) | P1 | 준비 전 (2-3) |
-| `get_order_context` | — | 주문 · 배송 · 구매자 연동 정보 | P5 (CakeShop) | 준비 전 (2-22) |
+| `get_order_context` | — | 주문 이름 · 구매자 본인 확인 응답 (배송 · 픽업은 2-29) | P5 (CakeShop) | 있음 (#82, 구매자 응답까지) |
 | `find_similar_cases` | — | 비슷한 과거 사건과 판정 결과 (근거로만, 자동 판정 금지) | P3 | 준비 전 (2-9) |
 
 - **주소:** `POST /internal/ai/tools/{toolName}`, 본문 `{ reportId, attemptId, args }`, 서비스 키(`X-Service-Key`)로 지킨다 (결과 수신과 같은 키)
@@ -182,7 +182,7 @@ sequenceDiagram
 
 - **응답 형식:** 데이터가 없으면 `ready: false` + `note`("데이터 준비 전" · "조회 실패") + 빈 `data` (#70). ai-server는 Spring 오류 · 연결 실패 · 5초 응답 초과를 같은 "조회 실패" 결과로 바꿔 AI에게 준다
 - **Tool 하나가 실패해도 보고서는 계속 쓴다.** 시도 실패로 세지 않고, AI가 그 내용을 `unknowns`(모르는 것)에 적는다. 예외로 Spring이 `409 RPT_003`(현재 시도 아님)을 주면 그 시도는 이미 버려진 것이라 ai-server가 조사를 멈추고 결과를 보내지 않는다
-- **Tool 호출 흐름:** AI가 보고서 대신 Tool 호출을 답하면 ai-server가 Spring 창구를 부르고 결과를 대화에 붙여 다시 묻는다. 어떤 창구를 언제 부를지는 AI가 정한다(지시문에 "`get_fds_evidence` 먼저"). 가짜 AI는 판단 없이 사건 종류별 고정 순서로 부른다 (결제 사기: `get_fds_evidence` → `get_case_payments` → `get_payment_history` → `find_similar_cases`, 직원 사건: `get_security_events` → `find_similar_cases`)
+- **Tool 호출 흐름:** AI가 보고서 대신 Tool 호출을 답하면 ai-server가 Spring 창구를 부르고 결과를 대화에 붙여 다시 묻는다. 어떤 창구를 언제 부를지는 AI가 정한다(지시문에 "`get_fds_evidence` 먼저"). 가짜 AI는 판단 없이 사건 종류별 고정 순서로 부른다 (결제 사기: `get_fds_evidence` → `get_case_payments` → `get_order_context`(#82) → `get_payment_history` → `find_similar_cases`, 직원 사건: `get_security_events` → `find_similar_cases`)
 - **최대 호출 수:** 한 시도에서 8번(`AI_SERVER_MAX_TOOL_CALLS`). 넘으면 "이제 답을 쓰세요"를 한 번 알리고, 그래도 부르면 형식이 틀린 답(LLM 재질문 1회)으로 센다
 - 없는 창구 이름은 Spring에 묻지 않고 "없는 창구"로 AI에게 알린다. 창구 호출 기록은 Spring `ai_report_steps`가 정본이라 ai-server 과정(`steps`)에는 AI 판단 · 형식 검사만 남긴다
 
