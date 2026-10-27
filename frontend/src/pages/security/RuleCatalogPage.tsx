@@ -10,7 +10,7 @@ import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { RawDetails } from '../../components/explain/RawDetails'
 import { TermTip } from '../../components/explain/TermTip'
-import { resultForScore, RULE_GUIDE, SCORE_BANDS } from '../../config/fdsRules'
+import { MAX_DISPLAY_SCORE, resultForScore, RULE_GUIDE, SCORE_BANDS } from '../../config/fdsRules'
 import type { FdsRule, RuleCode, RuleHitStat, RuleTarget } from '../../types/fds'
 import type { ApprovalRequest } from '../../types/investigation'
 import { relativeTime } from '../../utils/humanize'
@@ -34,12 +34,12 @@ const BAND_LABEL: Record<string, string> = { ALLOW: '통과', REVIEW: '직원 �
 // 위쪽 안내 카드의 점수 예시 — 점수는 실제 Rule 값으로 계산한다
 const EXAMPLES: { codes: RuleCode[]; story: string }[] = [
   {
-    codes: ['HIGH_AMOUNT', 'AMOUNT_SPIKE', 'NEW_CARD'],
-    story: '65만 원 · 평소의 16배 · 처음 쓰는 카드',
+    codes: ['HIGH_AMOUNT', 'NEW_CARD'],
+    story: '단골이 65만 원을 처음 쓰는 카드로',
   },
   {
-    codes: ['CARD_TESTING', 'NEW_ACCOUNT', 'GEO_MISMATCH'],
-    story: '같은 IP 카드 3장 · 신규 계정 · 해외 익명 IP',
+    codes: ['HIGH_RISK_COUNTRY_IP', 'CARD_TESTING'],
+    story: '고위험 국가 IP · 같은 IP 카드 3장',
   },
 ]
 
@@ -114,7 +114,10 @@ function ScoreGuide({ rules }: { rules: FdsRule[] }) {
         })}
       </div>
       {EXAMPLES.map((ex) => {
-        const total = ex.codes.reduce((sum, code) => sum + scoreOf(code), 0)
+        const total = Math.min(
+          MAX_DISPLAY_SCORE,
+          ex.codes.reduce((sum, code) => sum + scoreOf(code), 0),
+        )
         const parts = ex.codes.map((code) => `+${scoreOf(code)}`).join(' ')
         return (
           <p key={ex.story} className="dw-rule-example">
@@ -218,6 +221,7 @@ function RuleCard(props: RuleCardProps) {
         <Tag color={STATE_TAG[state][1]}>{STATE_TAG[state][0]}</Tag>
       </div>
       <h3>
+        {rule.displayCode && <span className="dw-rule-display-code">{rule.displayCode}</span>}
         {rule.displayName}
         {guide.english && <small className="dw-rule-english"> {guide.english}</small>}
       </h3>
@@ -253,6 +257,7 @@ function RuleCard(props: RuleCardProps) {
         title="원본 값"
         rows={[
           ['Rule 코드', rule.ruleCode],
+          ['표시 번호', rule.displayCode ?? '없음'],
           ['rule_id', rule.ruleId],
           ['점수', rule.score],
           ['기준값', rule.threshold ? JSON.stringify(rule.threshold) : '없음'],

@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// Rule 카탈로그 · 최근 적중 통계 (#82) — 켜기 · 끄기는 2-7
+// Rule 카탈로그 · 최근 적중 통계 (#82) — 폐지 Rule은 빼고 표시 번호 순 (#96). 켜기 · 끄기는 2-7
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -30,7 +30,7 @@ public class FdsRuleQueryService {
     private final FdsEvaluationRepository evaluationRepository;
 
     public List<FdsRuleResponse.Rule> rules() {
-        return ruleRepository.findAllByOrderByRuleIdAsc().stream()
+        return ruleRepository.findActiveCatalog().stream()
                 .map(FdsRuleQueryService::rule)
                 .toList();
     }
@@ -55,7 +55,7 @@ public class FdsRuleQueryService {
         for (Object[] row : evaluationRepository.findLastHitTimes(FdsRuleHitOutcome.MATCH)) {
             last.put((String) row[0], (Instant) row[1]);
         }
-        return ruleRepository.findAllByOrderByRuleIdAsc().stream()
+        return ruleRepository.findActiveCatalog().stream()
                 .filter(rule -> "PAYMENT".equals(rule.getTarget()))
                 .map(rule -> {
                     List<Integer> counts =
@@ -70,6 +70,7 @@ public class FdsRuleQueryService {
         return new FdsRuleResponse.Rule(
                 rule.getRuleId(),
                 rule.getRuleCode(),
+                rule.getDisplayCode(),
                 rule.getTarget(),
                 rule.getDisplayName(),
                 rule.getCriteria(),

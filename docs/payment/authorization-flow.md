@@ -40,10 +40,10 @@ P2 응답에는 paymentId·amount가 없으므로 응답만으로 결제 일치�
 | 평가·승인 결과 | 저장 상태 | authorization_ref | 다음 단계 판단 |
 | --- | --- | --- | --- |
 | DENY | DENIED | null | NONE |
-| ERROR | 기존 PENDING 유지 | null | RECORD_FDS_ERROR (실제 오류 이력 저장 아님) |
 | ALLOW + 성공 | PENDING | 승인기가 반환한 유효 참조 | REQUEST_CAPTURE (이번에는 발행 안 함) |
 | REVIEW + 성공 | HELD | 승인기가 반환한 유효 참조 | NOTIFY_HELD (이번에는 발행 안 함) |
-| ALLOW/REVIEW + 업무 거절 | DECLINED | null | NONE |
+| ERROR + 성공 | HELD | 승인기가 반환한 유효 참조 | NOTIFY_HELD (#96, ADR-0023 — 이전에는 승인 없이 PENDING · RECORD_FDS_ERROR) |
+| ALLOW/REVIEW/ERROR + 업무 거절 | DECLINED | null | NONE |
 | 승인기 예외·null/부적합 결과 | 결과 반영 트랜잭션 롤백 | 기존 값 보존 | 예외 전달, 성공 결과 반환 없음 |
 
 Entity에는 예를 들어 `deny()`, `recordAuthorizationSuccess(reference, hold)`, `declineAuthorization()`처럼 의도가 드러나는 메서드를 둔다. 구현 시 이름은 조정할 수 있지만 임의 setter나 service 타입을 받는 Entity 메서드는 만들지 않는다. Entity는 자신의 상태·참조 조합을 검사하고, FDS 분기 판단은 service의 PaymentRules가 담당한다.

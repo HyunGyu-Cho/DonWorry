@@ -80,19 +80,18 @@ class PaymentAuthorizationFlowTests {
         assertThat(result.status())
                 .isEqualTo(
                         switch (verdict) {
-                            case ALLOW, ERROR -> PaymentStatus.PENDING;
-                            case REVIEW -> PaymentStatus.HELD;
+                            case ALLOW -> PaymentStatus.PENDING;
+                            case REVIEW, ERROR -> PaymentStatus.HELD;
                             case DENY -> PaymentStatus.DENIED;
                         });
         assertThat(result.nextStep())
                 .isEqualTo(
                         switch (verdict) {
                             case ALLOW -> PaymentRules.NextStep.REQUEST_CAPTURE;
-                            case REVIEW -> PaymentRules.NextStep.NOTIFY_HELD;
+                            case REVIEW, ERROR -> PaymentRules.NextStep.NOTIFY_HELD;
                             case DENY -> PaymentRules.NextStep.NONE;
-                            case ERROR -> PaymentRules.NextStep.RECORD_FDS_ERROR;
                         });
-        if (verdict == FdsResult.ALLOW || verdict == FdsResult.REVIEW) {
+        if (verdict != FdsResult.DENY) {
             order.verify(authorizer).authorize(new AuthorizationCommand(101L, 2000L));
             assertThat(result.authorizationRef()).isEqualTo("MOCK-AUTH-101");
         } else {
@@ -103,8 +102,8 @@ class PaymentAuthorizationFlowTests {
         if (verdict == FdsResult.ALLOW) {
             verify(events).publishEvent(new CaptureRequested(101L, 1L, "order", 2000L));
             verifyNoMoreInteractions(events);
-        } else if (verdict == FdsResult.REVIEW) {
-            // 매입 보류면 investigation에 보류를 알린다 (#82)
+        } else if (verdict == FdsResult.REVIEW || verdict == FdsResult.ERROR) {
+            // 매입 보류면 investigation에 보류를 알린다 (#82, 평가 실패도 #96)
             verify(events).publishEvent(org.mockito.ArgumentMatchers.any(com.donworry.payment.api.PaymentHeld.class));
             verifyNoMoreInteractions(events);
         } else {

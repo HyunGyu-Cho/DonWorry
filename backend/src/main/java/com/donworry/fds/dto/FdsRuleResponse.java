@@ -12,6 +12,8 @@ public final class FdsRuleResponse {
     public record Rule(
             Long ruleId,
             String ruleCode,
+            // 결제 Rule 표시 번호 R01~R08, 직원 Rule은 null (#96)
+            String displayCode,
             String target,
             String displayName,
             String criteria,

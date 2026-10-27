@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -96,7 +97,7 @@ class PaymentAuthorizationPersistenceTests {
     void createAndAuthorize_withRealEvaluation_commitsIndependently(boolean review) {
         String customer = UUID.randomUUID().toString();
         if (review) {
-            capturedHistory(customer);
+            highAmountScoresReview();
         }
         when(authorizer.authorize(any())).thenAnswer(invocation -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive())
@@ -118,12 +119,13 @@ class PaymentAuthorizationPersistenceTests {
         verify(authorizer).authorize(new AuthorizationCommand(result.paymentId(), 600_000L));
     }
 
-    // DENY·ERROR 문맥 대역으로 실제 DB 반영을 확인하되 승인기는 호출하지 않는다.
+    // DENY 문맥은 승인기를 호출하지 않고, ERROR 문맥은 승인 후 매입 보류로 커밋한다 (#96 F-2)
     @ParameterizedTest
     @EnumSource(
             value = FdsResult.class,
             names = {"DENY", "ERROR"})
-    void authorize_withNonApprovalVerdict_persistsExpectedState(FdsResult verdict) {
+    void authorize_withDenyOrError_persistsExpectedState(FdsResult verdict) {
+        when(authorizer.authorize(any())).thenAnswer(invocation -> success(invocation.getArgument(0)));
         var original = evaluatedContext();
         var response = new FdsEvaluationResponse(
                 original.evaluationRequestId(),
@@ -138,11 +140,16 @@ class PaymentAuthorizationPersistenceTests {
                 new PaymentEvaluationResult(
                         response, original.evaluationResult().decision()));
         authorization.authorize(context);
-        assertStored(
-                context.payment().paymentId(),
-                verdict == FdsResult.DENY ? PaymentStatus.DENIED : PaymentStatus.PENDING,
-                null);
-        verifyNoInteractions(authorizer);
+        if (verdict == FdsResult.DENY) {
+            assertStored(context.payment().paymentId(), PaymentStatus.DENIED, null);
+            verifyNoInteractions(authorizer);
+        } else {
+            assertStored(
+                    context.payment().paymentId(),
+                    PaymentStatus.HELD,
+                    "MOCK-AUTH-" + context.payment().paymentId());
+            verify(authorizer).authorize(any());
+        }
     }
 
     // 업무 거절을 커밋한 결제는 같은 문맥을 다시 받아도 재승인하지 않는다.
@@ -162,7 +169,7 @@ class PaymentAuthorizationPersistenceTests {
     @Test
     void createAndAuthorize_whenCommitFails_rollsBackBothFields() {
         String customer = UUID.randomUUID().toString();
-        capturedHistory(customer);
+        highAmountScoresReview();
         var paymentId = new AtomicLong();
         var failure = new IllegalStateException("injected before-commit failure");
         when(authorizer.authorize(any())).thenAnswer(invocation -> {
@@ -265,14 +272,13 @@ class PaymentAuthorizationPersistenceTests {
         }
     }
 
-    // 이 고객의 매입 완료 이력 (평균 4만 원) — 평소보다 큰 금액 Rule이 판단할 수 있게 (#82)
-    private void capturedHistory(String customer) {
-        for (int i = 0; i < 2; i++) {
-            var past = com.donworry.payment.entity.Payment.pending(
-                    999L, customer, UUID.randomUUID().toString(), 40_000L, Instant.now());
-            past.recordAuthorizationSuccess("PAST-" + UUID.randomUUID(), false);
-            past.completeCapture();
-            payments.save(past);
-        }
+    // 이 흐름은 카드 없이 평가돼 R01 고액(30점)만 계산된다 — REVIEW를 만들려고 이 테스트 동안만 고액 점수를 50점으로 (#96)
+    private void highAmountScoresReview() {
+        jdbc.update("UPDATE fds_rules SET score = 50 WHERE rule_code = 'HIGH_AMOUNT'");
+    }
+
+    @AfterEach
+    void restoreHighAmountScore() {
+        jdbc.update("UPDATE fds_rules SET score = 30 WHERE rule_code = 'HIGH_AMOUNT'");
     }
 }

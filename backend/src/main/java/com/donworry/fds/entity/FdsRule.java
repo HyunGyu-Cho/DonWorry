@@ -26,6 +26,10 @@ public class FdsRule {
     @Column(name = "rule_code", nullable = false, length = 100)
     private String ruleCode;
 
+    // 결제 Rule 표시 번호 R01~R08 (#96). 직원 Rule · 폐지 Rule은 null
+    @Column(name = "display_code", length = 10)
+    private String displayCode;
+
     // PAYMENT / STAFF
     @Column(name = "target", nullable = false, length = 20)
     private String target;
@@ -53,6 +57,10 @@ public class FdsRule {
 
     @Column(name = "enabled", nullable = false)
     private boolean enabled;
+
+    // 폐지 시각 (#96) — 폐지 Rule은 평가 · 카탈로그에서 빠진다. enabled(직원이 끄고 켬)와 다르다
+    @Column(name = "retired_at", columnDefinition = "DATETIME(6)")
+    private Instant retiredAt;
 
     @Column(name = "updated_by")
     private Long updatedBy;

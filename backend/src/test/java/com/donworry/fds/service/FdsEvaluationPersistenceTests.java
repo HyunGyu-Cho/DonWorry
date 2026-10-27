@@ -34,18 +34,28 @@ class FdsEvaluationPersistenceTests {
     }
 
     @Test
-    // 시나리오 ①: 평소 4만 원 고객이 처음 쓰는 카드로 65만 원 → 시드 Rule 3개 55점 REVIEW로 저장 (#82)
+    // 시나리오 ①: 평소 4만 원 고객이 처음 쓰는 카드로 65만 원 → R01 30 + R03 25 = 55점 REVIEW로 저장 (#96)
     void evaluate_scenarioOne_persistsReviewWithRuleHits() {
         var requestedAt = Instant.parse("2026-10-27T01:00:00Z");
 
-        var result = evaluator.evaluate(
-                new FdsEvaluationRequest(UUID.randomUUID(), 3L, "hong-gildong", 650_000L, requestedAt, 40_000L, 0));
+        var result = evaluator.evaluate(FdsEvaluationRequest.builder()
+                .evaluationRequestId(UUID.randomUUID())
+                .paymentId(3L)
+                .merchantId(1L)
+                .customerRef("hong-gildong")
+                .amount(650_000L)
+                .paymentRequestedAt(requestedAt)
+                .hasPriorCapturedPayment(true)
+                .cardCompletedPayments(0)
+                .build());
 
         assertThat(result.result()).isEqualTo(FdsResult.REVIEW);
         assertThat(result.riskScore()).isEqualTo(55);
         assertThat(evaluationRepository.findAll()).singleElement().satisfies(evaluation -> {
             assertThat(evaluation.getPaymentRequestedAt()).isEqualTo(requestedAt);
-            assertThat(evaluation.getRuleHits()).hasSize(3);
+            assertThat(evaluation.getRawScore()).isEqualTo(55);
+            assertThat(evaluation.getMerchantId()).isEqualTo(1L);
+            assertThat(evaluation.getRuleHits()).hasSize(2);
         });
     }
 

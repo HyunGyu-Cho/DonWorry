@@ -13,6 +13,7 @@ import com.donworry.payment.api.PaymentLookup;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -45,6 +47,15 @@ class CheckoutToCaseFlowTests {
 
     @Autowired
     CasePaymentRepository casePaymentRepository;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    // 평가 실패 테스트가 깨뜨린 고액 결제 기준값을 시드 값으로 되돌린다 (#96)
+    @AfterEach
+    void restoreHighAmountThreshold() {
+        jdbc.update("UPDATE fds_rules SET threshold = '{\"minAmount\": 500000}' WHERE rule_code = 'HIGH_AMOUNT'");
+    }
 
     private String order(String productId) throws Exception {
         String body = mvc.perform(post("/api/demo/test-shop/orders")
@@ -90,12 +101,45 @@ class CheckoutToCaseFlowTests {
         assertThat(paymentLookup.find(paymentId).orElseThrow().status()).isEqualTo("HELD");
         var evaluation = fdsPaymentEvaluations.latestForPayment(paymentId).orElseThrow();
         assertThat(evaluation.riskScore()).isEqualTo(55);
-        assertThat(evaluation.matchedRuleCodes()).containsExactlyInAnyOrder("HIGH_AMOUNT", "AMOUNT_SPIKE", "NEW_CARD");
+        // R01 고액 30 + R03 결제 이력 없는 카드 25 = 55점 (#96)
+        assertThat(evaluation.matchedRuleCodes()).containsExactly("HIGH_AMOUNT", "NEW_CARD");
         await().atMost(Duration.ofSeconds(5))
                 .untilAsserted(() -> assertThat(casePaymentRepository.findByPaymentId(paymentId))
                         .isPresent());
         mvc.perform(get("/api/checkout/{token}", token))
                 .andExpect(jsonPath("$.status").value("PAID"));
+    }
+
+    // FDS 룰 계산이 실패하면(기준값이 깨진 Rule) ERROR 평가를 남기고, 결제는 승인 후 매입 보류 → 사건 (#96 F-2)
+    // 직원이 연 사건 상세는 점수가 없어도 열린다
+    @Test
+    void 사건상세_평가오류로보류된결제_점수없어도조회됨() throws Exception {
+        jdbc.update(
+                "UPDATE fds_rules SET threshold = '{\"minAmount\": \"not-a-number\"}' WHERE rule_code = 'HIGH_AMOUNT'");
+
+        Map<?, ?> result = pay(order("strawberry"), "demo-card-usual", 200);
+
+        assertThat(result.get("outcome")).isEqualTo("PAID");
+        Long paymentId = Long.valueOf(result.get("paymentId").toString());
+        assertThat(paymentLookup.find(paymentId).orElseThrow().status()).isEqualTo("HELD");
+        var evaluation = fdsPaymentEvaluations.latestForPayment(paymentId).orElseThrow();
+        assertThat(evaluation.result()).isEqualTo(com.donworry.fds.api.FdsResult.ERROR);
+        assertThat(evaluation.riskScore()).isNull();
+        await().atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> assertThat(casePaymentRepository.findByPaymentId(paymentId))
+                        .isPresent());
+        Long caseId = casePaymentRepository
+                .findByPaymentId(paymentId)
+                .orElseThrow()
+                .getSecurityCase()
+                .getId();
+        // 같은 고객의 다른 보류 결제와 한 사건에 묶일 수 있어 이 결제 줄을 골라 본다
+        String row = "$.payments[?(@.paymentId == " + paymentId + ")]";
+        mvc.perform(get("/api/security-cases/{id}", caseId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(row + ".fdsResult").value("ERROR"))
+                .andExpect(jsonPath(row + ".riskScore")
+                        .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.nullValue())));
     }
 
     // 같은 결제창으로 두 번 결제할 수 없다 · 없는 결제창은 만료와 같은 410
@@ -135,11 +179,14 @@ class CheckoutToCaseFlowTests {
 
         mvc.perform(get("/api/fds/rules"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].displayCode").value("R01"))
                 .andExpect(
-                        jsonPath("$[?(@.ruleCode == 'NEW_CARD')].displayName").value("처음 쓰는 카드"));
+                        jsonPath("$[?(@.ruleCode == 'NEW_CARD')].displayName").value("기존 결제 이력 없는 카드"))
+                .andExpect(jsonPath("$[?(@.ruleCode == 'AMOUNT_SPIKE')]").isEmpty());
         mvc.perform(get("/api/fds/rules/hit-stats").param("days", "7"))
-                .andExpect(jsonPath("$[?(@.ruleCode == 'AMOUNT_SPIKE')].daily.length()")
-                        .value(7));
+                .andExpect(jsonPath("$[?(@.ruleCode == 'NEW_DEVICE')].daily.length()")
+                        .value(7))
+                .andExpect(jsonPath("$[?(@.ruleCode == 'AMOUNT_SPIKE')]").isEmpty());
         mvc.perform(get("/api/investigation/payment-alerts")
                         .param("attentionOnly", "true")
                         .param("size", "50"))
@@ -158,7 +205,7 @@ class CheckoutToCaseFlowTests {
                 .andExpect(jsonPath("$.code").value("PAY_001"));
         mvc.perform(get("/api/security-cases/{id}", caseId))
                 .andExpect(jsonPath("$.securityCase.subjectLabel").value("김민수 고객"))
-                .andExpect(jsonPath("$.payments[0].hitRuleCodes.length()").value(3))
+                .andExpect(jsonPath("$.payments[0].hitRuleCodes.length()").value(2))
                 .andExpect(jsonPath("$.payments[0].evaluationId").isNumber());
         mvc.perform(get("/api/security-cases/handoffs")).andExpect(status().isOk());
         mvc.perform(get("/api/investigation/approvals")).andExpect(status().isOk());

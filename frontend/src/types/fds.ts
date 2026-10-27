@@ -1,16 +1,19 @@
 // P2 fds 계약 — 값은 fds_rules · blocklist_entries · staff_rule_hits와 같은 문자열 (docs/erd 7절)
 // 결제 평가(경보) 타입도 여기 둔다 — api/fds.ts는 기존 화면을 위해 다시 내보낸다
 
+// 결제 Rule R01~R08 순 (fds_rules.display_code, #96)
 export const PAYMENT_RULE_CODES = [
-  'BLOCKLIST',
   'HIGH_AMOUNT',
-  'AMOUNT_SPIKE',
+  'NEW_DEVICE',
   'NEW_CARD',
-  'NEW_ACCOUNT',
+  'RAPID_REPEAT',
+  'HIGH_RISK_COUNTRY_IP',
   'CARD_TESTING',
+  'BLOCKLIST',
   'DECLINE_RETRY',
-  'GEO_MISMATCH',
 ] as const
+// 폐지한 결제 Rule (#96) — 카탈로그에는 없고, 과거 평가 기록에만 남아 있을 수 있다
+export const RETIRED_PAYMENT_RULE_CODES = ['AMOUNT_SPIKE', 'NEW_ACCOUNT', 'GEO_MISMATCH'] as const
 export const STAFF_RULE_CODES = [
   'STAFF_LOGIN_FAIL',
   'STAFF_NEW_DEVICE',
@@ -22,8 +25,9 @@ export const STAFF_RULE_CODES = [
 ] as const
 
 export type PaymentRuleCode = (typeof PAYMENT_RULE_CODES)[number]
+export type RetiredPaymentRuleCode = (typeof RETIRED_PAYMENT_RULE_CODES)[number]
 export type StaffRuleCode = (typeof STAFF_RULE_CODES)[number]
-export type RuleCode = PaymentRuleCode | StaffRuleCode
+export type RuleCode = PaymentRuleCode | RetiredPaymentRuleCode | StaffRuleCode
 
 export type RuleTarget = 'PAYMENT' | 'STAFF'
 // SCORE = 점수 더하기, DENY = 점수 계산 없이 거절, ALERT = 직원 경보
@@ -34,6 +38,8 @@ export type Severity = 'CAUTION' | 'HIGH'
 export type FdsRule = {
   ruleId: number
   ruleCode: RuleCode
+  // 결제 Rule 표시 번호 R01~R08, 직원 Rule은 null (#96)
+  displayCode: string | null
   target: RuleTarget
   displayName: string
   criteria: string

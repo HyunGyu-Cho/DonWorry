@@ -36,9 +36,12 @@ type Seed = {
   caseId?: string
   errorCode?: string
   hits: Hit[]
+  // 비교할 이력이 없어 판단하지 못한 Rule (UNAVAILABLE)
+  unavailable?: PaymentRuleCode[]
 }
 
 // 점수 계산까지 간 평가는 차단 목록 미일치 + Rule 7개를 모두 남긴다. notes = 미적중 값을 바꿀 때
+// Mock은 묶음 ② · ③까지 끝난 모습(R01~R08 모두 계산)을 보여 준다 (#96)
 const scored = (
   matched: Partial<Record<PaymentRuleCode, [number, string]>>,
   notes: Partial<Record<PaymentRuleCode, string>> = {},
@@ -46,12 +49,12 @@ const scored = (
   const all: [PaymentRuleCode, string][] = [
     ['BLOCKLIST', '차단 목록과 일치하는 값 없음'],
     ['HIGH_AMOUNT', '50만 원 미만'],
-    ['AMOUNT_SPIKE', '평소 결제 금액과 비슷함'],
+    ['NEW_DEVICE', '평소 결제하던 기기'],
     ['NEW_CARD', '이 카드로 결제 완료 이력 있음'],
-    ['NEW_ACCOUNT', '가입 24시간 지남'],
+    ['RAPID_REPEAT', '최근 10분 결제 1번'],
+    ['HIGH_RISK_COUNTRY_IP', '고위험 국가 IP 아님'],
     ['CARD_TESTING', '같은 접속에서 1시간 카드 1장'],
     ['DECLINE_RETRY', '최근 10분 카드사 거절 없음'],
-    ['GEO_MISMATCH', '카드 발급국과 접속 국가 같음'],
   ]
   return all.map(([code, normal]) => {
     const hit = matched[code]
@@ -69,15 +72,15 @@ const SEEDS: Seed[] = [
     orderTitle: '조각 케이크',
     minutes: 3,
     result: 'DENY',
+    unavailable: ['NEW_DEVICE', 'NEW_CARD'],
     hits: scored(
       {
-        NEW_ACCOUNT: [20, '가입 40분 만에 결제'],
         CARD_TESTING: [45, '같은 접속에서 1시간 안에 카드 3장 시도'],
-        GEO_MISMATCH: [25, '미국 발급 카드 · 네덜란드 익명 접속(Tor)'],
+        HIGH_RISK_COUNTRY_IP: [40, '네덜란드 익명 접속(VPN) · 고위험 국가'],
       },
-      // 가입 40분 계정이라 비교할 이전 결제가 없다
+      // 가입 40분 계정이라 비교할 이전 결제가 없다 (R02 · R03 미적용)
       {
-        AMOUNT_SPIKE: '이전 결제가 없어 비교 못 함',
+        NEW_DEVICE: '이전 결제가 없어 비교 못 함',
         NEW_CARD: '이전 결제가 없어 비교 못 함',
       },
     ),
@@ -116,9 +119,8 @@ const SEEDS: Seed[] = [
     result: 'REVIEW',
     caseId: '201',
     hits: scored({
-      HIGH_AMOUNT: [20, '65만 원 (50만 원 이상)'],
-      AMOUNT_SPIKE: [20, '평소 평균 4만 원의 16배'],
-      NEW_CARD: [15, '이 카드로 결제 완료 0건'],
+      HIGH_AMOUNT: [30, '65만 원 (50만 원 이상)'],
+      NEW_CARD: [25, '이 카드로 결제 완료 0건'],
     }),
   },
   {
@@ -130,7 +132,7 @@ const SEEDS: Seed[] = [
     orderTitle: '초코 케이크',
     minutes: 50,
     result: 'ALLOW',
-    hits: scored({ DECLINE_RETRY: [30, '10분 안에 카드사 거절 2회 뒤 재시도'] }),
+    hits: scored({ DECLINE_RETRY: [35, '10분 안에 카드사 거절 2회 뒤 재시도'] }),
   },
   {
     evaluationId: 101,
@@ -156,7 +158,7 @@ function toDetail(seed: Seed, now: Date): Omit<FdsEvaluationDetail, 'history'> {
       hitId: seed.evaluationId * 10 + i,
       ruleCode: code,
       ruleName: nameOf(code),
-      outcome: matched ? 'MATCH' : 'NO_MATCH',
+      outcome: matched ? 'MATCH' : seed.unavailable?.includes(code) ? 'UNAVAILABLE' : 'NO_MATCH',
       appliedScore: points,
       observedValue: observed,
       thresholdSnapshot: MOCK_RULES.find((r) => r.ruleCode === code)?.criteria ?? null,
@@ -171,7 +173,8 @@ function toDetail(seed: Seed, now: Date): Omit<FdsEvaluationDetail, 'history'> {
       evaluationId: seed.evaluationId,
       paymentId: seed.paymentId,
       customerRef: seed.customerRef,
-      riskScore: seed.result === 'ERROR' || blocklisted ? null : score,
+      // 화면 점수는 최대 100 (원래 합계는 백엔드 raw_score)
+      riskScore: seed.result === 'ERROR' || blocklisted ? null : Math.min(100, score),
       result: seed.result,
       evaluatedAt: at,
       errorCode: seed.errorCode ?? null,
@@ -239,12 +242,12 @@ export function mockGetFdsEvaluation(evaluationId: string): Promise<FdsEvaluatio
 const PAST_PAYMENT_HITS: Partial<Record<RuleCode, number[]>> = {
   BLOCKLIST: [0, 0, 1, 0, 1, 0],
   HIGH_AMOUNT: [2, 1, 3, 0, 2, 1],
-  AMOUNT_SPIKE: [1, 0, 2, 0, 1, 1],
+  NEW_DEVICE: [1, 0, 2, 0, 1, 1],
   NEW_CARD: [3, 2, 4, 1, 3, 2],
-  NEW_ACCOUNT: [1, 2, 1, 1, 0, 2],
+  RAPID_REPEAT: [1, 2, 1, 1, 0, 2],
+  HIGH_RISK_COUNTRY_IP: [0, 1, 0, 1, 0, 0],
   CARD_TESTING: [0, 0, 1, 0, 0, 0],
   DECLINE_RETRY: [1, 0, 0, 2, 1, 0],
-  GEO_MISMATCH: [0, 1, 0, 1, 0, 0],
 }
 
 // Rule 적중 시각 — 결제 평가 MATCH + 직원 경보

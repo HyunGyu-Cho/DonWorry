@@ -48,7 +48,8 @@ record AuthorizationResult(
 | 조건 | 승인기 호출 | 후속 처리 계약 |
 | --- | --- | --- |
 | FDS DENY | 없음 | DENIED 저장 대상 |
-| FDS ERROR·평가 예외·잘못된 평가 응답 | 없음 | 최초 PENDING 보존, 자동 승인 금지 |
+| FDS ERROR (#96) | 있음 | 승인 성공이면 HELD(매입 보류) → 사건, 자동 매입 금지 |
+| 평가 예외·잘못된 평가 응답 | 없음 | 최초 PENDING 보존, 자동 승인 금지 |
 | ALLOW + SUCCEEDED | 1회 | afterAuthorization의 SUCCEEDED 판단 사용. 참조 저장·PENDING 유지 |
 | REVIEW + SUCCEEDED | 1회 | 같은 규칙으로 참조 저장·HELD 반영 |
 | ALLOW/REVIEW + DECLINED | 1회 | DECLINED 판단 사용. 승인 참조 없음 |

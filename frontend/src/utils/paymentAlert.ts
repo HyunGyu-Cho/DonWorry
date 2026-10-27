@@ -61,20 +61,22 @@ export function verdict(e: Pick<FdsEvaluationSummary, 'result' | 'hitRuleCodes'>
 // muted = 비교할 이력이 없어 좋다 나쁘다 말할 수 없음
 export type Fact = { label: string; text: string; tone: Tone }
 
-// 결제 한 건을 카드 · 접속 · 기기 · 계정 · 금액 · 시도 순서로 한 줄씩
+// 결제 한 건을 카드 · 접속 · 기기 · 계정 · 금액 · 시도 순서로 한 줄씩 (R01~R08 기준, #96)
 export function paymentFacts(
   detail: Pick<FdsEvaluationDetail, 'ruleHits'>,
   ctx: PaymentContext | null,
 ): Fact[] {
-  const hit = new Set(
-    detail.ruleHits.filter((h) => h.outcome === 'MATCH').map((h) => h.ruleCode as RuleCode),
-  )
+  const matched = (h: { outcome: string }) => h.outcome === 'MATCH'
+  const hit = new Set(detail.ruleHits.filter(matched).map((h) => h.ruleCode as RuleCode))
   if (hit.has('BLOCKLIST')) {
     return [{ label: '차단', text: '과거 사기로 확인된 값과 일치해요', tone: 'bad' }]
   }
   const facts: Fact[] = []
-  // 가입 직후 계정은 이전 결제가 없어 카드 · 금액을 "평소"와 비교할 수 없다
-  const noHistory = hit.has('NEW_ACCOUNT')
+  // 과거 정상 결제가 없는 구매자는 카드 · 기기를 "평소"와 비교할 수 없다 (R02 · R03 확인 불가)
+  const noHistory = detail.ruleHits.some(
+    (h) =>
+      (h.ruleCode === 'NEW_CARD' || h.ruleCode === 'NEW_DEVICE') && h.outcome === 'UNAVAILABLE',
+  )
   const card = cardName(ctx?.cardLast4 ?? null)
   const issued = ctx?.cardCountry ? `${countryName(ctx.cardCountry)} 발급` : null
   const cardDesc = [card, issued].filter(Boolean).join(', ')
@@ -87,23 +89,26 @@ export function paymentFacts(
   )
   const ip = ctx?.ip ?? null
   const where = ip ? placeName(ip.label) : '확인되지 않은 접속 위치'
-  if (hit.has('GEO_MISMATCH') && ip?.ipType === 'ANONYMOUS') {
-    facts.push({ label: '접속', text: `VPN · Tor 같은 익명 접속이에요 · ${where}`, tone: 'bad' })
-  } else if (hit.has('GEO_MISMATCH')) {
-    const from = ip ? countryName(ip.countryCode) : '다른 나라'
+  if (hit.has('HIGH_RISK_COUNTRY_IP')) {
+    const from = ip ? countryName(ip.countryCode) : '고위험 국가'
     facts.push({
       label: '접속',
-      text: `카드는 ${issued ?? '다른 나라 발급'}인데 ${from}에서 접속했어요`,
+      text: `고위험 국가(${from})에서 접속했어요 · ${where}`,
+      tone: 'bad',
+    })
+  } else if (ip?.ipType === 'ANONYMOUS') {
+    // 익명 접속만으로는 점수가 없다 — 참고 안내
+    facts.push({ label: '접속', text: `VPN · Tor 같은 익명 접속이에요 · ${where}`, tone: 'warn' })
+  } else {
+    facts.push({ label: '접속', text: `고위험 국가 접속은 아니에요 · ${where}`, tone: 'ok' })
+  }
+  if (hit.has('NEW_DEVICE')) {
+    facts.push({
+      label: '기기',
+      text: `이 고객이 처음 쓰는 기기예요${ctx?.deviceLabel ? ` (${ctx.deviceLabel})` : ''}`,
       tone: 'warn',
     })
-  } else {
-    facts.push({
-      label: '접속',
-      text: `카드 발급국과 같은 나라에서 접속했어요 · ${where}`,
-      tone: 'ok',
-    })
-  }
-  if (ctx?.deviceLabel) {
+  } else if (ctx?.deviceLabel) {
     // 자동화 브라우저 = 사람이 아니라 프로그램이 조작하는 브라우저 (점수와 무관한 안내)
     const bot = ctx.deviceLabel.includes('자동화')
     facts.push({
@@ -111,20 +116,17 @@ export function paymentFacts(
       text: bot
         ? `${ctx.deviceLabel}에서 결제했어요 · 사람이 아니라 프로그램이 조작했을 수 있어요`
         : `${ctx.deviceLabel}에서 결제했어요`,
-      tone: bot ? 'warn' : 'ok',
+      tone: bot ? 'warn' : noHistory ? 'muted' : 'ok',
     })
   }
   const joined = ctx?.customerJoinedAt ? Date.parse(ctx.customerJoinedAt) : null
   const paid = ctx ? Date.parse(ctx.requestedAt) : null
   const age = joined !== null && paid !== null ? paid - joined : null
-  if (hit.has('NEW_ACCOUNT')) {
+  if (age !== null && age < DAY) {
+    // 가입 시각은 점수에 쓰지 않는다 (신규 계정 Rule 폐지) — 참고 안내
     const after =
-      age === null
-        ? '하루 안'
-        : age < HOUR
-          ? `${Math.max(1, Math.round(age / MINUTE))}분`
-          : `${Math.round(age / HOUR)}시간`
-    facts.push({ label: '계정', text: `가입 ${after} 만에 결제했어요`, tone: 'warn' })
+      age < HOUR ? `${Math.max(1, Math.round(age / MINUTE))}분` : `${Math.round(age / HOUR)}시간`
+    facts.push({ label: '계정', text: `가입 ${after} 만에 결제했어요`, tone: 'muted' })
   } else if (age !== null) {
     facts.push({
       label: '계정',
@@ -133,30 +135,13 @@ export function paymentFacts(
     })
   }
   const amount = ctx ? koreanWon(ctx.amount) : '이 금액'
-  if (hit.has('AMOUNT_SPIKE')) {
-    // 실제 배수는 평가 당시 값으로 (5배는 Rule이 걸리는 기준일 뿐)
-    const observed = detail.ruleHits.find((h) => h.ruleCode === 'AMOUNT_SPIKE')?.observedValue
-    facts.push({
-      label: '금액',
-      text: observed
-        ? `${amount} · ${observed}예요 (기준 5배 이상)`
-        : `${amount} · 이 고객 평소 결제의 5배가 넘어요`,
-      tone: 'warn',
-    })
-  } else if (hit.has('HIGH_AMOUNT')) {
-    facts.push({
-      label: '금액',
-      text: `${amount} · 50만 원이 넘는 고액이에요 (이 고객에겐 평소 수준)`,
-      tone: 'warn',
-    })
-  } else if (noHistory) {
-    facts.push({
-      label: '금액',
-      text: `${amount} · 이전 결제가 없어 비교할 수 없어요`,
-      tone: 'muted',
-    })
-  } else {
-    facts.push({ label: '금액', text: `${amount} · 평소와 비슷한 금액이에요`, tone: 'ok' })
+  facts.push(
+    hit.has('HIGH_AMOUNT')
+      ? { label: '금액', text: `${amount} · 50만 원 이상 고액이에요`, tone: 'warn' }
+      : { label: '금액', text: `${amount} · 고액 기준(50만 원)보다 적어요`, tone: 'ok' },
+  )
+  if (hit.has('RAPID_REPEAT')) {
+    facts.push({ label: '시도', text: '10분 안에 결제를 여러 번 시도했어요', tone: 'warn' })
   }
   if (hit.has('CARD_TESTING')) {
     facts.push({ label: '시도', text: '같은 접속에서 여러 카드를 번갈아 시도했어요', tone: 'bad' })

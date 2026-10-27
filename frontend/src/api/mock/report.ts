@@ -59,7 +59,7 @@ const RUNS: Record<string, { version: number; doneAgo: number; defs: StepDef[] }
     defs: [
       req('결제 1건 · 보고서 v1'),
       tool('get_case_payments', 900, '이 사건에 묶인 결제', '결제 1건 · 합계 65만 원'),
-      tool('get_fds_evidence', 1100, '결제 1건', 'Rule 3개 적중 · 55점'),
+      tool('get_fds_evidence', 1100, '결제 1건', 'Rule 2개 적중 · 55점'),
       tool('get_payment_history', 1200, '김민수 고객 · 최근 90일', '과거 결제 5건 · 평균 4만 원'),
       tool(
         'get_payment_authentication',
@@ -379,17 +379,17 @@ export function buildMockReports(now: Date): ConclusionReport[] {
       ],
       riskPoints: [
         {
-          title: '고액 결제 (+20점)',
+          title: '고액 결제 (+30점)',
           detail: '단체 행사용 케이크 세트 · 65만 원',
           source: 'FDS 평가',
         },
         {
-          title: '평소보다 큰 금액 (+20점)',
+          title: '평소의 16배 금액',
           detail: '평균 4만 원 고객의 65만 원 결제',
-          source: 'FDS 평가',
+          source: '결제 이력',
         },
         {
-          title: '처음 쓰는 카드 (+15점)',
+          title: '기존 결제 이력 없는 카드 (+25점)',
           detail: '끝자리 1173 카드 · 이 고객의 결제 완료 이력 없음',
           source: 'FDS 평가',
         },
@@ -441,7 +441,7 @@ export function buildMockReports(now: Date): ConclusionReport[] {
         {
           evidenceId: 'EV-02',
           source: 'FDS 평가',
-          description: '55점 · 고액 결제, 평소보다 큰 금액, 처음 쓰는 카드',
+          description: '55점 · 고액 결제, 기존 결제 이력 없는 카드',
           retrievedAt: at(20),
           ref: { type: 'FDS_EVALUATION', id: 31 },
         },
@@ -528,7 +528,7 @@ function buildPastReports(now: Date): ConclusionReport[] {
       'PAYMENT_FRAUD',
       74,
       '카드 도용으로 보여 승인 취소를 권고합니다',
-      '김민수 고객 계정에서 처음 쓰는 카드로 평소보다 큰 48만 원을 결제했고, 구매자가 결제하지 않았다고 답했습니다.',
+      '김민수 고객 계정에서 처음 보는 기기와 처음 쓰는 카드로 48만 원을 결제했고, 구매자가 결제하지 않았다고 답했습니다.',
       {
         recommendations: [{ label: '승인 취소 검토', kind: 'NEGATIVE' }],
         riskPoints: [
@@ -609,7 +609,7 @@ const RERUN_DEFS: StepDef[] = [
     '픽업 예정 · 구매자 응답 "결제하지 않았어요"',
   ),
   tool('get_case_payments', 1500, '이 사건에 묶인 결제', '결제 1건 · 합계 65만 원'),
-  tool('get_fds_evidence', 1500, '결제 1건', 'Rule 3개 적중 · 55점'),
+  tool('get_fds_evidence', 1500, '결제 1건', 'Rule 2개 적중 · 55점'),
   tool('get_payment_history', 1800, '김민수 고객 · 최근 90일', '과거 결제 5건 · 평균 4만 원'),
   tool('find_similar_cases', 1500, '같은 고객 · 같은 Rule 조합', '2건 (사기 1 · 정상 1)'),
   llm('위험 근거 4 · 정상 정황 1 · 권고 2', 'AI 판단', 5000),

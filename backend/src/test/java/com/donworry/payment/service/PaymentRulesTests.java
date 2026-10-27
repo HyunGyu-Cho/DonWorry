@@ -27,7 +27,7 @@ class PaymentRulesTests {
         "ALLOW, PENDING, REQUEST_AUTHORIZATION",
         "REVIEW, PENDING, REQUEST_AUTHORIZATION",
         "DENY, DENIED, NONE",
-        "ERROR, PENDING, RECORD_FDS_ERROR"
+        "ERROR, PENDING, REQUEST_AUTHORIZATION"
     })
     void FDS_판정으로_승인_요청_여부를_구분한다(FdsVerdict verdict, PaymentStatus expectedStatus, NextStep expectedStep) {
         var result = PaymentRules.afterFds(State.pending(), verdict);
@@ -44,7 +44,8 @@ class PaymentRulesTests {
         "ALLOW, DECLINED, DECLINED, DECLINED, NONE",
         "REVIEW, DECLINED, DECLINED, DECLINED, NONE",
         "ALLOW, TECHNICAL_FAILURE, PENDING, UNKNOWN, RECONCILE_AUTHORIZATION",
-        "REVIEW, TECHNICAL_FAILURE, PENDING, UNKNOWN, RECONCILE_AUTHORIZATION"
+        "REVIEW, TECHNICAL_FAILURE, PENDING, UNKNOWN, RECONCILE_AUTHORIZATION",
+        "ERROR, TECHNICAL_FAILURE, PENDING, UNKNOWN, RECONCILE_AUTHORIZATION"
     })
     void 승인_성공과_거절과_기술_실패를_구분한다(
             FdsVerdict verdict,
@@ -59,15 +60,32 @@ class PaymentRulesTests {
         assertThat(result.nextStep()).isEqualTo(expectedStep);
     }
 
-    @ParameterizedTest
-    @EnumSource(
-            value = FdsVerdict.class,
-            names = {"DENY", "ERROR"})
-    void 차단이나_평가_실패를_승인_결과로_우회할_수_없다(FdsVerdict verdict) {
+    @Test
+    void 차단을_승인_결과로_우회할_수_없다() {
         for (var outcome : AuthorizationOutcome.values()) {
             assertThatIllegalArgumentException()
-                    .isThrownBy(() -> PaymentRules.afterAuthorization(State.pending(), verdict, outcome));
+                    .isThrownBy(() -> PaymentRules.afterAuthorization(State.pending(), FdsVerdict.DENY, outcome));
         }
+    }
+
+    // 평가 실패 결제는 승인이 나도 매입하지 않고 보류해 사건으로 보낸다 (#96 F-2)
+    @Test
+    void 결제상태규칙_ERROR_승인성공_HELD_사건알림() {
+        var result = PaymentRules.afterAuthorization(State.pending(), FdsVerdict.ERROR, AuthorizationOutcome.SUCCEEDED);
+
+        assertThat(result.state().status()).isEqualTo(PaymentStatus.HELD);
+        assertThat(result.state().authorizationStatus()).isEqualTo(AuthorizationStatus.SUCCEEDED);
+        assertThat(result.nextStep()).isEqualTo(NextStep.NOTIFY_HELD);
+    }
+
+    // 카드사가 거절하면 평가 실패여도 보류 사건이 아니라 거절로 끝난다 (#96 F-2)
+    @Test
+    void 결제상태규칙_ERROR_카드사거절_DECLINED() {
+        var result = PaymentRules.afterAuthorization(State.pending(), FdsVerdict.ERROR, AuthorizationOutcome.DECLINED);
+
+        assertThat(result.state().status()).isEqualTo(PaymentStatus.DECLINED);
+        assertThat(result.state().authorizationStatus()).isEqualTo(AuthorizationStatus.DECLINED);
+        assertThat(result.nextStep()).isEqualTo(NextStep.NONE);
     }
 
     @Test

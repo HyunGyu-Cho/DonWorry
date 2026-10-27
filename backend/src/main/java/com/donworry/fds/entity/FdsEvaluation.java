@@ -39,14 +39,23 @@ public class FdsEvaluation {
     @Column(name = "payment_id", nullable = false)
     private Long paymentId;
 
+    // 평가 당시 가맹점 (#96) — 이력 비교 단위. 개발용 Mock 평가는 null
+    @Column(name = "merchant_id")
+    private Long merchantId;
+
     @Column(name = "customer_ref", nullable = false, length = 100)
     private String customerRef;
 
     @Column(name = "payment_requested_at", nullable = false)
     private Instant paymentRequestedAt;
 
+    // 화면에 보이는 점수 = min(100, rawScore). ERROR면 null
     @Column(name = "risk_score")
     private Integer riskScore;
+
+    // 적용한 Rule 점수의 합 — 100을 넘을 수 있다 (#96). ERROR면 null
+    @Column(name = "raw_score")
+    private Integer rawScore;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -65,32 +74,58 @@ public class FdsEvaluation {
     private FdsEvaluation(
             UUID evaluationRequestId,
             Long paymentId,
+            Long merchantId,
             String customerRef,
             Instant paymentRequestedAt,
             Integer riskScore,
+            Integer rawScore,
             FdsResult result,
             Instant evaluatedAt,
             String errorCode) {
         this.evaluationRequestId = evaluationRequestId;
         this.paymentId = paymentId;
+        this.merchantId = merchantId;
         this.customerRef = customerRef;
         this.paymentRequestedAt = paymentRequestedAt;
         this.riskScore = riskScore;
+        this.rawScore = rawScore;
         this.result = result;
         this.evaluatedAt = evaluatedAt;
         this.errorCode = errorCode;
     }
 
+    // 합계가 100 이하인 평가 (테스트 · Mock) — 원점수 = 표시 점수
     public static FdsEvaluation completed(
             FdsEvaluationRequest request, FdsResult result, int riskScore, Instant evaluatedAt) {
+        return completed(request, result, riskScore, riskScore, evaluatedAt);
+    }
+
+    public static FdsEvaluation completed(
+            FdsEvaluationRequest request, FdsResult result, int riskScore, int rawScore, Instant evaluatedAt) {
         return FdsEvaluation.builder()
                 .evaluationRequestId(request.evaluationRequestId())
                 .paymentId(request.paymentId())
+                .merchantId(request.merchantId())
                 .customerRef(request.customerRef())
                 .paymentRequestedAt(request.paymentRequestedAt())
                 .riskScore(riskScore)
+                .rawScore(rawScore)
                 .result(result)
                 .evaluatedAt(evaluatedAt)
+                .build();
+    }
+
+    // 룰 계산이 실패한 평가 (#96 F-2) — 점수 없이 오류 코드만, 결제는 P5가 매입 보류로 처리한다
+    public static FdsEvaluation failed(FdsEvaluationRequest request, String errorCode, Instant evaluatedAt) {
+        return FdsEvaluation.builder()
+                .evaluationRequestId(request.evaluationRequestId())
+                .paymentId(request.paymentId())
+                .merchantId(request.merchantId())
+                .customerRef(request.customerRef())
+                .paymentRequestedAt(request.paymentRequestedAt())
+                .result(FdsResult.ERROR)
+                .evaluatedAt(evaluatedAt)
+                .errorCode(errorCode)
                 .build();
     }
 

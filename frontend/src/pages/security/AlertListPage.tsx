@@ -276,7 +276,7 @@ export function AlertListPage() {
         )}
       </Card>
       <p className="dw-muted dw-small dw-rule-note">
-        <TermTip term="SCORE_BAND" />: 40점 이상이면 직원 확인, 70점 이상이면 거절. 통과한 결제는
+        <TermTip term="SCORE_BAND" />: 50점 이상이면 직원 확인, 80점 이상이면 거절. 통과한 결제는
         전체 탭에서만 보여요.
       </p>
     </>

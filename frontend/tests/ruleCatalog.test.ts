@@ -34,7 +34,7 @@ test('hitStats_countsByKoreanDay', () => {
       { ruleCode: 'NEW_CARD', at: '2026-10-17T14:59:00Z' }, // 7일 전 — 기간 밖
       { ruleCode: 'HIGH_AMOUNT', at: '2026-10-24T05:00:00Z' },
     ],
-    ['NEW_CARD', 'GEO_MISMATCH'],
+    ['NEW_CARD', 'NEW_DEVICE'],
     now,
   )
   assert.deepEqual(stats[0].daily, [1, 0, 0, 0, 0, 1, 1])
@@ -42,7 +42,7 @@ test('hitStats_countsByKoreanDay', () => {
   assert.equal(stats[0].lastHitAt, '2026-10-23T23:30:00Z')
   // 적중이 없으면 0과 null
   assert.deepEqual(stats[1], {
-    ruleCode: 'GEO_MISMATCH',
+    ruleCode: 'NEW_DEVICE',
     daily: [0, 0, 0, 0, 0, 0, 0],
     total: 0,
     lastHitAt: null,
@@ -66,11 +66,12 @@ test('mockRuleHits_todayHasScenarioHits', () => {
 const rule = (over: Partial<FdsRule>): FdsRule => ({
   ruleId: 1,
   ruleCode: 'HIGH_AMOUNT',
+  displayCode: 'R01',
   target: 'PAYMENT',
   displayName: '고액 결제',
   criteria: '',
   action: 'SCORE',
-  score: 20,
+  score: 30,
   severity: null,
   threshold: null,
   enabled: true,
@@ -106,7 +107,7 @@ test('ruleDisable_needsApproval_enableIsImmediate', async () => {
     requestType: 'RULE_DISABLE',
     targetType: 'FDS_RULE',
     targetId: 4,
-    targetLabel: '"처음 쓰는 카드" Rule',
+    targetLabel: '"기존 결제 이력 없는 카드" Rule',
     reason: '오탐 점검',
   } as const
   const created = await mockCreateApproval(input)

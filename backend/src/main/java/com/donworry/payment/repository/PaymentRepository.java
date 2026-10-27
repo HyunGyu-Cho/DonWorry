@@ -21,10 +21,10 @@ public interface PaymentRepository extends Repository<Payment, Long> {
     @Query("select p from Payment p where p.paymentId = :paymentId")
     Optional<Payment> findByIdForUpdate(@Param("paymentId") Long paymentId);
 
-    // FDS 입력 (#82): 이 고객이 매입까지 끝낸 결제의 평균 금액 — 이력이 없으면 null
-    @Query("select avg(p.amount) from Payment p where p.merchantId = :merchantId and p.customerRef = :customerRef"
+    // FDS 입력 (#96): 같은 가맹점 · 같은 고객이 매입까지 끝낸 결제 수 — 과거 정상 결제가 있는지 (R02 · R03)
+    @Query("select count(p) from Payment p where p.merchantId = :merchantId and p.customerRef = :customerRef"
             + " and p.status = com.donworry.payment.entity.PaymentStatus.CAPTURED")
-    Double averageCapturedAmount(@Param("merchantId") Long merchantId, @Param("customerRef") String customerRef);
+    long countCaptured(@Param("merchantId") Long merchantId, @Param("customerRef") String customerRef);
 
     // AI 증거 (#90): 같은 가게 · 같은 고객이 이 시각보다 먼저 한 결제, 최근순 (개수는 limit으로)
     List<Payment> findByMerchantIdAndCustomerRefAndCreatedAtBeforeOrderByCreatedAtDesc(

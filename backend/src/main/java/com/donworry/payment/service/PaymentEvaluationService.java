@@ -44,7 +44,12 @@ public class PaymentEvaluationService {
                 .customerRef(input.customerRef())
                 .amount(input.amount())
                 .paymentRequestedAt(input.paymentRequestedAt())
-                .customerAverageAmount(input.customerAverageAmount())
+                .merchantId(input.merchantId())
+                .cardFingerprint(input.cardFingerprint())
+                .deviceId(input.deviceId())
+                .clientIp(input.clientIp())
+                .buyerEmail(input.buyerEmail())
+                .hasPriorCapturedPayment(input.hasPriorCapturedPayment())
                 .cardCompletedPayments(input.cardCompletedPayments())
                 .build();
 
