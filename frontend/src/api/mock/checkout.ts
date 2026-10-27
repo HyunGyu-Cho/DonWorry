@@ -10,6 +10,7 @@ import type {
   CheckoutResult,
   CheckoutSession,
   DemoCard,
+  TestBuyer,
   TestOrder,
   TestProduct,
 } from '../../types/checkout.ts'
@@ -164,7 +165,12 @@ export function mockGetTestProducts(): Promise<TestProduct[]> {
 }
 
 // 테스트 주문 만들기 — 같은 상품을 다른 카드로 여러 번 해 볼 수 있게 결제 기록을 지운다
-export async function mockCreateTestOrder(productId: string): Promise<TestOrder> {
+// Mock은 구매자를 구분하지 않는다 (결제 결과는 카드로만 정해짐)
+export async function mockCreateTestOrder(
+  productId: string,
+  _buyer?: TestBuyer,
+  _guestKey?: string,
+): Promise<TestOrder> {
   const product = TEST_PRODUCTS.find((p) => p.productId === productId)
   if (!product) throw new CheckoutExpiredError()
   paid.delete(product.seedToken)

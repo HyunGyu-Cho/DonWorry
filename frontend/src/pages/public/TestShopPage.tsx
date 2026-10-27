@@ -5,9 +5,16 @@ import { createTestOrder, getTestProducts } from '../../api/checkout'
 import { PublicShell } from '../../components/public/PublicShell'
 import { DEFAULT_DEMO_ENVIRONMENT, DEMO_ENVIRONMENTS } from '../../config/demoEnvironments'
 import { RawDetails } from '../../components/explain/RawDetails'
-import type { TestProduct } from '../../types/checkout'
+import type { TestBuyer, TestProduct } from '../../types/checkout'
 import { CARD_GUIDE } from '../../utils/checkoutView'
-import { chosenDemoEnvironment, saveDemoEnvironment } from '../../utils/demoEnvironment'
+import {
+  chosenDemoBuyer,
+  chosenDemoEnvironment,
+  demoGuestKey,
+  renewDemoGuestKey,
+  saveDemoBuyer,
+  saveDemoEnvironment,
+} from '../../utils/demoEnvironment'
 import { koreanWon } from '../../utils/humanize'
 
 const FOOT = '시연용 테스트 상점이에요. 실제 주문 · 결제는 일어나지 않아요.'
@@ -29,6 +36,8 @@ export function TestShopPage() {
   const [environment, setEnvironment] = useState(
     () => (chosenDemoEnvironment() ?? DEFAULT_DEMO_ENVIRONMENT).id,
   )
+  const [buyer, setBuyer] = useState<TestBuyer>(chosenDemoBuyer)
+  const [guestKey, setGuestKey] = useState(demoGuestKey)
 
   useEffect(() => {
     let alive = true
@@ -45,8 +54,9 @@ export function TestShopPage() {
     setFailed(false)
     // 결제창이 이 접속 환경으로 결제한다
     saveDemoEnvironment(environment)
+    saveDemoBuyer(buyer)
     try {
-      const { sessionToken } = await createTestOrder(productId)
+      const { sessionToken } = await createTestOrder(productId, buyer, guestKey)
       navigate(`/checkout/${encodeURIComponent(sessionToken)}`)
     } catch {
       setFailed(true)
@@ -78,6 +88,44 @@ export function TestShopPage() {
             ),
           }))}
         />
+      </div>
+      <div className="dw-shop-environment">
+        <b>구매자</b>
+        <span className="dw-muted dw-small">
+          단골은 결제 이력이 있고, 처음 온 손님은 이 탭에서만 쓰는 새 손님이에요 (시연 ⑤)
+        </span>
+        <Radio.Group
+          value={buyer}
+          onChange={(e) => setBuyer(e.target.value as TestBuyer)}
+          options={[
+            {
+              value: 'MINSU',
+              label: (
+                <span>
+                  김민수 <span className="dw-muted dw-small">· 단골 · 결제 이력 있음</span>
+                </span>
+              ),
+            },
+            {
+              value: 'GUEST',
+              label: (
+                <span>
+                  처음 온 손님{' '}
+                  <span className="dw-muted dw-small">· 손님 번호 {guestKey} · 결제 이력 없음</span>
+                </span>
+              ),
+            },
+          ]}
+        />
+        {buyer === 'GUEST' && (
+          <Button
+            size="small"
+            style={{ alignSelf: 'flex-start' }}
+            onClick={() => setGuestKey(renewDemoGuestKey())}
+          >
+            새 손님으로 바꾸기
+          </Button>
+        )}
       </div>
       {products === null && (
         <div className="dw-error-view" role="status">

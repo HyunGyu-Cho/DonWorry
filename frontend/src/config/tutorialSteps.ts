@@ -247,7 +247,10 @@ export const TUTORIAL_STEPS: Record<number, TutorialStep[]> = {
     {
       title: '홈에서 시작',
       todo: '왼쪽 [결제 경보] 메뉴를 눌러 보세요.',
-      look: ['홈의 [확인할 결제 경보] 칸에 거절된 경보 수도 함께 보여요'],
+      look: [
+        '홈의 [확인할 결제 경보] 칸에 거절된 경보 수도 함께 보여요',
+        '실제 서버로 해 볼 때는 테스트 상점에서 "처음 온 손님" · "해외 VPN"으로 도난 카드 1 · 2 · 3을 차례로 결제해 두세요',
+      ],
       path: '/security/home',
       target: 'nav-security-alerts',
     },

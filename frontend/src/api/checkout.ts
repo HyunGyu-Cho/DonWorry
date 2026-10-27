@@ -2,7 +2,11 @@
 // VITE_USE_MOCK에 payment가 있으면 Mock, 없으면 실제 API를 쓴다
 // 로그인 없이 결제창 토큰으로만 접근한다. 금액은 CakeShop 서버의 결제 준비 요청에서만 정해진다
 import { CheckoutAlreadyPaidError, CheckoutExpiredError } from './checkoutErrors.ts'
-import { chosenDemoEnvironment, demoEnvironmentHeaders } from '../utils/demoEnvironment.ts'
+import {
+  chosenDemoEnvironment,
+  chosenGuestKey,
+  demoEnvironmentHeaders,
+} from '../utils/demoEnvironment.ts'
 import { api, ApiError } from './client.ts'
 import {
   mockCreateTestOrder,
@@ -16,6 +20,7 @@ import type {
   CheckoutResult,
   CheckoutSession,
   DemoCard,
+  TestBuyer,
   TestOrder,
   TestProduct,
 } from '../types/checkout.ts'
@@ -46,7 +51,7 @@ async function realPayCheckout(token: string, cardToken: string): Promise<Checko
       // 테스트 상점에서 고른 접속 환경 (#98, 서버는 시연 설정이 켜졌을 때만 믿는다)
       headers: {
         'Content-Type': 'application/json',
-        ...demoEnvironmentHeaders(chosenDemoEnvironment()),
+        ...demoEnvironmentHeaders(chosenDemoEnvironment(), chosenGuestKey()),
       },
       body: JSON.stringify({ cardToken }),
     })
@@ -58,11 +63,12 @@ async function realPayCheckout(token: string, cardToken: string): Promise<Checko
 const realGetDemoCards = () => api<DemoCard[]>('/checkout/demo-cards')
 // 테스트 상점 API는 2단계(2-29)에서 demo 프로필 전용으로 추가 — 서버가 가맹점 키로 결제 준비를 대신 부른다
 const realGetTestProducts = () => api<TestProduct[]>('/demo/test-shop/products')
-const realCreateTestOrder = (productId: string) =>
+// 구매자: MINSU = 결제 이력 있는 단골, GUEST = 이 탭만의 처음 온 손님 (#100 S-4)
+const realCreateTestOrder = (productId: string, buyer: TestBuyer = 'MINSU', guestKey?: string) =>
   api<TestOrder>('/demo/test-shop/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ productId }),
+    body: JSON.stringify({ productId, buyer, guestKey: buyer === 'GUEST' ? guestKey : undefined }),
   })
 
 const mock = isMock('payment')

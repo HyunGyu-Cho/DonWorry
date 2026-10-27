@@ -17,6 +17,20 @@ public class TestShopService {
     private final MerchantDirectory merchantDirectory;
 
     public String order(String productId) {
+        return order(productId, "MINSU", null);
+    }
+
+    // buyer: MINSU(단골 김민수) · GUEST(처음 온 손님, guestKey 필요) (#100 S-4)
+    public String order(String productId, String buyerType, String guestKey) {
+        TestShop.Buyer buyer = buyerType == null || "MINSU".equals(buyerType)
+                ? TestShop.BUYER
+                : "GUEST".equals(buyerType)
+                        ? TestShop.guest(guestKey)
+                                .orElseThrow(() -> new PaymentException(PaymentErrorCode.INVALID_TEST_BUYER))
+                        : null;
+        if (buyer == null) {
+            throw new PaymentException(PaymentErrorCode.INVALID_TEST_BUYER);
+        }
         TestShop.Product product =
                 TestShop.product(productId).orElseThrow(() -> new PaymentException(PaymentErrorCode.UNKNOWN_PRODUCT));
         Long merchantId = merchantDirectory
@@ -26,13 +40,13 @@ public class TestShopService {
         String orderRef = "TS-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         Payment.Order order = new Payment.Order(
                 merchantId,
-                TestShop.BUYER.customerRef(),
+                buyer.customerRef(),
                 orderRef,
                 product.title(),
                 product.amount(),
-                TestShop.BUYER.name(),
-                TestShop.BUYER.email(),
-                TestShop.BUYER.joinedAt(),
+                buyer.name(),
+                buyer.email(),
+                buyer.joinedAt(),
                 Instant.now().plus(2, ChronoUnit.DAYS));
         return checkoutService.open(order, TestShop.RETURN_URL);
     }

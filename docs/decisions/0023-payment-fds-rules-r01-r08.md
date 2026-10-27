@@ -39,6 +39,7 @@
 - **모의 카드사 거절 사유 (#98 F-7).** 카드사 경계(`PaymentAuthorizer`)는 그대로 두고 모의 구현만 넓힌다 — 거절 사유 `LIMIT_EXCEEDED` · `LOST_OR_STOLEN` · `INVALID_CARD`를 `payments.decline_code`에 남긴다 (R08 · R06이 거절된 시도를 센다). 시연용 도난 카드 5장(1 · 4 승인, 2 분실/도난 · 3 잘못된 카드 · 5 한도 초과 거절). 별도 카드사 컨테이너(WireMock) 안은 1차에 일이 커서 버림
 - **시간 창 Rule (#98 F-8 · F-9).** 기간(windowMinutes)의 정본은 P2 `fds_rules` 기준값이고, P5가 `fds.api.FdsCountWindows`로 기간을 읽어 자기 결제 기록을 센 뒤 FDS 요청 `recentCustomerAttempts`(R04, 이번 포함) · `recentCardDeclines`(R08, 이번 제외) · `recentIpCards`(R06)로 넘긴다. "시도"는 결제창에서 카드를 붙인 결제, 시각은 결제 요청 시각. P5가 기간을 따로 하드코딩하는 안은 기준값과 어긋날 수 있어서 버림. 시연 주의: 리허설로 같은 김민수 · 같은 카드를 10분 안에 여러 번 결제하면 R04 · R08이 실제로 걸린다
 - **R07 차단 목록 (#100 F-10).** 평가 맨 앞에서 카드 지문 · 기기 · IP · 이메일(소문자)을 활성 항목(해제 · 만료 제외)과 대조, 일치하면 다른 Rule을 계산하지 않고 R07 한 줄 · 100점 DENY, 근거 `evidence_refs`에 `{blocklistEntryId, entryType}`. 등록은 P3 `POST /api/investigation/payment-alerts/{evaluationId}/blocklist {types, reason}`(보안 직원 · 보안 관리자만) — 카드는 화면에 끝자리만 있어 결제 번호로 카드 지문을 찾아야 하는데 P2는 결제를 못 읽어서 위층이 P5 `PaymentLookup.blockValues`(Java 안에서만) · P2 `BlocklistRegistry`를 잇는다. 같은 활성 값은 한 줄만. 화면 값은 `blocklist_entries.display_value`(카드 **** 1173), 카드 지문은 내보내지 않는다. P2에 `POST /api/fds/blocklist`(값 직접 등록)를 두는 안은 카드 지문을 화면이 알아야 해서 버림
+- **시연 ⑤ 처음 온 손님 (#100 S-4).** 테스트 상점 주문 `POST /api/demo/test-shop/orders`에 `buyer`(`MINSU` 기본 · `GUEST`)와 `guestKey`(소문자 · 숫자 4~16자, 그 밖은 `PAY_027`)를 받는다. 처음 온 손님은 브라우저 탭마다 새 손님 번호(`cakeshop-guest-{번호}`)라 결제 이력이 없어 첫 VPN 결제가 40점 통과 → 3장째 카드 테스팅 DENY 장면이 나온다. 결제창은 손님 번호를 기기 값 뒤에 붙여(`demo-device-attacker-{번호}`) 보내서, 기기를 차단해도 새 탭에서 시연을 다시 할 수 있다. 손님 하나를 고정하는 안은 리허설 결제가 쌓여 두 번째 시연부터 단골이 돼서 버림
 - 이번 결정은 카탈로그와 판정 구간까지다. R02 · R04 · R05 · R06 · R07 · R08의 계산과 R03의 "과거 정상 결제가 있는 구매자만" 조건은 묶음 ② · ③에서 Rule마다 붙인다. 그전까지 계산하지 않는 Rule은 기록 없이 0점이다
 
 ## 고려한 대안
@@ -60,9 +61,9 @@
 - API: `GET /api/fds/rules` 응답에 `displayCode`, 폐지 Rule 제외 · R01~R08 순. `GET /api/fds/rules/hit-stats`도 폐지 Rule 제외
 - DB: `fds_rules.display_code` · `retired_at`, `fds_evaluations.raw_score` · `merchant_id` 추가. 룰 시드 교체 migration (`V20261027_211046` · `V20261027_211057` · `V20261027_211105` · `V20261027_215208`)
 - 모듈 계약 (F-3): `fds.api.FdsEvaluationRequest` 선택 칸 추가 · `customerAverageAmount` 삭제. P5 `PaymentCreationService.Features`가 결제 · 이력에서 채운다
-- 화면: 판정 구간 안내 · 용어 풀이 · 튜토리얼 문구 · Rule 카탈로그(표시 번호) · 결제 경보 "평소와 다른 점" · Mock 데이터. 폐지 Rule은 과거 기록 표시용 설명만 남김
+- 화면: 테스트 상점 구매자 선택(김민수 · 처음 온 손님, #100 S-4) · 판정 구간 안내 · 용어 풀이 · 튜토리얼 문구 · Rule 카탈로그(표시 번호) · 결제 경보 "평소와 다른 점" · Mock 데이터. 폐지 Rule은 과거 기록 표시용 설명만 남김
 - ai-server: 가짜 AI의 Rule 이름표를 새 이름으로, 폐지 Rule 이름은 과거 기록용으로 유지
-- 테스트: FDS 단위 테스트(판정 경계 · 110점 · 폐지 Rule) · 시드 MariaDB 테스트 · 시연 ① 흐름 · 화면 시드 대조 테스트
+- 테스트: FDS 단위 테스트(판정 경계 · 110점 · 폐지 Rule) · 시드 MariaDB 테스트 · 시연 ① 흐름 · 시연 ⑤ 흐름(처음 온 손님 → 카드 테스팅 DENY → 기기 차단 → 즉시 차단) · 화면 시드 대조 테스트
 - 결제 상태 (F-2): `PaymentRules` ERROR → 승인 요청, 승인 성공이면 HELD · `NOTIFY_HELD`. `RECORD_FDS_ERROR` 단계 삭제. AI 증거 창구 요약에 "FDS 평가 실패 N건", 사건 흐름도 카드에 "FDS 평가 실패 · 직원 확인"
 - 문서: `docs/erd` 초기 데이터 표, ADR-0022의 판정 구간 문장, `docs/payment` 승인 분기 표
 

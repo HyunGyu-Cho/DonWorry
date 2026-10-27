@@ -30,6 +30,6 @@ public class TestShopController {
 
     @PostMapping("/orders")
     public TestOrderResponse order(@RequestBody TestOrderRequest request) {
-        return new TestOrderResponse(testShopService.order(request.productId()));
+        return new TestOrderResponse(testShopService.order(request.productId(), request.buyer(), request.guestKey()));
     }
 }

@@ -26,7 +26,8 @@ public final class CheckoutDtos {
 
     public record TestProductResponse(String productId, String title, long amount, String note) {}
 
-    public record TestOrderRequest(String productId) {}
+    // buyer: MINSU(단골 김민수, 기본) · GUEST(처음 온 손님 — 브라우저 탭마다 guestKey가 다르다) (#100 S-4)
+    public record TestOrderRequest(String productId, String buyer, String guestKey) {}
 
     public record TestOrderResponse(String sessionToken) {}
 }
