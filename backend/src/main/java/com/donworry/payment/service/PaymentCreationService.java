@@ -71,6 +71,9 @@ public class PaymentCreationService {
                 ? null
                 : (int) paymentRepository.countDeclinesWithCard(
                         payment.getCardFingerprint(), payment.getPaymentId(), at.minus(windows.cardDeclines()), at);
+        Integer ipCards = payment.getClientIp() == null
+                ? null
+                : (int) paymentRepository.countCardsFromIp(payment.getClientIp(), at.minus(windows.ipCards()), at);
         // 접속 IP의 나라 · 회선 종류 (#98) — 이름표에 없으면 null (R05 확인 불가)
         var location = ipLocator.locate(payment.getClientIp());
         return new Features(
@@ -86,7 +89,7 @@ public class PaymentCreationService {
                 deviceCount,
                 customerAttempts,
                 cardDeclines,
-                null);
+                ipCards);
     }
 
     public record Features(

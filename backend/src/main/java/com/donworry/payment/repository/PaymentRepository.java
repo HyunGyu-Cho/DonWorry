@@ -94,6 +94,11 @@ public interface PaymentRepository extends Repository<Payment, Long> {
             @Param("from") Instant from,
             @Param("to") Instant to);
 
+    // FDS 입력 (#98): 같은 접속 IP에서 이 기간에 쓴 서로 다른 카드 수 — 이번 결제 · 거절 · 차단된 시도 포함 (R06)
+    @Query("select count(distinct p.cardFingerprint) from Payment p where p.clientIp = :clientIp"
+            + " and p.cardFingerprint is not null and p.createdAt > :from and p.createdAt <= :to")
+    long countCardsFromIp(@Param("clientIp") String clientIp, @Param("from") Instant from, @Param("to") Instant to);
+
     // 사장님 보안 확인 결과 (#86) — 우리 가게 결제, 최근 먼저
     List<Payment> findByMerchantIdOrderByCreatedAtDesc(Long merchantId);
 }

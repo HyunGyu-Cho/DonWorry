@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-// 결제 Rule 계산 — R01 고액 · R02 새 기기 · R03 새 카드 · R04 반복 결제 · R05 고위험 국가 IP · R08 거절 후 재시도 (#96 · #98)
-// 시간 창 기록은 P5가 세어 넘긴다 (P2는 payments를 읽지 않음). R06 · R07은 F-9 · F-10
+// 결제 Rule 계산 — R01 고액 · R02 새 기기 · R03 새 카드 · R04 반복 결제 · R05 고위험 국가 IP · R06 카드 테스팅
+// · R08 거절 후 재시도 (#96 · #98). 시간 창 기록은 P5가 세어 넘긴다 (P2는 payments를 읽지 않음). R07 차단 목록은 F-10
 // 기준값 · 점수는 fds_rules에서 읽는다. 판단할 값이 없으면 UNAVAILABLE(0점)로 남긴다 — 점수를 추정하지 않는다
 final class PaymentRuleSet {
 
@@ -38,6 +38,7 @@ final class PaymentRuleSet {
                 case "HIGH_RISK_COUNTRY_IP" -> hits.add(highRiskCountry(rule, request));
                 case "RAPID_REPEAT" -> hits.add(rapidRepeat(rule, request));
                 case "DECLINE_RETRY" -> hits.add(declineRetry(rule, request));
+                case "CARD_TESTING" -> hits.add(cardTesting(rule, request));
                 default -> {
                     // 아직 계산하지 않는 Rule (묶음 ② · ③) — 기록 없이 0점
                 }
@@ -112,6 +113,17 @@ final class PaymentRuleSet {
         long min = number(threshold(rule).getOrDefault("minDeclines", 2));
         String text = "이 카드 " + windowText(rule, 10) + " 안 카드사 거절 " + declines + "번";
         return hit(rule, declines >= min, rule.getScore(), json("declines", declines, text));
+    }
+
+    // R06: 같은 IP에서 기간 안에 서로 다른 카드를 기준 장수 이상 쓰면(이번 · 거절 · 차단 포함) +45 (#98 F-9)
+    private static Hit cardTesting(FdsRule rule, FdsEvaluationRequest request) {
+        Integer cards = request.recentIpCards();
+        if (request.clientIp() == null || cards == null) {
+            return unavailable(rule, "접속 IP 모름");
+        }
+        long min = number(threshold(rule).getOrDefault("minCards", 3));
+        String text = "같은 접속 " + windowText(rule, 60) + " 안 카드 " + cards + "장 (이번 포함)";
+        return hit(rule, cards >= min, rule.getScore(), json("cards", cards, text));
     }
 
     // 기준값 windowMinutes → "10분" · "1시간"

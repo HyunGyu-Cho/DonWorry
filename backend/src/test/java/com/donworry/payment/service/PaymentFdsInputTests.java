@@ -153,6 +153,32 @@ class PaymentFdsInputTests {
         assertThat(observed(target, "DECLINE_RETRY")).contains("카드사 거절 2번");
     }
 
+    // R06: 같은 IP에서 1시간 안에 서로 다른 카드 3장째면 +45 — 거절 · 차단된 시도도 센다, 1시간 지난 카드는 안 센다 (#98 F-9)
+    @Test
+    void R06_같은IP1시간카드3장째_45점_거절차단포함() {
+        String ip = "10.98." + (int) (Math.random() * 250) + "." + (int) (Math.random() * 250);
+        Instant now = Instant.now();
+        save(fromIp(
+                attempt(3003L, "c-" + UUID.randomUUID(), "fp-" + UUID.randomUUID(), now.minusSeconds(90 * 60)), ip));
+        save(declined(fromIp(
+                attempt(3003L, "c-" + UUID.randomUUID(), "fp-" + UUID.randomUUID(), now.minusSeconds(30 * 60)), ip)));
+        Payment denied = fromIp(
+                attempt(3003L, "c-" + UUID.randomUUID(), "fp-" + UUID.randomUUID(), now.minusSeconds(10 * 60)), ip);
+        denied.deny();
+        save(denied);
+        Long target = save(fromIp(attempt(3003L, "c-" + UUID.randomUUID(), "fp-" + UUID.randomUUID(), now), ip));
+
+        flow.authorizeReady(target);
+
+        assertThat(matched(target)).contains("CARD_TESTING");
+        assertThat(observed(target, "CARD_TESTING")).contains("카드 3장");
+    }
+
+    private static Payment fromIp(Payment payment, String ip) {
+        org.springframework.test.util.ReflectionTestUtils.setField(payment, "clientIp", ip);
+        return payment;
+    }
+
     // 결제창에서 카드를 붙인 결제 (= 시도)
     private static Payment attempt(long merchantId, String customer, String fingerprint, Instant createdAt) {
         Payment payment = Payment.pending(merchantId, customer, "T-" + UUID.randomUUID(), 12_000L, createdAt);
