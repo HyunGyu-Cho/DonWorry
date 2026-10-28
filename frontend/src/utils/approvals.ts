@@ -23,6 +23,9 @@ export const APPROVAL_TYPE: Record<
 // 감사 로그 action 코드 → 우리말. 모르는 코드는 그대로
 const ACTION_TEXT: Record<string, string> = {
   LOGIN_SUCCESS: '로그인',
+  LOGIN_FAILED: '로그인 실패 (비밀번호 틀림)',
+  ACCOUNT_LOCKED: '계정 잠김 (비밀번호 5번 실패)',
+  LOGIN_WHILE_LOCKED: '잠긴 계정 로그인 시도',
   LOGIN_OTP_FAILED: 'OTP 인증 실패',
   SESSION_CONCURRENT: '세션 동시 사용 감지',
   SESSION_TERMINATED: '세션 강제 종료',
@@ -40,6 +43,8 @@ export const auditActionText = (action: string) => ACTION_TEXT[action] ?? action
 
 const TARGET_TEXT: Record<string, string> = {
   APPROVAL_REQUEST: '승인 요청',
+  PLATFORM_USER: '직원 계정',
+  PAYMENT_DECISION: '결제 판정',
   SECURITY_CASE: '사건',
   FDS_RULE: 'Rule',
   BLOCKLIST_ENTRY: '차단 목록 값',
