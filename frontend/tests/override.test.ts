@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { beforeEach, test } from 'node:test'
-import { InvalidOtpError } from '../src/api/auth.ts'
+import { ReauthPasswordError } from '../src/api/auth.ts'
 import { ReauthRequiredError } from '../src/api/caseErrors.ts'
 import {
   mockGetCase,
@@ -9,13 +9,7 @@ import {
   resetMockCases,
   setMockActionDelay,
 } from '../src/api/mock/cases.ts'
-import {
-  DEMO_OTP,
-  mockLogout,
-  mockReauth,
-  mockStartLogin,
-  mockVerifyOtp,
-} from '../src/api/mock/identity.ts'
+import { DEMO_PASSWORD, mockLogout, mockReauth, mockStartLogin } from '../src/api/mock/identity.ts'
 import {
   mockDecideApproval,
   mockGetApprovals,
@@ -35,9 +29,9 @@ const accept = {
 }
 
 async function loginJiwon() {
-  const step = await mockStartLogin('jiwon', '1234')
-  assert.equal(step.status, 'OTP_REQUIRED')
-  if (step.status === 'OTP_REQUIRED') await mockVerifyOtp(step.challengeId, DEMO_OTP)
+  // 1차 MVP는 비밀번호만으로 로그인 (#102)
+  const step = await mockStartLogin('jiwon', DEMO_PASSWORD)
+  assert.equal(step.status, 'SUCCESS')
 }
 
 beforeEach(async () => {
@@ -51,8 +45,8 @@ beforeEach(async () => {
 // 권고 반대 판정은 재인증 없이는 안 되고, 재인증하면 바로 반영 대신 관리자 승인 대기
 test('override_needsReauth_thenWaitsForManager', async () => {
   await assert.rejects(mockSubmitDecisions('201', 4, accept), ReauthRequiredError)
-  await assert.rejects(mockReauth('000000'), InvalidOtpError)
-  const ticket = await mockReauth(DEMO_OTP)
+  await assert.rejects(mockReauth('0000'), ReauthPasswordError)
+  const ticket = await mockReauth(DEMO_PASSWORD)
   const result = await mockSubmitDecisions('201', 4, { ...accept, reauthToken: ticket.reauthToken })
   assert.equal(result.outcome, 'APPROVAL_PENDING')
   const c = await mockGetCase('201')
@@ -72,7 +66,7 @@ test('override_needsReauth_thenWaitsForManager', async () => {
 
 // 관리자가 승인하면 판정이 반영되고 매입이 진행된다
 test('override_approved_appliesDecisionAndCapture', async () => {
-  const ticket = await mockReauth(DEMO_OTP)
+  const ticket = await mockReauth(DEMO_PASSWORD)
   const result = await mockSubmitDecisions('201', 4, { ...accept, reauthToken: ticket.reauthToken })
   setMockActor(MANAGER)
   await mockDecideApproval(result.approvalId as number, 'APPROVE', '박지원과 통화로 확인')
@@ -87,7 +81,7 @@ test('override_approved_appliesDecisionAndCapture', async () => {
 
 // 관리자가 거절하면 판정 대기로 돌아가고, 거절 이유가 기록에 남는다
 test('override_rejected_backToDecisionPending', async () => {
-  const ticket = await mockReauth(DEMO_OTP)
+  const ticket = await mockReauth(DEMO_PASSWORD)
   const result = await mockSubmitDecisions('201', 4, { ...accept, reauthToken: ticket.reauthToken })
   setMockActor(MANAGER)
   await mockDecideApproval(result.approvalId as number, 'REJECT', '구매자 응답이 없어 보류')

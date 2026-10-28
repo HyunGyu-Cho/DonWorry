@@ -8,9 +8,14 @@ import {
   mockStartLogin,
   mockVerifyOtp,
   resetMockIdentity,
+  setMockSecondFactor,
 } from '../src/api/mock/identity.ts'
 
-beforeEach(() => resetMockIdentity())
+// 2단계 확인(직원 OTP · 사장님 이메일)은 2차 MVP — 1차에서는 꺼 두었지만 화면 코드와 함께 동작을 지킨다 (#102)
+beforeEach(() => {
+  resetMockIdentity()
+  setMockSecondFactor(true)
+})
 
 const challengeOf = async (loginId: string) => {
   const step = await mockStartLogin(loginId, '1234')

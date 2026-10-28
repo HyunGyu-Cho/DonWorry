@@ -48,14 +48,8 @@ async function login(page: Page, scenario: number, password = '1234') {
   await page.getByRole('button', { name: '로그인', exact: true }).click()
 }
 
-async function typeCode(page: Page, label: string, code: string) {
-  await page.getByLabel(label).locator('input').first().click()
-  await page.keyboard.type(code)
-}
-
 test('① 결제 사기 의심 — 경보 → 사건 → AI 재조사 → 판정 → 조치', async ({ page }) => {
   await login(page, 1)
-  await typeCode(page, '인증 코드 6자리', '246810')
   await expect(page).toHaveURL(/\/security\/home$/)
   await expectStep(page, 1, 9)
 
@@ -111,7 +105,6 @@ test('① 결제 사기 의심 — 경보 → 사건 → AI 재조사 → 판정
 
 test('② 직원 계정 분산 공격 — 사건 → AI 실패 · 재시도 → 계정별로 묶기', async ({ page }) => {
   await login(page, 2)
-  await typeCode(page, '인증 코드 6자리', '246810')
   await expect(page).toHaveURL(/\/manager\/home$/)
   await expectStep(page, 1, 6)
 
@@ -142,11 +135,8 @@ test('② 직원 계정 분산 공격 — 사건 → AI 실패 · 재시도 → 
   await expect(page.getByText('박지원').first()).toBeVisible()
 })
 
-test('③ 정산 자금 부족 — 이메일 확인 → 정산 캘린더 → 자금 예측 → 대출', async ({ page }) => {
+test('③ 정산 자금 부족 — 정산 캘린더 → 자금 예측 → 대출', async ({ page }) => {
   await login(page, 3)
-  // 새 기기라 가입 이메일로 한 번 더 확인한다
-  await expect(page.getByText('이메일로 한 번 더 확인할게요')).toBeVisible()
-  await typeCode(page, '이메일 확인 코드 6자리', '135790')
   await expect(page).toHaveURL(/\/owner\/home$/)
   await expectStep(page, 1, 5)
 
@@ -177,7 +167,6 @@ test('③ 정산 자금 부족 — 이메일 확인 → 정산 캘린더 → 자
 
 test('④ 직원 계정 탈취 — 위험 요청 거절 → 세션 종료 → 사건 · 감사 로그', async ({ page }) => {
   await login(page, 4)
-  await typeCode(page, '인증 코드 6자리', '246810')
   await expect(page).toHaveURL(/\/manager\/home$/)
   await expectStep(page, 1, 5)
 
@@ -217,7 +206,6 @@ test('④ 직원 계정 탈취 — 위험 요청 거절 → 세션 종료 → �
 
 test('⑤ 카드 테스팅 → 자동 차단 — 거절된 경보 → 차단 목록 등록', async ({ page }) => {
   await login(page, 5)
-  await typeCode(page, '인증 코드 6자리', '246810')
   await expect(page).toHaveURL(/\/security\/home$/)
   await expectStep(page, 1, 4)
 

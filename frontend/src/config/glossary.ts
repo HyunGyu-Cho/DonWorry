@@ -52,7 +52,7 @@ export const GLOSSARY = {
   },
   REAUTH: {
     term: '재인증',
-    text: '중요한 행동 직전에 OTP를 한 번 더 확인하는 것입니다. 세션을 훔친 사람은 여기서 막힙니다.',
+    text: '중요한 행동 직전에 비밀번호를 한 번 더 확인하는 것입니다. 세션을 훔친 사람은 여기서 막힙니다.',
   },
   SETTLEMENT_CONFIRM: {
     term: '정산 확정',

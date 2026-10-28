@@ -56,7 +56,7 @@ public class SecurityConfig {
             throws Exception {
         // 전체 API 차단과 CSRF 활성화는 EPIC #68 5단계에서 함께 적용한다.
         http.csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/me")
+                .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/me", "/api/identity/reauth")
                         .authenticated()
                         .anyRequest()
                         .permitAll())

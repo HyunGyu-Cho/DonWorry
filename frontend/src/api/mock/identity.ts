@@ -4,6 +4,7 @@ import {
   AccountLockedError,
   InvalidCredentialsError,
   InvalidOtpError,
+  ReauthPasswordError,
   StaffActionDoneError,
   StaffActionForbiddenError,
 } from '../auth.ts'
@@ -23,7 +24,7 @@ import type {
 
 export const DEMO_OTP = '246810'
 export const DEMO_RECOVERY_CODE = 'DW-RECOVERY-0001'
-const DEMO_PASSWORD = '1234'
+export const DEMO_PASSWORD = '1234'
 
 const user = (
   userId: number,
@@ -232,16 +233,34 @@ const passwordFailures = new Map<string, number>()
 const knownDevices = new Set<string>()
 // OTP를 이만큼 틀리면 계정을 잠근다 (Mock은 이번 요청만 끝냄)
 export const MAX_OTP_FAILURES = 5
+// 1차 MVP는 비밀번호만으로 로그인 (#102) — 2단계 확인(직원 OTP · 사장님 이메일)은 2차에서 켠다
+let secondFactor = false
+export function setMockSecondFactor(on: boolean) {
+  secondFactor = on
+}
+// 서버와 같은 규칙: 비밀번호 5번 연속 실패 → 잠금 (Mock은 시간 대신 새로 고침 전까지)
+export const MAX_PASSWORD_FAILURES = 5
 
 export async function mockStartLogin(loginId: string, password: string): Promise<LoginStep> {
   await mockRespond(null)
   const id = loginId.trim().toLowerCase()
   const found = MOCK_USERS.find((u) => u.loginId === id)
+  if (found && lockedUsers.has(found.userId)) throw new AccountLockedError()
   if (!found || password !== DEMO_PASSWORD) {
-    if (found) passwordFailures.set(id, (passwordFailures.get(id) ?? 0) + 1)
+    if (found) {
+      const failures = (passwordFailures.get(id) ?? 0) + 1
+      passwordFailures.set(id, failures)
+      if (!secondFactor && failures >= MAX_PASSWORD_FAILURES) {
+        passwordFailures.delete(id)
+        lockedUsers.set(found.userId, '비밀번호를 5번 틀려 잠김')
+      }
+    }
     throw new InvalidCredentialsError()
   }
-  if (lockedUsers.has(found.userId)) throw new AccountLockedError()
+  if (!secondFactor) {
+    passwordFailures.delete(id)
+    return { status: 'SUCCESS', user: signIn(found) }
+  }
   const challengeId = `mock-${found.loginId}-${Date.now()}`
   const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString()
   if (needsOtp(found)) {
@@ -303,11 +322,12 @@ export const mockSubmitRecoveryCode = (challengeId: string, recoveryCode: string
 const reauthTickets = new Map<string, { userId: number; expiresAt: number }>()
 const REAUTH_MINUTES = 5
 
-export async function mockReauth(code: string): Promise<ReauthTicket> {
+// 1차 MVP: 비밀번호를 다시 넣는다 (#102)
+export async function mockReauth(password: string): Promise<ReauthTicket> {
   await mockRespond(null)
   const user = loadSession()
   if (!user) throw new ApiError(401, 'AUTH_001')
-  if (code.trim() !== DEMO_OTP) throw new InvalidOtpError()
+  if (password !== DEMO_PASSWORD) throw new ReauthPasswordError()
   const expiresAt = Date.now() + REAUTH_MINUTES * 60_000
   const reauthToken = `mock-reauth-${user.userId}-${Date.now()}`
   reauthTickets.set(reauthToken, { userId: user.userId, expiresAt })
@@ -364,6 +384,7 @@ export function resetMockIdentity() {
   challenges.clear()
   passwordFailures.clear()
   knownDevices.clear()
+  secondFactor = false
   saveSession(null)
 }
 

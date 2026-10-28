@@ -131,7 +131,10 @@ test('mockTerminateAndUnlock_onlyManagerOnce', async () => {
   await assert.rejects(mockStartLogin('dohyun', '1234'), AccountLockedError)
   const unlocked = await mockUnlockStaffAccount(6)
   assert.equal(unlocked.locked, false)
-  assert.equal((await mockStartLogin('dohyun', '1234')).status, 'OTP_REQUIRED')
+  // 1차 MVP는 비밀번호만으로 로그인 (#102)
+  assert.equal((await mockStartLogin('dohyun', '1234')).status, 'SUCCESS')
+  // 로그인하면 Mock 현재 사용자가 이도현으로 바뀐다 → 관리자로 되돌림
+  setMockActor(MANAGER)
   await assert.rejects(mockUnlockStaffAccount(6), StaffActionDoneError)
 })
 

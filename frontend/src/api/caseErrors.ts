@@ -11,7 +11,7 @@ export class CaseVersionConflictError extends Error {
 // AI 권고와 반대인 판정인데 재인증 표가 없거나 만료됨 (INV_017)
 export class ReauthRequiredError extends Error {
   constructor() {
-    super('AI 권고와 반대인 판정은 OTP를 다시 입력해야 합니다. 재인증 후 다시 시도해 주세요.')
+    super('AI 권고와 반대인 판정은 비밀번호를 다시 입력해야 합니다. 재인증 후 다시 시도해 주세요.')
     this.name = 'ReauthRequiredError'
   }
 }

@@ -1,4 +1,5 @@
-// P1 identity API 계약 — 2단계 인증 로그인 · 직원 로그인 기록 · 접속 세션
+// P1 identity API 계약 — 로그인 · 재인증 · 직원 로그인 기록 · 접속 세션
+// 1차 MVP는 비밀번호만으로 로그인한다 (#102). OTP · 복구 코드 · 사장님 이메일 확인은 2차 — 화면 코드는 남겨 둔다
 // VITE_USE_MOCK에 identity가 있으면 Mock, 없으면 실제 API를 쓴다
 // 로그인 화면(1-1)은 startLogin → verifyOtp · submitRecoveryCode 순서로 쓴다
 import {
@@ -7,6 +8,7 @@ import {
   InvalidCredentialsError,
   InvalidOtpError,
   logout as realLogout,
+  ReauthPasswordError,
   StaffActionDoneError,
   StaffActionForbiddenError,
 } from './auth.ts'
@@ -35,7 +37,7 @@ import type {
   StaffSession,
 } from '../types/auth.ts'
 
-// 백엔드 오류 코드 → 화면용 오류 (AUTH_010 · AUTH_011은 2-1에서 AuthErrorCode에 추가)
+// 백엔드 오류 코드 → 화면용 오류
 function mapAuthError(error: unknown): never {
   if (error instanceof ApiError) {
     if (error.code === 'AUTH_004') throw new InvalidCredentialsError()
@@ -63,8 +65,12 @@ async function realStartLogin(loginId: string, password: string): Promise<LoginS
 const realVerifyOtp = (challengeId: string, code: string) =>
   postJson<AuthUser>('/auth/otp', { challengeId, code })
 
-// 재인증: 로그인한 직원이 OTP를 다시 넣는다 (2-1에서 백엔드). 틀리면 AUTH_010
-const realReauth = (code: string) => postJson<ReauthTicket>('/identity/reauth', { code })
+// 재인증: 로그인한 직원이 비밀번호를 다시 넣는다 (#102). 틀리면 AUTH_010
+const realReauth = (password: string) =>
+  postJson<ReauthTicket>('/identity/reauth', { password }).catch((error: unknown) => {
+    if (error instanceof InvalidOtpError) throw new ReauthPasswordError()
+    throw error
+  })
 
 const realSubmitRecoveryCode = (challengeId: string, recoveryCode: string) =>
   postJson<AuthUser>('/auth/recovery-code', { challengeId, recoveryCode })
@@ -90,13 +96,13 @@ const realUnlockStaffAccount = (userId: number) =>
 
 const mock = isMock('identity')
 
-// 1단계: 아이디 · 비밀번호. 직원이면 OTP_REQUIRED, 사장님이면 SUCCESS
+// 1단계: 아이디 · 비밀번호 → 1차 MVP는 늘 SUCCESS (2차: 직원 OTP_REQUIRED)
 export const startLogin = mock ? mockStartLogin : realStartLogin
-// 2단계: 인증 앱의 6자리 코드
+// 2단계: 인증 앱의 6자리 코드 (2차 MVP)
 export const verifyOtp = mock ? mockVerifyOtp : realVerifyOtp
-// OTP 기기를 잃었을 때 1회용 복구 코드
+// OTP 기기를 잃었을 때 1회용 복구 코드 (2차 MVP)
 export const submitRecoveryCode = mock ? mockSubmitRecoveryCode : realSubmitRecoveryCode
-// 위험한 판정 직전 OTP 재인증 → 5분짜리 1회용 표
+// 위험한 판정 직전 비밀번호 재인증 → 5분짜리 1회용 표
 export const reauth = mock ? mockReauth : realReauth
 // 직원 로그인 기록 (보안 직원 · 관리자 화면)
 export const getLoginEvents = mock ? mockGetLoginEvents : realGetLoginEvents

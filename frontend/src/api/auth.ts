@@ -16,10 +16,18 @@ export class InvalidOtpError extends Error {
   }
 }
 
+// 재인증 비밀번호가 틀림 (AUTH_010, #102 — 1차 MVP는 OTP 대신 비밀번호로 재인증)
+export class ReauthPasswordError extends Error {
+  constructor() {
+    super('비밀번호가 올바르지 않습니다.')
+    this.name = 'ReauthPasswordError'
+  }
+}
+
 // 로그인 실패가 반복되어 잠긴 계정
 export class AccountLockedError extends Error {
   constructor() {
-    super('로그인 실패가 반복되어 계정이 잠겼습니다. 보안 관리자에게 문의하세요.')
+    super('비밀번호를 5번 연속 틀려 계정이 30분 동안 잠겼습니다. 잠시 후 다시 시도해 주세요.')
     this.name = 'AccountLockedError'
   }
 }

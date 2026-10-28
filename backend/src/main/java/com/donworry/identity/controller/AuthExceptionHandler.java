@@ -1,5 +1,6 @@
 package com.donworry.identity.controller;
 
+import com.donworry.identity.security.AccountLockedException;
 import com.donworry.identity.security.AuthErrorCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -13,6 +14,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(basePackages = "com.donworry.identity.controller")
 public class AuthExceptionHandler {
+    // BadCredentialsException보다 먼저 잡아야 해서 구체 타입으로 따로 둔다
+    @ExceptionHandler(IdentityController.InvalidReauthException.class)
+    public ProblemDetail reauthFailed() {
+        return problem(AuthErrorCode.INVALID_REAUTH);
+    }
+
+    @ExceptionHandler(AccountLockedException.class)
+    public ProblemDetail accountLocked() {
+        return problem(AuthErrorCode.ACCOUNT_LOCKED);
+    }
+
     @ExceptionHandler({BadCredentialsException.class, DisabledException.class})
     public ProblemDetail authenticationFailed() {
         return problem(AuthErrorCode.INVALID_CREDENTIALS);

@@ -3,6 +3,7 @@ package com.donworry.identity.service;
 import com.donworry.identity.dto.LoginRequest;
 import com.donworry.identity.dto.MeResponse;
 import com.donworry.identity.repository.UserPermissionRepository;
+import com.donworry.identity.security.AccountLockedException;
 import com.donworry.identity.security.PlatformUserDetails;
 import com.donworry.identity.security.SessionUser;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,11 +30,19 @@ public class AuthService {
     private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
     private final SecurityContextRepository securityContextRepository;
     private final UserPermissionRepository permissionRepository;
+    private final LoginAttemptService loginAttempts;
 
     public MeResponse login(LoginRequest input, HttpServletRequest request, HttpServletResponse response) {
         String loginId = input.loginId().trim().toLowerCase(Locale.ROOT);
         // 제어 문자 · Unicode 줄 구분자 · 방향 제어 문자로 로그에 가짜 줄을 넣거나 내용을 뒤집지 못하게 한다.
         String logLoginId = loginId.replaceAll("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]", "_");
+        var client = new LoginAttemptService.Client(request.getRemoteAddr(), request.getHeader("User-Agent"));
+        // 잠긴 동안은 비밀번호를 확인하지 않고 거절한다 (#102)
+        if (loginAttempts.lockedUntil(loginId).isPresent()) {
+            loginAttempts.recordLocked(loginId, client);
+            log.info("잠긴 계정 로그인 시도 loginId={}", logLoginId);
+            throw new AccountLockedException();
+        }
         try {
             var result = authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(loginId, input.password()));
@@ -51,9 +60,11 @@ public class AuthService {
             context.setAuthentication(authentication);
             SecurityContextHolder.setContext(context);
             securityContextRepository.saveContext(context, request, response);
+            loginAttempts.recordSuccess(loginId, client);
             log.info("로그인 성공 loginId={}", logLoginId);
             return MeResponse.from(user);
         } catch (BadCredentialsException | DisabledException exception) {
+            loginAttempts.recordFailure(loginId, client);
             log.info("로그인 실패 loginId={}", logLoginId);
             throw exception;
         } catch (InternalAuthenticationServiceException exception) {
