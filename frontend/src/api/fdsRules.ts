@@ -25,7 +25,7 @@ const realGetRules = () => api<FdsRule[]>('/fds/rules')
 
 const realGetRuleHitStats = (days = 7) => api<RuleHitStat[]>(`/fds/rules/hit-stats?days=${days}`)
 
-// 백엔드 오류 코드 → 화면용 오류 (FDS_010 · FDS_011은 2-7에서 백엔드에 추가)
+// 백엔드 오류 코드 → 화면용 오류 (FDS_010 권한 · 끌 수 없는 Rule, FDS_011 이미 켜짐 — #104 2-7)
 const realEnableRule = (ruleId: number) =>
   api<FdsRule>(`/fds/rules/${ruleId}/enable`, { method: 'POST' }).catch((error: unknown) => {
     if (error instanceof ApiError && error.code === 'FDS_010') throw new RuleActionForbiddenError()

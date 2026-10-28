@@ -11,7 +11,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-// 차단 목록 (blocklist_entries) — 등록 · 평가 전 확인 (#100 F-10). 해제는 관리자 승인 뒤(2-7)
+// 차단 목록 (blocklist_entries) — 등록 · 평가 전 확인 (#100 F-10). 해제는 관리자 승인 뒤 (#104 2-7)
 @Entity
 @Table(name = "blocklist_entries")
 @Getter
@@ -82,5 +82,11 @@ public class BlocklistEntry {
 
     public boolean isActive(Instant now) {
         return releasedAt == null && (expiresAt == null || expiresAt.isAfter(now));
+    }
+
+    // 관리자 승인 뒤 해제 (#104 2-7) — 지우지 않고 해제 시각 · 승인한 관리자를 남긴다
+    public void release(Long userId, Instant now) {
+        releasedAt = now.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        releasedBy = userId;
     }
 }

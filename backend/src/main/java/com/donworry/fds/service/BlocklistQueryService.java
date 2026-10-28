@@ -13,7 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 차단 목록 조회 (#82) — 항목별 최근 7일 막은 결제 수 · 마지막 차단 시각 (#100). 해제는 2-7
+// 차단 목록 조회 (#82) — 항목별 최근 7일 막은 결제 수 · 마지막 차단 시각 (#100). 해제는 BlocklistRegistryService
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)

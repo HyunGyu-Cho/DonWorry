@@ -1,8 +1,11 @@
 package com.donworry.fds.repository;
 
 import com.donworry.fds.entity.BlocklistEntry;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
@@ -31,4 +34,11 @@ public interface BlocklistEntryRepository extends Repository<BlocklistEntry, Lon
             @Param("now") Instant now);
 
     List<BlocklistEntry> findByEntryTypeAndEntryValue(String entryType, String entryValue);
+
+    Optional<BlocklistEntry> findById(Long entryId);
+
+    // 해제가 동시에 들어와도 한 번만 (#104 2-7)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from BlocklistEntry e where e.entryId = :entryId")
+    Optional<BlocklistEntry> findByIdForUpdate(@Param("entryId") Long entryId);
 }
