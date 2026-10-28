@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-// 2인 승인 요청 (approval_requests, #102) — 요청자 본인은 승인할 수 없다 (DB CHECK로도 막음)
+// 관리자 승인 요청 (approval_requests, #102) — 요청자 본인은 승인할 수 없다 (DB CHECK로도 막음)
 @Entity
 @Table(name = "approval_requests")
 @Getter

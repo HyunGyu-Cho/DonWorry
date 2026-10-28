@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// Rule 카탈로그 · 최근 적중 통계 (#82) — 폐지 Rule은 빼고 표시 번호 순 (#96). 켜기 · 끄기는 2-7
+// Rule 카탈로그 · 최근 적중 통계 (#82) — 폐지 Rule은 빼고 표시 번호 순 (#96). 켜기 · 끄기는 FdsRuleCommandService
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -66,7 +66,7 @@ public class FdsRuleQueryService {
                 .toList();
     }
 
-    private static FdsRuleResponse.Rule rule(FdsRule rule) {
+    static FdsRuleResponse.Rule rule(FdsRule rule) {
         return new FdsRuleResponse.Rule(
                 rule.getRuleId(),
                 rule.getRuleCode(),

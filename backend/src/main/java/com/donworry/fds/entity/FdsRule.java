@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-// FDS Rule 카탈로그 (fds_rules 시드) — 평가가 기준값 · 점수를 여기서 읽는다 (#82). 켜기 · 끄기는 2-7
+// FDS Rule 카탈로그 (fds_rules 시드) — 평가가 기준값 · 점수를 여기서 읽는다 (#82). 켜기는 바로, 끄기는 관리자 승인 뒤 (#104 2-7)
 @Entity
 @Table(name = "fds_rules")
 @Getter
@@ -67,4 +67,23 @@ public class FdsRule {
 
     @Column(name = "updated_at", nullable = false, columnDefinition = "DATETIME(6)")
     private Instant updatedAt;
+
+    // 켜고 끌 수 있는 Rule — 폐지 안 된 결제 Rule만. 차단 목록(R07)은 재범 방지, 직원 Rule은 흔적 지우기 방지로 막는다 (화면 canToggle과 같은 규칙)
+    public boolean isToggleable() {
+        return retiredAt == null && "PAYMENT".equals(target) && !"BLOCKLIST".equals(ruleCode);
+    }
+
+    public void enable(Long userId, Instant now) {
+        switchTo(true, userId, now);
+    }
+
+    public void disable(Long userId, Instant now) {
+        switchTo(false, userId, now);
+    }
+
+    private void switchTo(boolean on, Long userId, Instant now) {
+        enabled = on;
+        updatedBy = userId;
+        updatedAt = now.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+    }
 }

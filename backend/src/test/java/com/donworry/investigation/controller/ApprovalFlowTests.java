@@ -6,12 +6,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.donworry.FdsRuleFixture;
 import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.fds.api.BlocklistRegistry;
 import com.donworry.identity.api.CurrentUser;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,8 +27,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
 
-// 2인 승인 요청 만들기 · 처리 (#102) — 시연 직원 jiwon(4, 보안 직원) · yunseo(5, 보안 관리자)
-// 다른 테스트와 대상이 겹치지 않게 대상 번호를 무작위로 고른다
+// 관리자 승인 요청 만들기 · 처리 (#102) — 시연 직원 jiwon(4, 보안 직원) · yunseo(5, 보안 관리자)
+// 다른 테스트와 대상이 겹치지 않게 테스트용 Rule · 차단 항목을 새로 만든다 (#104부터 대상이 실제로 있어야 함)
 @Tag("mariadb")
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,13 +47,25 @@ class ApprovalFlowTests {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    BlocklistRegistry blocklistRegistry;
+
     @MockitoBean
     CurrentUser currentUser;
 
     @Test
     void 승인처리_본인요청_보안직원_이미끝난요청_거절이유없음_막힘() throws Exception {
+        long rule = FdsRuleFixture.create(jdbc, true);
+        try {
+            decideBlocked(rule);
+        } finally {
+            FdsRuleFixture.retire(jdbc, rule);
+        }
+    }
+
+    private void decideBlocked(long rule) throws Exception {
         as(JIWON);
-        long ruleOff = idOf(create("RULE_DISABLE", "FDS_RULE", randomTarget()).andExpect(status().isOk()));
+        long ruleOff = idOf(create("RULE_DISABLE", "FDS_RULE", rule).andExpect(status().isOk()));
 
         // 보안 직원은 승인할 수 없다
         decide(ruleOff, "APPROVE", null).andExpect(jsonPath("$.code").value("INV_016"));
@@ -59,7 +73,7 @@ class ApprovalFlowTests {
         // 관리자도 자기가 요청한 건은 승인할 수 없다
         as(YUNSEO);
         long own = idOf(
-                create("BLOCKLIST_RELEASE", "BLOCKLIST_ENTRY", randomTarget()).andExpect(status().isOk()));
+                create("BLOCKLIST_RELEASE", "BLOCKLIST_ENTRY", activeEntry()).andExpect(status().isOk()));
         decide(own, "APPROVE", null).andExpect(jsonPath("$.code").value("INV_010"));
 
         // 거절은 이유가 있어야 한다
@@ -81,8 +95,16 @@ class ApprovalFlowTests {
 
     @Test
     void 승인요청_같은대상대기중이면하나만_INV_013_기한지나면만료() throws Exception {
+        long target = FdsRuleFixture.create(jdbc, true);
+        try {
+            pendingOnlyOnce(target);
+        } finally {
+            FdsRuleFixture.retire(jdbc, target);
+        }
+    }
+
+    private void pendingOnlyOnce(long target) throws Exception {
         as(JIWON);
-        long target = randomTarget();
         long first = idOf(create("RULE_DISABLE", "FDS_RULE", target).andExpect(status().isOk()));
         create("RULE_DISABLE", "FDS_RULE", target).andExpect(jsonPath("$.code").value("INV_013"));
 
@@ -103,8 +125,12 @@ class ApprovalFlowTests {
         when(currentUser.get()).thenReturn(Optional.of(user));
     }
 
-    private static long randomTarget() {
-        return ThreadLocalRandom.current().nextLong(1_000_000, 9_000_000);
+    // 요청 대상은 실제로 있어야 한다 (#104 INV_025) — 테스트마다 새 차단 항목
+    private long activeEntry() {
+        String device = "dev-approval-" + UUID.randomUUID();
+        return blocklistRegistry
+                .register(new BlocklistRegistry.NewEntry("DEVICE", device, device, "테스트 #102", "STAFF", null, 4L))
+                .entryId();
     }
 
     private ResultActions create(String requestType, String targetType, long targetId) throws Exception {

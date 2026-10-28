@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.Map;
 
-// 2인 승인 요청 만들기 · 처리 · 감사 로그 (#102) — 화면 types/investigation.ts와 같은 모양
+// 관리자 승인 요청 만들기 · 처리 · 감사 로그 (#102) — 화면 types/investigation.ts와 같은 모양
 public final class ApprovalDtos {
 
     private ApprovalDtos() {}

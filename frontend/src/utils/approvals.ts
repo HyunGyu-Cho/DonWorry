@@ -37,6 +37,8 @@ const ACTION_TEXT: Record<string, string> = {
   CASE_ACTIONS_REQUESTED: '직원 사건 판정 · 조치 요청',
   DECISION_CONFIRMED: '결제 사건 판정',
   RULE_ENABLED: 'Rule 다시 켜기',
+  RULE_DISABLED: 'Rule 끄기 반영 (관리자 승인)',
+  BLOCKLIST_RELEASED: '차단 해제 반영 (관리자 승인)',
   BLOCKLIST_ADDED: '차단 목록 등록',
 }
 export const auditActionText = (action: string) => ACTION_TEXT[action] ?? action
@@ -59,7 +61,7 @@ export function auditTargetText(
   return auditActionText(log.action).includes(text) ? null : text
 }
 
-// 상세 값 중 사람이 읽을 것만 한 줄로 (사유 · 메모 · 시도 횟수 · 새 기기)
+// 상세 값 중 사람이 읽을 것만 한 줄로 (사유 · 메모 · 시도 횟수 · 새 기기 · 반영 안 한 이유)
 export function auditDetailText(detail: AuditLog['detail']): string | null {
   if (!detail) return null
   const parts: string[] = []
@@ -67,6 +69,7 @@ export function auditDetailText(detail: AuditLog['detail']): string | null {
   if (typeof detail.comment === 'string' && detail.comment) parts.push(`메모: ${detail.comment}`)
   if (typeof detail.attempts === 'number') parts.push(`${detail.attempts}회 시도`)
   if (detail.newDevice === true) parts.push('처음 보는 기기')
+  if (typeof detail.note === 'string' && detail.note) parts.push(detail.note)
   return parts.length ? parts.join(' · ') : null
 }
 

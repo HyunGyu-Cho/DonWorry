@@ -16,7 +16,7 @@ public enum InvestigationErrorCode {
     PAYMENT_NOT_IN_CASE("INV_006", "이 Case에 속한 결제가 아닙니다.", HttpStatus.BAD_REQUEST),
     PAYMENT_ALREADY_DECIDED("INV_007", "이미 판정한 결제입니다.", HttpStatus.CONFLICT),
     DUPLICATE_PAYMENT_IN_REQUEST("INV_008", "같은 결제를 한 요청에서 두 번 판정할 수 없습니다.", HttpStatus.BAD_REQUEST),
-    // 2인 승인 · 재인증 (#102) — 화면 계약(types · api)에 미리 정한 번호
+    // 관리자 승인 · 재인증 (#102) — 화면 계약(types · api)에 미리 정한 번호
     SELF_APPROVAL("INV_010", "본인이 요청한 건은 승인할 수 없습니다. 다른 보안 관리자가 처리해야 합니다.", HttpStatus.FORBIDDEN),
     STAFF_ONLY("INV_011", "보안 직원 · 보안 관리자만 할 수 있습니다.", HttpStatus.FORBIDDEN),
     APPROVAL_CLOSED("INV_012", "이미 처리됐거나 기한이 지난 승인 요청입니다.", HttpStatus.CONFLICT),
@@ -31,7 +31,9 @@ public enum InvestigationErrorCode {
     LOGIN_REQUIRED("INV_021", "로그인이 필요합니다.", HttpStatus.UNAUTHORIZED),
     APPROVAL_NOT_FOUND("INV_022", "승인 요청이 없습니다.", HttpStatus.NOT_FOUND),
     INVALID_APPROVAL_REQUEST("INV_023", "직접 만들 수 없는 승인 요청입니다.", HttpStatus.BAD_REQUEST),
-    AUDIT_MANAGER_ONLY("INV_024", "감사 로그는 보안 관리자만 볼 수 있습니다.", HttpStatus.FORBIDDEN);
+    AUDIT_MANAGER_ONLY("INV_024", "감사 로그는 보안 관리자만 볼 수 있습니다.", HttpStatus.FORBIDDEN),
+    // Rule 끄기 · 차단 해제 요청 대상 확인 (#104 2-7) — 없는 대상 · 끌 수 없는 Rule · 이미 꺼진 Rule · 이미 풀린 차단
+    APPROVAL_TARGET_INVALID("INV_025", "요청할 수 없는 대상입니다. 이미 꺼졌거나 풀렸는지 화면을 새로 고쳐 확인해 주세요.", HttpStatus.CONFLICT);
 
     private final String code;
     private final String message;

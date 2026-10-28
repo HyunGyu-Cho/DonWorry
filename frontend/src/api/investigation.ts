@@ -6,6 +6,7 @@ import {
   ApprovalClosedError,
   ApprovalDuplicateError,
   ApprovalForbiddenError,
+  ApprovalTargetInvalidError,
   CaseActionForbiddenError,
   RejectReasonRequiredError,
   SelfApprovalError,
@@ -32,7 +33,7 @@ import type {
   StaffCase,
 } from '../types/investigation.ts'
 
-// 백엔드 오류 코드 → 화면용 오류 (INV_010 ~ INV_012 · INV_014는 2-9, INV_013 · INV_015 · INV_016은 2-10에서 백엔드에 추가)
+// 백엔드 오류 코드 → 화면용 오류 (INV_010 ~ INV_012 · INV_014는 2-9, INV_013 · INV_015 · INV_016은 2-10, INV_025는 2-7에서 백엔드에 추가)
 function mapInvestigationError(error: unknown): never {
   if (error instanceof ApiError) {
     if (error.code === 'INV_010') throw new SelfApprovalError()
@@ -42,6 +43,7 @@ function mapInvestigationError(error: unknown): never {
     if (error.code === 'INV_014') throw new StaffCaseForbiddenError()
     if (error.code === 'INV_015') throw new RejectReasonRequiredError()
     if (error.code === 'INV_016') throw new ApprovalForbiddenError()
+    if (error.code === 'INV_025') throw new ApprovalTargetInvalidError()
   }
   throw error
 }

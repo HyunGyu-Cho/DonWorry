@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { enableRule, getRuleHitStats, getRules } from '../../api/fdsRules'
 import { RuleActionForbiddenError, RuleAlreadyEnabledError } from '../../api/fdsErrors'
 import { createApproval, getApprovals } from '../../api/investigation'
-import { ApprovalDuplicateError } from '../../api/investigationErrors'
+import { ApprovalDuplicateError, ApprovalTargetInvalidError } from '../../api/investigationErrors'
 import { useAuth } from '../../auth/useAuth'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -345,7 +345,7 @@ export function RuleCatalogPage() {
       await load()
     } catch (e) {
       void toast.error(
-        e instanceof ApprovalDuplicateError
+        e instanceof ApprovalDuplicateError || e instanceof ApprovalTargetInvalidError
           ? e.message
           : '요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.',
       )

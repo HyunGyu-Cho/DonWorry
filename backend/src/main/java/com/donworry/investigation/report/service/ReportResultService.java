@@ -5,6 +5,7 @@ import com.donworry.investigation.report.dto.StepReportRequest;
 import com.donworry.investigation.service.CaseStatusService;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
+import com.donworry.investigation.service.SimilarCaseService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
@@ -37,6 +38,8 @@ public class ReportResultService {
     private final PaymentInfoReader paymentInfoReader;
     // 조사 과정 기록 — 단계 알림을 저장하고 보고서 trace로 쓴다 (2-19 · 2-19b)
     private final ReportStepRecorder reportStepRecorder;
+    // 비슷한 과거 사건 — 보고서 칸을 Spring이 채운다 (#104 2-9a)
+    private final SimilarCaseService similarCaseService;
     // 다시 요청은 쉬는 시간이 있어 결과를 보낸 ai-server를 기다리게 하지 않도록 따로 돌린다
     private final Executor retryExecutor;
 
@@ -48,7 +51,8 @@ public class ReportResultService {
             ReportService reportService,
             CaseStatusService caseStatusService,
             PaymentInfoReader paymentInfoReader,
-            ReportStepRecorder reportStepRecorder) {
+            ReportStepRecorder reportStepRecorder,
+            SimilarCaseService similarCaseService) {
         this(
                 reportTransitions,
                 attemptRegistry,
@@ -57,6 +61,7 @@ public class ReportResultService {
                 caseStatusService,
                 paymentInfoReader,
                 reportStepRecorder,
+                similarCaseService,
                 Executors.newVirtualThreadPerTaskExecutor());
     }
 
@@ -68,6 +73,7 @@ public class ReportResultService {
             CaseStatusService caseStatusService,
             PaymentInfoReader paymentInfoReader,
             ReportStepRecorder reportStepRecorder,
+            SimilarCaseService similarCaseService,
             Executor retryExecutor) {
         this.reportTransitions = reportTransitions;
         this.attemptRegistry = attemptRegistry;
@@ -76,6 +82,7 @@ public class ReportResultService {
         this.caseStatusService = caseStatusService;
         this.paymentInfoReader = paymentInfoReader;
         this.reportStepRecorder = reportStepRecorder;
+        this.similarCaseService = similarCaseService;
         this.retryExecutor = retryExecutor;
     }
 
@@ -102,8 +109,11 @@ public class ReportResultService {
             // 과정 = 지금까지의 기록 전체 (2-19b). ai-server가 단계를 하나도 못 알렸으면 결과에 실려 온 steps로 채운다
             List<Map<String, Object>> aiServerSteps =
                     reportStepRecorder.hasAiServerSteps(reportId) ? null : result.steps();
+            List<Map<String, Object>> similar = similarCaseService.find(target.caseId()).stream()
+                    .map(SimilarCaseService.SimilarCase::toMap)
+                    .toList();
             Map<String, Object> body = ConclusionReportBuilder.build(
-                    target, result.report(), aiServerSteps, reportStepRecorder.rows(reportId), payments, now);
+                    target, result.report(), aiServerSteps, reportStepRecorder.rows(reportId), payments, similar, now);
             // 이미 끝난 보고서면 false — 덮지 않고 할 일도 없다 (#54)
             if (reportTransitions.succeed(reportId, body, now)) {
                 finish(target);

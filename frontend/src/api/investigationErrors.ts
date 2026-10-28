@@ -24,6 +24,14 @@ export class ApprovalClosedError extends Error {
   }
 }
 
+// 요청할 수 없는 대상 (INV_025) — 없는 대상 · 끌 수 없는 Rule · 이미 꺼진 Rule · 이미 풀린 차단
+export class ApprovalTargetInvalidError extends Error {
+  constructor() {
+    super('요청할 수 없는 대상입니다. 이미 꺼졌거나 풀렸는지 화면을 새로 고쳐 확인해 주세요.')
+    this.name = 'ApprovalTargetInvalidError'
+  }
+}
+
 // 같은 대상에 승인 대기 중인 요청이 이미 있음 (INV_013)
 export class ApprovalDuplicateError extends Error {
   constructor() {

@@ -40,7 +40,8 @@ public class AuditTrail {
                 AuditLog.of(STAFF, actorId, action, targetType, targetId, detail, clientIp, occurredAt));
     }
 
-    private static String requestIp() {
+    // 커밋 뒤 리스너도 같은 요청 스레드에서 돌면 요청 IP를 읽을 수 있다. 요청 밖이면 null
+    static String requestIp() {
         return RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes
                 ? attributes.getRequest().getRemoteAddr()
                 : null;
