@@ -1,12 +1,15 @@
 package com.donworry.investigation.service;
 
 import com.donworry.investigation.entity.ActionHandoff;
+import com.donworry.investigation.entity.ApprovalRequest;
 import com.donworry.investigation.entity.CaseHistory;
 import com.donworry.investigation.entity.CaseHistoryEventType;
+import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.HandoffStatus;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.ActionHandoffRepository;
+import com.donworry.investigation.repository.ApprovalRequestRepository;
 import com.donworry.investigation.repository.CaseHistoryRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.PaymentDecisionRepository;
@@ -34,6 +37,7 @@ public class CaseStatusService {
     private final ActionHandoffRepository actionHandoffRepository;
     private final CaseHistoryRepository caseHistoryRepository;
     private final ReportGateway reportGateway;
+    private final ApprovalRequestRepository approvalRequestRepository;
 
     // 호출자 트랜잭션 안에서, findByIdForUpdate · findMergeCandidates로 잠근 Case에만 부른다
     @Transactional(propagation = Propagation.MANDATORY)
@@ -51,7 +55,8 @@ public class CaseStatusService {
                 (int) paymentDecisionRepository.countByCasePaymentSecurityCaseId(caseId),
                 handoffs,
                 reportProgress(caseId, securityCase.getEvidenceVersion()));
-        CaseStatus next = InvestigationRules.nextStatus(snapshot);
+        CaseStatus next = InvestigationRules.withPendingApproval(
+                InvestigationRules.nextStatus(snapshot), overridePending(caseId, now));
         if (next == current) {
             return;
         }
@@ -76,6 +81,16 @@ public class CaseStatusService {
                 .findByIdForUpdate(caseId)
                 .filter(securityCase -> !securityCase.isClosed())
                 .ifPresent(securityCase -> refresh(securityCase, Instant.now()));
+    }
+
+    // 이 사건 결제를 대상으로 한 권고 반대 판정 요청이 처리 기한 안에 대기 중인지
+    public boolean overridePending(Long caseId, Instant now) {
+        List<Long> casePaymentIds = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
+                .map(CasePayment::getId)
+                .toList();
+        return !casePaymentIds.isEmpty()
+                && approvalRequestRepository.existsByRequestTypeAndStatusAndExpiresAtAfterAndTargetIdIn(
+                        ApprovalCommandService.DECISION_OVERRIDE, ApprovalRequest.PENDING, now, casePaymentIds);
     }
 
     // 최신 보고서가 현재 증거 버전보다 오래됐으면 재조사 중으로 본다 (fds 정본 03 §3.5)

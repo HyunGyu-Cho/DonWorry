@@ -8,6 +8,7 @@ import com.donworry.investigation.repository.ApprovalRequestRepository;
 import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +31,10 @@ public class ApprovalCommandService {
     private final ApprovalQueryService approvalQueryService;
     private final StaffGuard staffGuard;
     private final AuditTrail auditTrail;
+    private final ApplicationEventPublisher events;
+
+    // 권고 반대 판정 승인 · 거절 → 판정 서비스가 같은 트랜잭션에서 사건에 반영 (서로 부르지 않게 이벤트로)
+    public record OverrideDecided(ApprovalRequest request, boolean approved) {}
 
     @Transactional
     public ApprovalResponse create(NewApprovalRequest input) {
@@ -100,6 +105,9 @@ public class ApprovalCommandService {
                 TARGET,
                 request.getId(),
                 Map.of("requestType", request.getRequestType(), "requestedBy", request.getRequestedBy()));
+        if (DECISION_OVERRIDE.equals(request.getRequestType())) {
+            events.publishEvent(new OverrideDecided(request, approve));
+        }
         return approvalQueryService.response(request, now);
     }
 }

@@ -87,4 +87,9 @@ public final class InvestigationRules {
             case COMPLETED -> CaseStatus.DECISION_PENDING;
         };
     }
+
+    // 판정 대기인데 권고 반대 판정이 관리자 승인을 기다리면 승인 대기로 보인다 (#102)
+    public static CaseStatus withPendingApproval(CaseStatus next, boolean overridePending) {
+        return overridePending && next == CaseStatus.DECISION_PENDING ? CaseStatus.APPROVAL_PENDING : next;
+    }
 }

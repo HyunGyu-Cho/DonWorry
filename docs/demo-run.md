@@ -93,6 +93,18 @@ npm run dev
 > UPDATE blocklist_entries SET released_at = UTC_TIMESTAMP(6) WHERE released_at IS NULL;
 > ```
 
+## 3-2. AI 권고와 반대로 판정 → 관리자 승인 (#102)
+
+3절 시나리오 ① 6번에서 [승인 취소] 대신 이렇게 해 봅니다. 가짜 AI(`AI_SERVER_LLM_PROVIDER=mock`)는 65만 원 결제에 "승인 취소 검토"를 권고합니다.
+
+1. `jiwon`으로 사건 화면 → 결제에서 **[매입 허용]** + 사유 → [재인증 후 승인 요청]
+2. "비밀번호 다시 확인" 창에 `1234` → 사건이 **관리자 승인 대기**가 되고 결제는 그대로(매입 보류)
+3. 로그아웃 → `yunseo` / `1234` 로그인 → [승인함]에서 요청을 [승인] (또는 이유를 적고 [거절])
+4. 승인하면 박지원 이름으로 판정이 반영돼 매입이 진행되고, 거절하면 사건이 판정 대기로 돌아갑니다
+5. `yunseo`의 [감사 로그]에서 로그인 · 승인 요청 · 승인 · 판정이 한 줄씩 남은 것을 확인
+
+> 비밀번호를 5번 연속 틀리면 그 계정은 30분 동안 잠깁니다. 시연 중 잠겼다면 30분을 기다리거나, 시연용 DB에서만 `UPDATE platform_users SET locked_until = NULL, failed_login_count = 0 WHERE login_id = 'jiwon';`
+
 ## 4. 진짜 AI(Ollama Qwen)로 바꾸기 (#88)
 
 가짜 AI는 정해진 순서로 증거를 보고 보고서를 조립합니다. 진짜 AI는 **어떤 증거를 볼지 스스로 고르고** 보고서를 직접 씁니다.

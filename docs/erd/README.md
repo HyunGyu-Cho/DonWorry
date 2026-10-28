@@ -184,7 +184,7 @@ erDiagram
 | `replace_payment_rules_with_r01_r08` | 결제 Rule R01~R08 (3개 추가 · 3개 폐지), 판정 구간 0~49 ALLOW · 50~79 REVIEW · 80+ DENY, 차단 목록은 즉시 DENY (ADR-0023) |
 | `seed_loan_products` | 가상 은행 대출 상품 3개 |
 | `seed_demo_fake_ips` | 가짜 IP 38개 (사내망 3 · 국내 3 · 익명 2 · 분산 공격 30) |
-| `seed_demo_staff_users` | 시연 직원 3명: `jiwon` 박지원(보안 직원) · `yunseo` 최윤서(보안 관리자) · `dohyun` 이도현(보안 직원). 비밀번호 1234, OTP는 demo 프로필 고정 코드 |
+| `seed_demo_staff_users` | 시연 직원 3명: `jiwon` 박지원(보안 직원) · `yunseo` 최윤서(보안 관리자) · `dohyun` 이도현(보안 직원). 비밀번호 1234. 1차 MVP는 비밀번호만으로 로그인 (OTP는 2차, ADR-0024) |
 
 ### 이번에 만들지 않은 것
 

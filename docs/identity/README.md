@@ -16,6 +16,14 @@
 - 시연 계정 시드: DEMOSHOP 가맹점(pg_fee_rate 0.020000 임시값), 사장님 boss(OPERATOR, FDS_VIEW · FINANCE_VIEW), 보안 직원 staff_test(SECURITY_STAFF, 추가 권한 없음). 비밀번호는 둘 다 1234다.
 - DB · 프론트 · 다른 모듈 계약 변경은 없다. /me 외 접근 허용과 CSRF 비활성화는 ADR-0014대로 유지한다.
 
+## 로그인 기록 · 잠금 · 재인증 (#102, [ADR-0024](../decisions/0024-staff-reauth-two-person-approval-audit.md))
+
+- 1차 MVP는 비밀번호만으로 로그인한다. OTP · 복구 코드 · 사장님 이메일 확인은 2차.
+- 모든 로그인 시도를 staff_login_events에 남긴다 (SUCCESS · BAD_PASSWORD · LOCKED · UNKNOWN_USER).
+- 비밀번호 5번 연속 실패 → 30분 잠금. 잠긴 동안은 맞는 비밀번호도 423 AUTH_011.
+- POST /api/identity/reauth {password}: 로그인한 직원이 비밀번호를 다시 넣으면 5분 · 1회용 재인증 표. 틀리면 400 AUTH_010. 다른 모듈은 identity.api.Reauthentication으로만 확인한다.
+- 직원 로그인 결과는 StaffLoginRecorded 이벤트로 내보내고, investigation이 감사 로그에 남긴다.
+
 ## 검증
 
 2026-10-22, feature/76-auth-api에서 기준 커밋 79366e3 위의 #76 미커밋 작업 트리로 실행했다. 아래 결과는 기준 커밋 단독의 결과가 아니다.
