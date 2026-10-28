@@ -43,10 +43,13 @@ public class SecurityCaseController {
         return caseQueryService.detail(caseId);
     }
 
-    // 판정 커밋 뒤 인계 결과까지 반영된 상세를 돌려준다
+    // 바로 반영되면 인계 결과까지 반영된 상세를, 권고 반대라 관리자 승인을 기다리면 {outcome, approvalId}를 돌려준다 (#102)
     @PostMapping("/{caseId}/decisions")
-    public CaseDetailResponse decide(@PathVariable Long caseId, @Valid @RequestBody DecisionSubmitRequest request) {
-        caseDecisionService.decide(caseId, request);
+    public Object decide(@PathVariable Long caseId, @Valid @RequestBody DecisionSubmitRequest request) {
+        CaseDecisionService.Outcome outcome = caseDecisionService.decide(caseId, request);
+        if (outcome.approvalId() != null) {
+            return outcome;
+        }
         return caseQueryService.detail(caseId);
     }
 

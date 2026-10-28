@@ -45,6 +45,7 @@
 | [0021](0021-ai-investigation-langgraph.md) | AI 조사 흐름을 LangGraph 그래프로 (ai-server) | 제안 |
 | [0022](0022-demo-skeleton-module-wiring.md) | 시연 뼈대 ① — 결제 · FDS · 사건 · AI · 조치를 실제로 잇기 | 제안 |
 | [0023](0023-payment-fds-rules-r01-r08.md) | 결제 FDS 룰을 R01~R08로 바꾸고 판정 구간을 50 · 80으로 | 제안 |
+| [0024](0024-staff-reauth-two-person-approval-audit.md) | 직원 재인증 · 2인 승인 · 감사 로그 (1차 MVP는 비밀번호만) | 제안 |
 
 ## 현재 적용 상태와 기록의 구분
 

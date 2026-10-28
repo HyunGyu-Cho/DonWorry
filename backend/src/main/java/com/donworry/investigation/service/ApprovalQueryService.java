@@ -4,12 +4,13 @@ import com.donworry.identity.api.StaffDirectory;
 import com.donworry.investigation.dto.InvestigationViewDtos.ApprovalResponse;
 import com.donworry.investigation.entity.ApprovalRequest;
 import com.donworry.investigation.repository.ApprovalRequestRepository;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 2인 승인 요청 목록 (#82, 읽기만) — 요청 만들기 · 승인은 2-10
+// 2인 승인 요청 목록 (#82) — 기한이 지난 대기 요청은 "만료"로 보인다 (#102)
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -19,25 +20,26 @@ public class ApprovalQueryService {
     private final StaffDirectory staffDirectory;
 
     public List<ApprovalResponse> list(String status) {
-        List<ApprovalRequest> rows = status == null
-                ? approvalRequestRepository.findAllByOrderByRequestedAtDesc()
-                : approvalRequestRepository.findByStatusOrderByRequestedAtDesc(status);
-        return rows.stream().map(this::response).toList();
+        Instant now = Instant.now();
+        return approvalRequestRepository.findAllByOrderByRequestedAtDesc().stream()
+                .map(request -> response(request, now))
+                .filter(response -> status == null || status.equals(response.status()))
+                .toList();
     }
 
-    private ApprovalResponse response(ApprovalRequest request) {
+    public ApprovalResponse response(ApprovalRequest request, Instant now) {
         return new ApprovalResponse(
                 request.getId(),
                 request.getRequestType(),
                 request.getTargetType(),
                 request.getTargetId(),
-                request.getTargetType(),
+                request.getTargetLabel() == null ? request.getTargetType() : request.getTargetLabel(),
                 request.getPayload(),
                 request.getReason(),
                 request.getRequestedBy(),
                 staffDirectory.displayName(request.getRequestedBy()).orElse("직원"),
                 request.getRequestedAt(),
-                request.getStatus(),
+                request.displayStatus(now),
                 request.getDecidedBy(),
                 request.getDecidedAt(),
                 request.getDecisionComment(),

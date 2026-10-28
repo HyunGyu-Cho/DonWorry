@@ -9,6 +9,7 @@ import com.donworry.payment.api.PaymentLookup;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class PaymentAlertBlockService {
     private final FdsPaymentEvaluations fdsPaymentEvaluations;
     private final PaymentLookup paymentLookup;
     private final BlocklistRegistry blocklistRegistry;
+    private final AuditTrail auditTrail;
 
     @Transactional
     public List<BlockedEntry> block(Long evaluationId, BlockRequest request) {
@@ -55,6 +57,14 @@ public class PaymentAlertBlockService {
                     type, value[0], value[1], request.reason().trim(), "STAFF", null, user.userId()));
             result.add(new BlockedEntry(
                     registered.entryId(), registered.entryType(), registered.displayValue(), !registered.created()));
+            if (registered.created()) {
+                auditTrail.staff(
+                        user.userId(),
+                        "BLOCKLIST_ADDED",
+                        "BLOCKLIST_ENTRY",
+                        registered.entryId(),
+                        Map.of("entryType", registered.entryType(), "evaluationId", evaluationId));
+            }
         }
         return result;
     }

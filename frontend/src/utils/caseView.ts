@@ -165,7 +165,7 @@ const HISTORY_TEXT: Record<string, string> = {
   CASE_CLOSED: '사건 종료',
 }
 const STATUS_CHANGE_TEXT: Record<string, string> = {
-  APPROVAL_PENDING: '권고 반대 판정 · 관리자 승인 요청 (OTP 재인증 완료)',
+  APPROVAL_PENDING: '권고 반대 판정 · 관리자 승인 요청 (재인증 완료)',
   APPROVED: '관리자 승인 · 판정 반영',
   REJECTED: '관리자 거절 · 다시 판정 대기',
   DECISION_PENDING: 'AI 조사 완료 · 판정 대기',

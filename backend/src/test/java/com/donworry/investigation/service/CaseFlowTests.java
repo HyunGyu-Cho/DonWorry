@@ -33,6 +33,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
@@ -44,6 +45,17 @@ import tools.jackson.databind.json.JsonMapper;
 @AutoConfigureMockMvc
 @Import({MariaDbTestContainerConfig.class, HeldPaymentFixture.class})
 class CaseFlowTests {
+
+    // 판정은 로그인한 보안 직원만 (#102) — 박지원(4)으로 로그인한 상태
+    @MockitoBean
+    com.donworry.identity.api.CurrentUser currentUser;
+
+    @org.junit.jupiter.api.BeforeEach
+    void loginAsStaff() {
+        org.mockito.Mockito.when(currentUser.get())
+                .thenReturn(java.util.Optional.of(
+                        new com.donworry.identity.api.CurrentUser.UserView(4L, "SECURITY_STAFF", null)));
+    }
 
     @Autowired
     HeldPaymentFixture heldPaymentFixture;

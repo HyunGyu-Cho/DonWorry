@@ -14,6 +14,7 @@ import com.donworry.identity.entity.UserStatus;
 import com.donworry.identity.repository.PlatformUserRepository;
 import com.donworry.identity.repository.UserPermissionRepository;
 import com.donworry.identity.service.AuthService;
+import com.donworry.identity.service.LoginAttemptService;
 import java.io.*;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +61,10 @@ class AuthApiTests {
 
     @MockitoBean
     UserPermissionRepository permissionRepository;
+
+    // 로그인 기록 · 잠금은 LoginLockTests(MariaDB)에서 본다
+    @MockitoBean
+    LoginAttemptService loginAttempts;
 
     private PlatformUser user;
 

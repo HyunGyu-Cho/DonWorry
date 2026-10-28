@@ -278,7 +278,7 @@ function OverridePendingCard(props: { approval: ApprovalRequest; manager: boolea
           <dt>요청</dt>
           <dd>
             {approval.requestedByName} · {relativeTime(approval.requestedAt, now)} ·{' '}
-            {approval.payload?.reauthenticated ? 'OTP 재인증 완료' : '재인증 정보 없음'}
+            {approval.payload?.reauthenticated ? '비밀번호 재인증 완료' : '재인증 정보 없음'}
           </dd>
           <dt>사유</dt>
           <dd>{approval.reason}</dd>

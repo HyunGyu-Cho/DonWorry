@@ -246,11 +246,7 @@ export function LoginPage({
               {demoHint && (
                 <div className="dw-login-demo">
                   <h3>시연 계정 (Mock 모드)</h3>
-                  <p>
-                    보안 직원 jiwon · 보안 관리자 yunseo · 사장님 boss — 비밀번호 1234
-                    <br />
-                    직원 OTP 246810 · 복구 코드 DW-RECOVERY-0001 · 사장님 새 기기 이메일 코드 135790
-                  </p>
+                  <p>보안 직원 jiwon · 보안 관리자 yunseo · 사장님 boss — 비밀번호 1234</p>
                 </div>
               )}
             </>

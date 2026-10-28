@@ -32,6 +32,10 @@ class HandoffReceiptTests {
     @MockitoBean
     FinancialActionGateway financialActionGateway;
 
+    // 판정은 로그인한 보안 직원만 (#102)
+    @MockitoBean
+    com.donworry.identity.api.CurrentUser currentUser;
+
     @Autowired
     CaseIntakeService caseIntakeService;
 
@@ -59,6 +63,9 @@ class HandoffReceiptTests {
     @BeforeEach
     void decideOnePayment() {
         given(financialActionGateway.request(any())).willReturn(Receipt.unknown());
+        given(currentUser.get())
+                .willReturn(java.util.Optional.of(
+                        new com.donworry.identity.api.CurrentUser.UserView(4L, "SECURITY_STAFF", null)));
         caseId = receiveHeld();
         CaseDetailResponse detail = caseQueryService.detail(caseId);
         caseDecisionService.decide(
@@ -68,7 +75,8 @@ class HandoffReceiptTests {
                         1,
                         detail.reports().getLast().reportId(),
                         List.of(new DecisionSubmitRequest.Item(
-                                detail.payments().getFirst().casePaymentId(), Decision.ACCEPT, "사유"))));
+                                detail.payments().getFirst().casePaymentId(), Decision.ACCEPT, "사유")),
+                        null));
         idempotencyKey = actionHandoffRepository
                 .findByDecisionCasePaymentSecurityCaseId(caseId)
                 .getFirst()
@@ -103,7 +111,8 @@ class HandoffReceiptTests {
                         1,
                         before.reports().getLast().reportId(),
                         List.of(new DecisionSubmitRequest.Item(
-                                before.payments().getFirst().casePaymentId(), Decision.REJECT, "사유"))));
+                                before.payments().getFirst().casePaymentId(), Decision.REJECT, "사유")),
+                        null));
 
         CaseDetailResponse after = caseQueryService.detail(otherCaseId);
         assertThat(after.decisions()).hasSize(1);
