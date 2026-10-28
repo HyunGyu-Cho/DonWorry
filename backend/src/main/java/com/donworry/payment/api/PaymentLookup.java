@@ -1,9 +1,11 @@
 package com.donworry.payment.api;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 // 다른 모듈(investigation)이 결제 정보를 읽는 공개 경계 (#82) — 읽기 전용
 public interface PaymentLookup {
@@ -42,6 +44,19 @@ public interface PaymentLookup {
     Optional<BlockValues> blockValues(Long paymentId);
 
     record BlockValues(String cardFingerprint, String cardLast4, String deviceId, String clientIp, String buyerEmail) {}
+
+    // 비슷한 과거 사건 찾기 (#104 2-9a) — 후보 결제 중 이 결제와 같은 값을 쓴 결제와 무엇이 같은지
+    // 고객은 같은 가맹점 안에서만, 카드 · 기기 · IP · 이메일은 가맹점과 상관없이 비교한다. 값(카드 지문 등)은 내보내지 않는다
+    // 겹치는 값이 없는 후보 · 이 결제 자신은 결과에 넣지 않는다
+    Map<Long, Set<SharedValue>> sharedValues(Long paymentId, Collection<Long> candidatePaymentIds);
+
+    enum SharedValue {
+        CARD,
+        DEVICE,
+        IP,
+        EMAIL,
+        CUSTOMER
+    }
 
     // 화면 · 보고서에 보일 결제 정보. 카드 번호 원문 · 지문은 넣지 않는다
     record PaymentView(

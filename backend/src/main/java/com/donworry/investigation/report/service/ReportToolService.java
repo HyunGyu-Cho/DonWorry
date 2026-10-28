@@ -4,6 +4,7 @@ import com.donworry.investigation.report.dto.ToolCallRequest;
 import com.donworry.investigation.report.dto.ToolResponse;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
+import com.donworry.investigation.service.SimilarCaseService;
 import com.donworry.payment.api.PaymentLookup;
 import java.text.NumberFormat;
 import java.time.Instant;
@@ -33,6 +34,7 @@ public class ReportToolService {
     private final PaymentInfoReader paymentInfoReader;
     private final ReportStepRecorder reportStepRecorder;
     private final PaymentLookup paymentLookup;
+    private final SimilarCaseService similarCaseService;
 
     public ToolResponse call(String toolName, ToolCallRequest request) {
         ReportTool tool =
@@ -68,6 +70,7 @@ public class ReportToolService {
             case GET_ORDER_CONTEXT -> orderContext(target);
             case GET_PAYMENT_HISTORY -> paymentHistory(target);
             case GET_PAYMENT_AUTHENTICATION -> paymentAuthentication(target);
+            case FIND_SIMILAR_CASES -> similarCases(target);
             default -> new Answer(List.of(), NOT_READY_NOTE);
         };
     }
@@ -186,6 +189,20 @@ public class ReportToolService {
                     + (authorized ? "승인됨" : "승인 전"));
         }
         return new Answer(rows, summaries.isEmpty() ? "카드 정보 없음" : String.join(", ", summaries));
+    }
+
+    // 판정이 끝난 비슷한 과거 사건 (#104 2-9a, P3 SimilarCaseService) — 근거로만, 자동 판정에 쓰지 않는다. 카드 지문은 없다
+    private Answer similarCases(ReportTarget target) {
+        List<SimilarCaseService.SimilarCase> found = similarCaseService.find(target.caseId());
+        List<Map<String, Object>> rows =
+                found.stream().map(SimilarCaseService.SimilarCase::toMap).toList();
+        long fraud = found.stream().filter(c -> "FRAUD".equals(c.outcome())).count();
+        long strong =
+                found.stream().filter(SimilarCaseService.SimilarCase::strong).count();
+        String summary = found.isEmpty()
+                ? "판정이 끝난 비슷한 사건 없음"
+                : "비슷한 사건 " + found.size() + "건 · 사기 " + fraud + "건 · 같은 대상 겹침 " + strong + "건";
+        return new Answer(rows, summary);
     }
 
     // 이번 금액 ÷ 평균, 소수 한 자리. 평균을 모르면 null

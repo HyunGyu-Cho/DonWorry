@@ -4,7 +4,7 @@
  */
 
 import type { RuleCode } from './fds.ts'
-import type { ConclusionReport } from './report.ts'
+import type { ConclusionReport, SimilarCase } from './report.ts'
 
 // ── 상태값 (설계 3.3) ──
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
@@ -144,6 +144,8 @@ export type ReportBody = {
     retrievedAt: string
     dataVersion: string
   }>
+  // 비슷한 과거 사건 [Spring] (#104) — 가짜 작성기 보고서에도 Spring이 찾아 넣는다. 옛 보고서에는 없음
+  similarCases?: SimilarCase[]
 }
 
 export type AiReport = {

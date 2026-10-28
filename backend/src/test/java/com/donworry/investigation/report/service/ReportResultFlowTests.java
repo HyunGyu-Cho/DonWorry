@@ -22,6 +22,8 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.CaseType;
+import com.donworry.investigation.entity.Decision;
+import com.donworry.investigation.entity.PaymentDecision;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.client.AiServerClient;
 import com.donworry.investigation.report.client.AiServerClient.Kind;
@@ -31,6 +33,7 @@ import com.donworry.investigation.report.entity.AiReport;
 import com.donworry.investigation.report.entity.ReportStatus;
 import com.donworry.investigation.report.repository.AiReportRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
+import com.donworry.investigation.repository.PaymentDecisionRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
 import java.time.Duration;
@@ -49,6 +52,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -87,6 +91,12 @@ class ReportResultFlowTests {
 
     @Autowired
     CasePaymentRepository casePaymentRepository;
+
+    @Autowired
+    PaymentDecisionRepository paymentDecisionRepository;
+
+    @Autowired
+    JdbcTemplate jdbc;
 
     @Autowired
     HeldPaymentFixture heldPaymentFixture;
@@ -481,6 +491,36 @@ class ReportResultFlowTests {
         mvc.perform(get(runUrl))
                 .andExpect(jsonPath("$.steps[1].got").value("이전 결제 0건 · 완료된 결제 없음"))
                 .andExpect(jsonPath("$.steps[2].got").value("카드 모름 · 카드 이력 모름 · 승인됨"));
+    }
+
+    // 비슷한 사건 창구가 열렸다 (#104 2-9a) — 판정이 끝난 같은 고객 사건을 근거로 주고, 저장한 보고서 칸에도 Spring이 채운다
+    @Test
+    void AI조사창구_find_similar_cases열림_보고서비슷한사건칸채움() throws Exception {
+        String customerRef =
+                jdbc.queryForObject("SELECT customer_ref FROM payments WHERE payment_id = ?", String.class, paymentId);
+        Long pastPayment = heldPaymentFixture.payment(1L, customerRef, 40_000L, 10, List.of());
+        SecurityCase past = securityCaseRepository.save(SecurityCase.open(
+                1L, customerRef, CaseType.PAYMENT_FRAUD, Instant.now().minus(Duration.ofDays(20))));
+        CasePayment link = casePaymentRepository.save(CasePayment.link(past, pastPayment, Instant.now()));
+        paymentDecisionRepository.save(PaymentDecision.confirm(
+                link, 4L, null, Decision.REJECT, "카드 도용 확인", past.getEvidenceVersion(), Instant.now()));
+        Sent sent = requestInvestigation();
+
+        tool("find_similar_cases", sent, Map.of(), KEY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ready").value(true))
+                .andExpect(jsonPath("$.data[0].caseId").value(String.valueOf(past.getId())))
+                .andExpect(jsonPath("$.data[0].outcome").value("FRAUD"))
+                .andExpect(jsonPath("$.data[0].strength").value("STRONG"))
+                .andExpect(
+                        jsonPath("$.data[0].matches[?(@ == 'SAME_CUSTOMER')]").exists());
+
+        send(sent.reportId(), result(sent, "SUCCEEDED", String.valueOf(paymentId)), KEY, 204);
+
+        List<?> similar = (List<?>) report(sent.reportId()).getReportBody().get("similarCases");
+        assertThat(similar).isNotEmpty();
+        assertThat(((Map<?, ?>) similar.getFirst()).get("caseId")).isEqualTo(String.valueOf(past.getId()));
+        assertThat(((Map<?, ?>) similar.getFirst()).get("outcomeLabel")).isEqualTo("승인 취소 · 카드 도용 확인");
     }
 
     // 키 없음 · 틀림 401, 없는 창구 404, 옛 시도 409, 다른 사건 결제 400, 끝난 보고서 409

@@ -67,8 +67,8 @@ export function toConclusionReport(
       retrievedAt: e.retrievedAt,
       ref: null,
     })),
-    // 기존 형식에는 비슷한 사건 · 조사 과정이 없다 (만들어 넣지 않음)
-    similarCases: [],
+    // 비슷한 사건은 Spring이 넣은 값만 (#104), 조사 과정은 기존 형식에 없다 (만들어 넣지 않음)
+    similarCases: body.similarCases ?? [],
     trace: [],
     limitations: body.recommendation.limitations,
     model: '기존 보고서 형식',

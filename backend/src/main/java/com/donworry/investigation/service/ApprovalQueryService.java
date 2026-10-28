@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// 2인 승인 요청 목록 (#82) — 기한이 지난 대기 요청은 "만료"로 보인다 (#102)
+// 관리자 승인 요청 목록 (#82) — 기한이 지난 대기 요청은 "만료"로 보인다 (#102)
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)

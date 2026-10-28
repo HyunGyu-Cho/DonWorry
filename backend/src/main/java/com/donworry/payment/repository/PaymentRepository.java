@@ -3,6 +3,7 @@ package com.donworry.payment.repository;
 import com.donworry.payment.entity.Payment;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Lock;
@@ -16,6 +17,9 @@ public interface PaymentRepository extends Repository<Payment, Long> {
     Payment save(Payment payment);
 
     Optional<Payment> findById(Long paymentId);
+
+    // 비슷한 과거 사건 후보 결제 (#104 2-9a)
+    List<Payment> findByPaymentIdIn(Collection<Long> paymentIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.paymentId = :paymentId")

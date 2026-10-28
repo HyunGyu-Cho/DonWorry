@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 // AI가 쓴 칸 + Spring이 아는 사실 → 화면 결론 카드(frontend/src/types/report.ts ConclusionReport, schemaVersion 2)
-// 모르는 칸은 지어내지 않고 빈 목록으로 둔다 — 경위 · 증거 · 비슷한 사건은 2-19 · 2-9에서 채운다
+// 모르는 칸은 지어내지 않고 빈 목록으로 둔다 — 경위 · 증거는 아직 비움. 비슷한 사건은 Spring이 찾아 채운다 (#104 2-9a)
 final class ConclusionReportBuilder {
 
     static final List<String> LIMITATIONS =
@@ -26,17 +26,19 @@ final class ConclusionReportBuilder {
             List<Map<String, Object>> steps,
             Map<Long, PaymentInfo> payments,
             Instant generatedAt) {
-        return build(target, draft, steps, List.of(), payments, generatedAt);
+        return build(target, draft, steps, List.of(), payments, List.of(), generatedAt);
     }
 
     // recordedRows = 조사 과정 기록 전체 (ReportStepRecorder.rows — 접수 · 증거 조회 · AI 판단 · 검사 · 저장, 2-19b)
     // steps = ai-server 결과에 실려 온 과정 — 단계 알림이 하나도 기록되지 않았을 때만 넘긴다 (아니면 null)
+    // similarCases = 저장 시점의 비슷한 과거 사건 (SimilarCaseService) — AI가 쓴 칸이 아니라 Spring이 아는 사실
     static Map<String, Object> build(
             ReportTarget target,
             Map<String, Object> draft,
             List<Map<String, Object>> steps,
             List<Map<String, Object>> recordedRows,
             Map<Long, PaymentInfo> payments,
+            List<Map<String, Object>> similarCases,
             Instant generatedAt) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("schemaVersion", 2);
@@ -59,7 +61,7 @@ final class ConclusionReportBuilder {
         body.put("timeline", List.of());
         body.put("paymentRecommendations", paymentRecommendations(target, draft, payments));
         body.put("evidence", List.of());
-        body.put("similarCases", List.of());
+        body.put("similarCases", similarCases);
         body.put("trace", trace(steps, recordedRows));
         body.put("limitations", LIMITATIONS);
         body.put("model", "ai-server");

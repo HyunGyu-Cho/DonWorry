@@ -6,9 +6,11 @@ import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
+import com.donworry.investigation.service.SimilarCaseService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,6 +30,7 @@ class FakeReportWriter implements ReportWriter {
     private final CasePaymentRepository casePaymentRepository;
     private final PaymentInfoReader paymentInfoReader;
     private final ReportTransitions reportTransitions;
+    private final SimilarCaseService similarCaseService;
 
     @Override
     public void write(ReportTarget target) {
@@ -45,10 +48,15 @@ class FakeReportWriter implements ReportWriter {
             reportTransitions.fail(target.reportId(), error(now), now);
             return;
         }
-        reportTransitions.succeed(
-                target.reportId(),
-                body(securityCase.get(), payments, target.reportVersion(), target.evidenceVersion(), now),
-                now);
+        // 비슷한 과거 사건은 Spring이 아는 사실이라 가짜 작성기도 실제로 찾아 넣는다 (#104 2-9a, 화면 reportConvert가 읽음)
+        Map<String, Object> body = new LinkedHashMap<>(
+                body(securityCase.get(), payments, target.reportVersion(), target.evidenceVersion(), now));
+        body.put(
+                "similarCases",
+                similarCaseService.find(target.caseId()).stream()
+                        .map(SimilarCaseService.SimilarCase::toMap)
+                        .toList());
+        reportTransitions.succeed(target.reportId(), body, now);
     }
 
     // 개발자 조사용 실패 정보 — ReportService가 P3 · 화면에는 넘기지 않는다

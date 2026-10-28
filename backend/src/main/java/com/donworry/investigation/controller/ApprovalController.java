@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-// 2인 승인 요청 · 감사 로그 (#82 목록, #102 만들기 · 처리 · 감사 로그)
+// 관리자 승인 요청 · 감사 로그 (#82 목록, #102 만들기 · 처리 · 감사 로그)
 @RestController
 @RequestMapping("/api/investigation")
 @RequiredArgsConstructor

@@ -150,9 +150,9 @@ erDiagram
 
 | 컬럼 | 새 값 |
 | --- | --- |
-| `platform_users.role` | `SECURITY_MANAGER` (보안 관리자: 직원 사건 판정 · 2인 승인). `UserRole` enum에 함께 추가 |
+| `platform_users.role` | `SECURITY_MANAGER` (보안 관리자: 직원 사건 판정 · 관리자 승인). `UserRole` enum에 함께 추가 |
 | `security_cases.case_type` | `STAFF_TAKEOVER`(직원 계정 탈취 의심) · `STAFF_SPRAY`(직원 계정 분산 대입 공격). 기존 `PAYMENT_FRAUD`는 그대로 |
-| `security_cases.status` | `APPROVAL_PENDING`(2인 승인 대기). 조치 진행 중은 기존 `ACTION_PENDING`을 그대로 쓴다 (개인 Issue #10) |
+| `security_cases.status` | `APPROVAL_PENDING`(관리자 승인 대기). 조치 진행 중은 기존 `ACTION_PENDING`을 그대로 쓴다 (개인 Issue #10) |
 | `ai_reports.report_body` | 결론 카드 구조 (JSON, PLAN 0-5) |
 
 ### 새 테이블
@@ -169,7 +169,7 @@ erDiagram
 | | `staff_rule_hits` | 직원 Rule 적중 기록 (직원 경보) |
 | P3 `investigation` | `case_staff_hits` | 직원 사건에 묶인 직원 경보 |
 | | `case_actions` | 직원 사건 조치 (세션 종료 · 계정 잠금 · OTP 재등록 등) |
-| | `approval_requests` | 2인 승인 요청. 요청자 본인 승인은 `CHECK` 제약으로도 막음 |
+| | `approval_requests` | 관리자 승인 요청. 요청자 본인 승인은 `CHECK` 제약으로도 막음 |
 | | `audit_logs` | 감사 로그 (수정 · 삭제 없음) |
 | P4 `investigation/report` | `ai_report_steps` | AI 조사 과정 한 단계 (증거 조회 Tool 호출 등, 짧은 요약만). 끝나면 `report_body.trace`로 요약 복사 (#70) |
 | P5 `payment` | `notifications` | 구매자 · 사장님 메일 발송 기록 |
